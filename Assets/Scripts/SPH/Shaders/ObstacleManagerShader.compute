@@ -1,0 +1,541 @@
+struct Particle {
+    float3 position;
+};
+
+struct ParticleTriangle {
+    int obstacleIndex;
+    int3 vertexIndices;
+    float3 c;
+    float3 n;
+    float d;
+    float3 v1v2, v1v3, v2v3;
+    float3 v1v2n, v1v3n, v2v3n;
+    float3 lowerBound, upperBound;
+};
+
+struct ObstacleVertex {
+    int obstacleIndex;
+    float3 position;
+    float3 normal;
+};
+
+struct ObstacleBounds {
+    float3 lowerBounds;
+    float3 upperBounds;
+    int isActive;
+    float frictionCoefficient;
+};
+
+struct Projection {
+    int intersections;
+    float3 position;
+    float3 normal;
+    float distance;
+    float frictionCoefficient;
+};
+
+uint _numObstacles;
+uint _numVertices;
+uint _numTriangles;
+uint _numGridCells;
+uint3 _numCellsPerAxis;
+
+// Only used if `_PARTICLE_CONTROLLER` is set in `GPU_ObstacleManager`.
+uint _numParticles;
+float _particleRenderRadius;
+RWStructuredBuffer<Particle> _PARTICLES;
+//RWStructuredBuffer<float3> _EXTERNAL_FORCES;
+
+float _gridCellSize;
+float _gridScalingX;
+float _gridScalingY;
+float _gridScalingZ;
+
+RWStructuredBuffer<ParticleTriangle> _TRIANGLES;
+RWStructuredBuffer<ObstacleVertex> _VERTICES;
+RWStructuredBuffer<int2> _VERTEX_INDEX_LIMITS;
+RWStructuredBuffer<int2> _TRIANGLE_INDEX_LIMITS;
+RWStructuredBuffer<ObstacleBounds> _BOUNDS;
+RWStructuredBuffer<Projection> _PROJECTIONS;
+RWStructuredBuffer<int> _DEBUG_BUFFER;
+
+// == HELPER FUNCTIONS ==
+int3 GetGridXYZIndices(float3 position) {
+    return int3(
+        floor((position[0] - _gridScalingX)/_gridCellSize),
+        floor((position[1] - _gridScalingY)/_gridCellSize),
+        floor((position[2] - _gridScalingZ)/_gridCellSize)
+    );
+}
+uint GetProjectedGridIndexFromXYZ(uint3 xyz) {
+    return xyz[0] + (_numCellsPerAxis[0] * xyz[1]) + (_numCellsPerAxis[0] * _numCellsPerAxis[1] * xyz[2]);
+}
+uint GetProjectedGridIndexFromXYZ(uint x, uint y, uint z) {
+    return x + (_numCellsPerAxis[0] * y) + (_numCellsPerAxis[0] * _numCellsPerAxis[1] * z);
+}
+int PointInsideBound(float3 position, ObstacleBounds bounds) {
+    // Return early if the bound isn't even active at all.
+    if (bounds.isActive == 0) return 0;
+    if (
+        bounds.lowerBounds[0] <= position[0] && position[0] <= bounds.upperBounds[0]
+        && bounds.lowerBounds[1] <= position[1] && position[1] <= bounds.upperBounds[1] 
+        && bounds.lowerBounds[2] <= position[2] && position[2] <= bounds.upperBounds[2]    
+    ) return 1;
+    return 0;
+}
+int PointInsideBoundUnpacked(float3 position, float3 lowerBounds, float3 upperBounds) {
+    if (
+        lowerBounds[0] <= position[0] && position[0] <= upperBounds[0]
+        && lowerBounds[1] <= position[1] && position[1] <= upperBounds[1] 
+        && lowerBounds[2] <= position[2] && position[2] <= upperBounds[2]    
+    ) return 1;
+    return 0;
+}
+int CheckVoroniRegions(
+        float3 p,                        // the position (aka projection of 3D point onto the 2D plane)
+        float3 v1, float3 v1N,                          // the comparison vertex of the triangle + its normal
+        float3 edge1, float3 edge2,     // The two edges connected to v1
+        float3 edge1N, float3 edge2N,   // The normals of the two edges
+        float3 v2N, float3 v3N,         // The normals of the other two vertices
+        float3 triN,                    // The normal of the triangle itself
+        float threshold,                // The threshold value for edge comparison
+        out float3 closestPoint,
+        out float3 closestNormal
+) {
+    // Determine vector from vertex to position
+    float3 v_to_p = p - v1;
+    
+    // Now, the position is closest to the vertex if the dot(edge1 , v_to_p) <= 0 AND dot(edge2, v_to_p) <= 0
+    float d1 = dot(edge1, v_to_p);
+    float d2 = dot(edge2, v_to_p);
+    if (d1 <= 0 && d2 <= 0) {
+        closestPoint = v1;
+        closestNormal = v1N;
+        // We need to check if the point is actually the vertex 
+        if (d1 == 0 && d2 == 0) return 1;
+        return 0;
+    }
+    
+    // At this point, we need to check if position is closer to edge1 or edge2. This is via dot product comparison
+    // We introduce a "threshold" because float points are finicky and there's a margin for error w.r.t. if the projection is exactly on the line
+    float d3 = dot(edge1N, v_to_p);
+    if (d3 >= threshold) {
+        closestPoint = edge1 * (d1 / dot(edge1, edge1));
+        closestNormal = normalize(v1N + v2N);
+        if (d3 == threshold) return 1;
+        return 0;
+    }
+    float d4 = dot(edge2N, v_to_p);
+    if (d4 >= threshold) {
+        closestPoint = edge2 * (d2 / dot(edge2, edge2));
+        closestNormal = normalize(v1N + v3N);
+        if (d4 == threshold) return 1;
+        return 0;
+    }
+
+    // At this point, the point is inside the triangle. No need to reproject
+    closestPoint = p;
+    closestNormal = triN;
+    return 1;
+
+    /*
+    // Calculate vector between vertex and position
+    float3 v_to_p = position - vertex;
+    // Calculate vector between vertex and center
+    float3 c_to_v = vertex - center;
+    // Calculate dot products for each involved vector
+    float d1 = dot(c_to_v, v_to_p);
+    float d2 = dot(edge1Normal, v_to_p);
+    float d3 = dot(edge2Normal, v_to_p);
+    
+    // Comparison check 1: is it closest to the vertex?
+    if (d1 >= 0.0 && (d2 >= 0.0 || d3 >= 0.0)) {
+        // The projection's closest point is the vertex.
+        closestPoint = vertex;
+        closestNormal = vertexNormal;
+        // Is it inside the triangle? only if d2 or d3 == 0.0
+        if (d1 == 0.0 && (d2 == 0.0 || d3 == 0.0)) return 1;
+        return 0;
+    }
+
+    // let's check if the position is closer to edge1
+    // In this case, we need to check if the dot product between 
+    d1 = dot(v_to_p, edge1Normal);
+    d2 = dot(v2_to_p, edge1Normal);
+    if (d1 >= threshold && d2 >= threshold) {
+        // Projection is closest to edge of v1v2
+        projection = tri.v1v2 * (dot(v1_to_p,tri.v1v2)/dot(tri.v1v2,tri.v1v2));
+        normal = normalize(v1.normal + v2.normal);
+        // Is the projection inside the triangle?
+        if (d1 == threshold && d2 == threshold) return 1;
+        return 0;
+    }
+    */
+
+}
+int GetRayProjectionOntoPlane(
+        float3 rayOrigin, 
+        float3 rayDirection, 
+        ParticleTriangle tri,
+        ObstacleVertex v1, ObstacleVertex v2, ObstacleVertex v3,
+        float threshold,
+        out float3 projection,
+        out float3 normal
+) {
+    // Firstly, we set the projection to RayOrigin as a precaution
+    projection = rayOrigin;
+    normal = float3(0,0,0);
+
+    // Secondly, we pre-process the rayDirection by normalizing it
+    float3 dir = normalize(rayDirection);
+    // Thirdly, if the ray is perpendicular to the plane, then intersection is unlikely. We need to check!
+    float ray_n_dot =  dot(tri.n, dir);
+    if (ray_n_dot == 0) {
+        // In this scenario, the raycast is perpendicular to the normal. That means that there is likely no chance of the ray intersecting the plane.
+        // The only way we can check is if the ray is intersecting with the origin. This would mean there are an infinite number of points where the ray intersects with the triangle.
+        // The more important thing is that, yes, the ray IS intersecting anyways.
+        if (dot(dir,(tri.c-rayOrigin)) == 1.0) {
+            projection = tri.c;
+            normal = tri.n;
+            return 1;
+        } 
+        // Welp, no dice. Indicate that the projection is beyond saving.
+        return 0;
+    }
+    
+    // If we reach here, then there IS a chance of an intersection. We need to project the point onto the plane formed by this triangle
+    float dist_from_point_to_plane = -(dot(tri.n, rayOrigin) + tri.d) / ray_n_dot;
+    if (dist_from_point_to_plane < 0) return 0;
+    float3 currentProjection = rayOrigin + dist_from_point_to_plane * dir;
+
+    // We pick the closest vertex, and do the comparison there
+    float3 closestVertex = v1.position;
+    float3 closestVertexNormal = v1.normal;
+    float3 edge1 = v2.position - v1.position;
+    float3 edge2 = v3.position - v1.position;
+    float3 edge1N = tri.v1v2n;
+    float3 edge2N = tri.v1v3n;
+    float3 v2N = v2.normal;
+    float3 v3N = v3.normal;
+
+    float closestDistance = distance(v1.position, currentProjection);
+    float d_v2_p = distance(v2.position, currentProjection);
+    float d_v3_p = distance(v3.position, currentProjection);
+
+    if (d_v2_p < closestDistance) {
+        closestDistance = d_v2_p;
+        closestVertex = v2.position;
+        closestVertexNormal = v2.normal;
+        edge1 = v1.position - v2.position;
+        edge2 = v3.position - v2.position;
+        edge1N = tri.v1v2n;
+        edge2N = tri.v2v3n;
+        v2N = v1.normal;
+        v3N = v3.normal;
+    }
+
+    if (d_v3_p < closestDistance) {
+        closestVertex = v3.position;
+        closestVertexNormal = v3.normal;
+        edge1 = v1.position - v3.position;
+        edge2 = v2.position - v3.position;
+        edge1N = tri.v1v3n;
+        edge2N = tri.v2v3n;
+        v2N = v1.normal;
+        v3N = v2.normal;
+    }
+
+    int intersectionResult = CheckVoroniRegions(
+        currentProjection, 
+        closestVertex, closestVertexNormal,
+        edge1, edge2,
+        edge1N, edge2N,  
+        v2N, v3N,
+        tri.n,
+        threshold, 
+        projection,
+        normal
+    );
+    return intersectionResult;
+
+    /*
+    projection = rayOrigin + dist_from_point_to_plane * dir;
+    normal = tri.n;
+    
+    // Here's the key: we need to check where the projection lies w.r.t. the triangle
+    // Let's first check if the closest is v1
+    float3 v1_to_p = projection - v1.position;
+    float3 c_to_v = v1.position - tri.c;
+    float d1 = dot(c_to_v,v1_to_p);
+    float d2 = dot(tri.v1v2n,v1_to_p);
+    float d3 = dot(tri.v1v3n,v1_to_p);
+    if (
+        d1 >= 0.0 && 
+        (d2 >= 0.0 || d3 >= 0.0)
+    ) {
+        // The projection's closest point is v1.
+        projection = v1.position;
+        normal = v1.normal;
+        // Is it inside the triangle? only if d2 or d3 == 0.0
+        if (d1 == 0.0 && (d2 == 0.0 || d3 == 0.0)) return 1;
+        return 0;
+    }
+
+    // Let's check if closest to v2
+    float3 v2_to_p = projection - v2.position;
+    c_to_v = v2.position - tri.c;
+    d1 = dot(c_to_v,v2_to_p);
+    d2 = dot(tri.v1v2n,v2_to_p);
+    d3 = dot(tri.v2v3n,v2_to_p);
+    if (
+        d1 >= 0.0 &&
+        (d2 >= 0.0 || d3 >= 0.0)
+    ) {
+        // the projection's closest point is v2
+        projection = v2.position;
+        normal = v2.normal;
+        // is it inside the triangle?
+        if (d1 == 0.0 && (d2 == 0.0 || d3 == 0.0)) return 1;
+        return 0;
+    }
+
+    // Let's check if closest to v3
+    float3 v3_to_p = projection - v3.position;
+    c_to_v = v3.position - tri.c;
+    d1 = dot(c_to_v,v3_to_p);
+    d2 = dot(tri.v2v3n,v3_to_p);
+    d3 = dot(tri.v1v3n,v3_to_p);
+    if (
+        d1 >= 0.0 &&
+        (d2 >= 0.0 || d3 >= 0.0 )
+    ) {
+        // the projection's closest point is v3
+        projection = v3.position;
+        normal = v3.normal;
+        // is it inside the triangle?
+        if (d1 == 0.0 && (d2 == 0.0 || d3 == 0.0)) return 1;
+        return 0;
+    }
+
+    // let's check if the projection is closer to v1v2's edge
+    d1 = dot(v1_to_p,tri.v1v2n);
+    d2 = dot(v2_to_p,tri.v1v2n);
+    if (d1 >= threshold && d2 >= threshold) {
+        // Projection is closest to edge of v1v2
+        projection = tri.v1v2 * (dot(v1_to_p,tri.v1v2)/dot(tri.v1v2,tri.v1v2));
+        normal = normalize(v1.normal + v2.normal);
+        // Is the projection inside the triangle?
+        if (d1 == threshold && d2 == threshold) return 1;
+        return 0;
+    }
+
+    // Let's check if the projection is closer to v2v3's edge
+    d1 = dot(v2_to_p,tri.v2v3n);
+    d2 = dot(v3_to_p,tri.v2v3n);
+    if (d1 >= threshold && d2 >= threshold) {
+        // projection is closest to edge of v2v3
+        projection = tri.v2v3 * (dot(v2_to_p,tri.v2v3)/dot(tri.v2v3,tri.v2v3));
+        normal = normalize(v2.normal + v3.normal);
+        // is the projection inside the triangle?
+        if (d1 == threshold && d2 == threshold) return 1;
+        return 0;
+    }
+
+    // Let's check if the projection is closer to v1v3's edge
+    d1 = dot(v1_to_p, tri.v1v3n);
+    d2 = dot(v3_to_p, tri.v1v3n);
+    if (d1 >= threshold && d2 >= threshold) {
+        // projection is closest to edge of v1v3
+        projection = tri.v1v3 * (dot(v1_to_p,tri.v1v3)/dot(tri.v1v3, tri.v1v3));
+        normal = normalize(v1.normal + v3.normal);
+        // Is it inside the triangle?
+        if (d1 == threshold && d2 == threshold) return 1;
+        return 0;
+    }
+
+    // At this point... it's certain the the projection is inside the triangle
+    return 1;
+
+    /*
+    // Note: the INT return value merely tells if the projection is placed within the triangle
+    //  1 == the projection is inside the triangle
+    //  0 == the projection is not inside the triangle
+
+    // To calculate the projection, we do the following:
+    // 1. Check if the raycast is perpendicular/orthogonal to the plane. If so, no intersections can be found
+    float ray_n_dot = dot(n,normalize(rayDirection));
+    if (ray_n_dot == 0.0) {
+        // In this case... we're just being lazy. The projection is set to the closest vertex
+        projection = v1;
+        if (distance(rayOrigin,v2) < distance(rayOrigin,projection)) projection = v2;
+        if (distance(rayOrigin,v3) < distance(rayOrigin,projection)) projection = v3; 
+        return 0;
+    }
+
+    // Calculate the edges and their normals
+    float3 v1_v2 = v2 - v1;
+    float3 v1_v3 = v3 - v1;
+    float3 v2_v3 = v3 - v2;
+    float3 v1_v2_normal = -((c-v1)-((dot(v1,v2)/dot(v2,v2))*v2));
+
+
+    float3 v1_rayOrigin = rayOrigin - v1;
+    
+    // Checking if the projection lies outward of v1
+    float d1 = dot(v1_v2, v1_rayOrigin);
+    float d2 = dot(v1_v3, v1_rayOrigin);
+    if (d1 <= 0.0 && d2 <= 0.0) {
+        // We merely have to set the projection to v1
+        projection = v1;
+        // Whether this projection is IN or OUT of the triangle is a matter of orthogonality
+        // In other words, if d1 == 0.0 OR d2 == 0.0 exactly, then the projection is IN the triangle
+        // Otherwise, it'll be outside.
+        if (d1 == 0.0) return 1;
+        return 0;
+    }
+
+    // Checking if the projection lies outward of v2
+    float3 v2_rayOrigin = rayOrigin - v2;
+    float d3 = dot(v1_v2, v2_rayOrigin)'
+    */
+}
+float3 FindNearestPointOnLine(float3 lineStart, float3 lineEnd, float3 query) {
+        //Get heading
+        float3 heading = lineEnd - lineStart;
+        float magnitudeMax = length(heading);
+        float3 headingNorm = normalize(heading);
+
+        //Do projection from the point but clamp it
+        float3 lhs = query - lineStart;
+        float dotP = dot(lhs, heading);
+        dotP = clamp(dotP, 0.0, magnitudeMax);
+        return lineStart + heading * dotP;
+    }
+float4 CheckIfPointInTriangle(float3 p, float3 v1, float3 v2, float3 v3, float3 n, float threshold = 0.0) {
+    float3 edge0 = v2 - v1;
+    float3 edge1 = v3 - v2;
+    float3 edge2 = v1 - v3;
+    float3 C0 = p - v1;
+    float3 C1 = p - v2;
+    float3 C2 = p - v3;
+
+    float t1 = dot(n, cross(edge0, C0));
+    float t2 = dot(n, cross(edge1, C1));
+    float t3 = dot(n, cross(edge2, C2));
+    float r;
+    if ( t1 >= threshold && t2 >= threshold && t3 >= threshold) r = 1.0;
+    else r = 0.0;
+    return float4(t1,t2,t3,r);
+}
+
+#pragma kernel ClearProjections
+[numthreads(64,1,1)]
+void ClearProjections(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= _numParticles) return;
+    //_EXTERNAL_FORCES[id.x] = float3(0,0,0);
+    Projection p = _PROJECTIONS[id.x];
+    p.intersections = 0;
+    p.position = _PARTICLES[id.x].position;
+    p.normal = float3(0,0,0);
+    _PROJECTIONS[id.x] = p;
+}
+
+#pragma kernel CalculateProjections
+[numthreads(128,1,1)]
+void CalculateProjections(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= _numParticles) return;
+
+    // Get our necessary values
+    Particle p = _PARTICLES[id.x];
+    Projection pr = _PROJECTIONS[id.x];
+
+    float3 closestProjection = float3(0,0,0);
+    float closestDistance = -1.0;
+    float3 closestNormal = float3(0,0,0);
+    float closestFrictionCoefficient = 0.0;
+    int inPolygonCounter = 0;
+    int projectionCounter = 0;
+
+    for(uint oi = 0; oi < _numObstacles; oi++) {
+
+        // Check if the point is in bounds
+        ObstacleBounds bound = _BOUNDS[oi];
+        if (PointInsideBound(p.position, bound) == 0) continue;
+
+        // Assuming it is, we iterate through all triangles associated with this obstacle
+        int2 triangle_limits = _TRIANGLE_INDEX_LIMITS[oi];
+        int2 vertex_limits = _VERTEX_INDEX_LIMITS[oi];
+        
+        // We initialize a raycast that points particle position towards the 1st triangle of this obstacle
+        float3 raycast = normalize(_TRIANGLES[triangle_limits[0]].c - p.position);
+        int intersects = 0;
+
+        ParticleTriangle tri;
+        float3 projection;
+        float3 normal;
+        float dist;
+        float4 res;
+        ObstacleVertex v1, v2, v3;
+        
+        // We then iterate through each triangle. 
+        // We don't just check if the raycast intersects with the triangle. We're also checking for the closest triangle whose projection lies inside the triangle
+        for(uint ti = uint(triangle_limits[0]); ti < uint(triangle_limits[0] + triangle_limits[1]); ti++) { 
+            // Get Triangle details
+            tri = _TRIANGLES[ti];
+
+            // We check if the position is currently within the bounds of the triangle
+            //if (PointInsideBoundUnpacked(p.position, tri.lowerBound, tri.upperBound) == 0) continue;
+
+            // We extract the vertices for this triangle
+            v1 = _VERTICES[vertex_limits[0] + tri.vertexIndices[0]];
+            v2 = _VERTICES[vertex_limits[0] + tri.vertexIndices[1]];
+            v3 = _VERTICES[vertex_limits[0] + tri.vertexIndices[2]];
+            // Firstly, we perform a raycast such that the raycast is a projection onto the plane formed by the triangle's vertices
+            // This function returns 1 if said projection is located inside the triangle itself or on its edges or its vertices
+            _DEBUG_BUFFER[id.x] += GetRayProjectionOntoPlane(
+                p.position, 
+                sign(dot(tri.n, tri.c - p.position)) * tri.n, 
+                tri,
+                v1, v2, v3,
+                0.1,
+                projection,
+                normal
+            );
+            // We now know that the projection is either in the triangle, on its edge, or on its vertices.
+            // Now, we just need to double-check if it's inside the obstacle's boundaries
+            if (PointInsideBound(projection,bound) == 1) {
+                // It fits inside the boundary! But is it within the boundary of the particle?
+                dist = distance(projection, p.position);
+                /*
+                if (dist <= _particleRenderRadius) {
+                    closestNormal += normal;
+                }
+                */
+                if (projectionCounter == 0 || dist < closestDistance) {
+                    closestDistance = dist;
+                    closestProjection = projection;
+                    closestNormal = normal;
+                    closestFrictionCoefficient = bound.frictionCoefficient;
+                    projectionCounter += 1;
+                }            
+            }
+        }
+
+    }
+    
+    // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
+    float distfinal = distance(closestProjection,p.position);
+    if (distfinal <= _particleRenderRadius && projectionCounter > 0) {
+        float3 innermostPoint = p.position + normalize(closestProjection - p.position) * min(_particleRenderRadius,distfinal);
+        // The point is inside the mesh of the vector from the innermost point to the projection has a dot product >= 0.0 with the normal
+        if (distfinal == 0.0 || dot(closestProjection - innermostPoint, closestNormal) >= 0.0) inPolygonCounter = 1;
+    }
+    
+    pr.intersections = inPolygonCounter;
+    pr.distance = distfinal;
+    pr.normal = normalize(closestNormal);
+    //pr.position = p.position - pr.normal * _particleRenderRadius;
+    pr.position = closestProjection;
+    pr.frictionCoefficient = closestFrictionCoefficient;
+    _PROJECTIONS[id.x] = pr;
+}

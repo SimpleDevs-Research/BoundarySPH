@@ -1,0 +1,326 @@
+struct Particle {
+    float3 position;
+};
+struct ParticleTriangle {
+    int3 vertexIndices;
+    float3 c;
+    float3 n;
+    float d;
+};
+struct Projection {
+    int triangleIndex;
+    float3 position;
+    float d;
+    int count;
+    float3 check;
+};
+
+RWStructuredBuffer<Particle> _PARTICLES;
+RWStructuredBuffer<float3> _PARTICLE_VELOCITIES;
+float particleRadius;
+
+RWStructuredBuffer<float> _BOUNDS;
+RWStructuredBuffer<ParticleTriangle> _TRIANGLES;
+RWStructuredBuffer<float3> _VERTICES;
+
+RWStructuredBuffer<int> _IN_BOUNDS;
+RWStructuredBuffer<Projection> _PROJECTIONS;
+RWStructuredBuffer<int> _COUNTERS;
+
+float3 position;
+float4 rotation;
+float3 scale;
+
+uint numTriangles;
+uint numVertices;
+uint numParticles;
+
+// == HELPER FUNCTIONS ==
+int GetRayProjectionOntoPlane(float3 rayOrigin, float3 rayDirection, float3 n, float3 v1, float d, out float3 projection) {
+    projection = rayOrigin;
+    float3 dir = normalize(rayDirection);
+    float ray_n_dot =  dot(n, dir);
+    if (ray_n_dot == 0) return 0;
+
+    //float d = -dot(n, v1);
+    float dist_from_point_to_plane = -(dot(n, rayOrigin) + d) / ray_n_dot;
+            
+    if (dist_from_point_to_plane < 0) return 0;
+        
+    projection = rayOrigin + dist_from_point_to_plane * dir;
+    return 1;
+}
+int CheckIfPointInTriangle(float3 p, float3 v1, float3 v2, float3 v3, float3 n, int threshold = 0.0) {
+    float3 edge0 = v2 - v1;
+    float3 edge1 = v3 - v2;
+    float3 edge2 = v1 - v3;
+    float3 C0 = p - v1;
+    float3 C1 = p - v2;
+    float3 C2 = p - v3;
+    if (
+        dot(n, cross(edge0, C0)) >= threshold
+        && dot(n, cross(edge1, C1)) >= threshold
+        && dot(n, cross(edge2, C2)) >= threshold
+    ) return 1;
+    return 0;
+}
+
+float4 CheckIfPointInTriangle2(float3 p, float3 v1, float3 v2, float3 v3, float3 n, float threshold = 0.0) {
+    float3 edge0 = v2 - v1;
+    float3 edge1 = v3 - v2;
+    float3 edge2 = v1 - v3;
+    float3 C0 = p - v1;
+    float3 C1 = p - v2;
+    float3 C2 = p - v3;
+
+    float t1 = dot(n, cross(edge0, C0));
+    float t2 = dot(n, cross(edge1, C1));
+    float t3 = dot(n, cross(edge2, C2));
+    float r;
+    if ( t1 >= threshold && t2 >= threshold && t3 >= threshold) r = 1.0;
+    else r = 0.0;
+    return float4(t1,t2,t3,r);
+}
+
+#pragma kernel ClearCounters
+[numthreads(256,1,1)]
+void ClearCounters(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles) return;
+    _COUNTERS[id.x] = 0;
+    Projection projection = _PROJECTIONS[id.x];
+    projection.triangleIndex = -1;
+    projection.position = _PARTICLES[id.x].position;
+    projection.d = 0.0;
+    projection.count = 0;
+    projection.check = float3(0,0,0);
+    _PROJECTIONS[id.x] = projection;
+}
+
+#pragma kernel CheckInBounds
+[numthreads(256,1,1)]
+void CheckInBounds(uint3 id : SV_DispatchThreadID) {
+    // REQUIRES:
+    // 1. bounds buffer
+    // 2. in_bounds buffer
+    // 3. particles buffer
+    
+    if (id.x >= numParticles) return;
+    float3 particle = _PARTICLES[id.x].position;
+    if (
+        _BOUNDS[0] <= particle[0] 
+        && _BOUNDS[1] <= particle[1]
+        && _BOUNDS[2] <= particle[2]
+        && _BOUNDS[3] >= particle[0]
+        && _BOUNDS[4] >= particle[1]
+        && _BOUNDS[5] >= particle[2]
+    ) {
+        _IN_BOUNDS[id.x] = 1;
+    } else {
+        _IN_BOUNDS[id.x] = 0;
+    }
+}
+
+#pragma kernel FindClosestVertex
+[numthreads(256,4,1)]
+void FindClosestVertex(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles || id.y >= numTriangles) return;
+
+}
+
+#pragma kernel FindClosestPoint
+[numthreads(256,1,1)]
+void FindClosestPoint(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles) return;
+    
+    float3 particle = _PARTICLES[id.x].position;
+    int inside = _IN_BOUNDS[id.x];
+    Projection projection = _PROJECTIONS[id.x];
+    // We have to exit early if _IN_BOUNDS for this particle shows that it's not inside any bounds of this obstacle
+    if (inside == 0) {
+        projection.triangleIndex = -1;
+        projection.position = particle;
+        projection.d = 0.0;
+        projection.count = 0;
+        _PROJECTIONS[id.x] = projection;
+        return;
+    }
+
+    float3 v1, v2, v3, c, n, proj;
+    float d, dist = 0;
+    float4 res;
+
+    for(uint ti = 0; ti < numTriangles; ti++) {
+        v1 = _VERTICES[_TRIANGLES[ti].vertexIndices[0]];
+        v2 = _VERTICES[_TRIANGLES[ti].vertexIndices[1]];
+        v3 = _VERTICES[_TRIANGLES[ti].vertexIndices[2]];
+        c = _TRIANGLES[ti].c;
+        d = _TRIANGLES[ti].d;
+        n = normalize(_TRIANGLES[ti].n);
+
+        GetRayProjectionOntoPlane(
+            particle, 
+            sign(dot(n, c - particle)) * n, 
+            n, 
+            v1, 
+            d,
+            proj
+        );
+        res = CheckIfPointInTriangle2(proj, v1, v2, v3, n,-0.1);
+        if (res[3] == 1.0) {
+            dist = distance(c,particle);
+            if (dist < projection.d || projection.triangleIndex == -1) {
+                projection.d = dist;
+                projection.position = proj;
+                projection.triangleIndex = ti;
+                projection.check = float3(res[0], res[1], res[2]);
+            }
+        }
+        
+        /*
+        if (res[3] == 1.0) {
+            dist = distance(proj, particle);
+            if (dist < projection.d || projection.triangleIndex == -1) {
+                projection.d = dist;
+                projection.position = proj;
+                projection.triangleIndex = ti;
+            }
+        }
+        */
+    }
+
+    _PROJECTIONS[id.x] = projection;
+}
+
+/*
+#pragma kernel CheckIntersections1
+[numthreads(256,1,1)]
+void CheckIntersections1(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles) return;
+
+    float3 particle = _PARTICLES[id.x].position;
+    int closestTriangle = _CLOSEST_TRIANGLE_INDICES[id.x];
+
+    // Return early if `closestTriangle` is -1
+    if (closestTriangle == -1) {
+        _COUNTERS[id.x] = 0;
+        return;
+    }
+
+    int isValid;
+    float3 v1, v2, v3, c, n;
+    float3 projection;
+    float projDist;
+    ParticleTriangle t;
+
+    int counter = 0;
+    float3 raycast = _PROJECTIONS[id.x] - particle;
+    float dist = length(raycast);
+
+    for(uint i = 0; i < numTriangles; i++) {
+        t = _TRIANGLES[i];
+        v1 = _VERTICES[t.vertexIndices[0]];
+        v2 = _VERTICES[t.vertexIndices[1]];
+        v3 = _VERTICES[t.vertexIndices[2]];
+        c = t.c;
+        n = normalize(t.n);
+
+        isValid = GetRayProjectionOntoPlane(particle, raycast, n, v1, projection);
+        if (isValid == 0) continue;
+        
+        if (CheckIfPointInTriangle(projection, v1, v2, v3, n) == 1) {
+            if (dot(raycast,n) <= 0) counter -= 1;
+            else counter += 1;
+            // Because of buggy systems, we check if this projection is closer to the existing projection, or if the current projection is closer.
+            // We tend to prefer the closer one
+            projDist = length(particle - projection);
+            if (projDist < dist) {
+                dist = projDist;
+                _PROJECTIONS[id.x] = projection;
+            }
+        }
+    }
+    
+    // Update counter
+    _COUNTERS[id.x] = counter;
+}
+*/
+
+#pragma kernel CheckIntersections2
+[numthreads(256,4,1)]
+void CheckIntersections2(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles) return;
+    if (id.y >= numTriangles) return;
+
+    float3 particle = _PARTICLES[id.x].position;
+    Projection projection = _PROJECTIONS[id.x];
+
+    // Return early if `closestTriangle` is -1
+    if (projection.triangleIndex == -1) return; 
+
+    float3 raycast = projection.position - particle;
+    
+    ParticleTriangle t = _TRIANGLES[id.y];    
+    float3 v1 = _VERTICES[t.vertexIndices[0]];
+    float3 v2 = _VERTICES[t.vertexIndices[1]];
+    float3 v3 = _VERTICES[t.vertexIndices[2]];
+    float3 c = t.c;
+    float d = t.d;
+    float3 n = normalize(t.n);
+
+    float3 proj;
+    int isValid = GetRayProjectionOntoPlane(particle, raycast, n, v1, d, proj);
+    if (isValid == 0) return;
+        
+    int counter = 0;
+    int count = 0;
+    if (CheckIfPointInTriangle(proj, v1, v2, v3, n) == 1 && distance(proj, particle) >= particleRadius) {
+        count = 1;
+        if (dot(raycast,n) <= 0) counter = -1;
+        else counter = 1;
+    }
+    
+    // Update counter
+    InterlockedAdd(_COUNTERS[id.x], counter);
+    InterlockedAdd(_PROJECTIONS[id.x].count, count);
+}
+
+#pragma kernel PushParticles
+[numthreads(256,1,1)]
+void PushParticles(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles) return;
+    int count = _COUNTERS[id.x];
+    // If the particle is INSIDE the obstacle, we have to do some mathematics
+    Particle p = _PARTICLES[id.x];
+    float3 v = _PARTICLE_VELOCITIES[id.x];
+
+    Projection projection = _PROJECTIONS[id.x];
+    float3 outwardDir = normalize(p.position - projection.position);
+    if (count > 0) {
+        // Particle is just about to enter the mesh. Let's prevent it from doing so.
+        p.position = projection.position + outwardDir * particleRadius;
+        // Alter the velocity
+        ParticleTriangle t = _TRIANGLES[projection.triangleIndex];
+        float3 n = normalize(t.n);
+        float3 v2 = v - 2.0 * dot(v,n) * n;
+        //float3 v2 = v * -0.5;
+        // Set both
+        _PARTICLES[id.x] = p;
+        _PARTICLE_VELOCITIES[id.x] = v2;
+    }
+    /*
+    if (count > 0) {
+        Particle p = _PARTICLES[id.x];
+        float3 v = _PARTICLE_VELOCITIES[id.x];
+        float3 projection = _PROJECTIONS[id.x];
+        // Firstly, if the particle is INSIDE-INSIDE the particle (aka the distance between the projection and particle is > 0), then we relocate
+        //if (length(p.position-projection) > 0) {
+        //    p.position = projection;
+        //}
+        // Set the velocity of the particle to negative 0.5
+        v *= -0.5;
+        // Set both...
+        _PARTICLES[id.x] = p;
+        _PARTICLE_VELOCITIES[id.x] = v;
+    }
+    */
+}
