@@ -5,10 +5,12 @@ using UnityEngine;
 public class DebugRotate : MonoBehaviour
 {
     public enum Axis {
-        X,Y,Z,XY,XZ,YZ
+        X,Y,Z,XY,XZ,YZ,XYZ
     }
     public Axis axis = Axis.Y;
     public Transform centerOfRotation;
+    public float deltaTime = -1f;
+    private float _deltaTime;
     public float speed = 20f;
     // Update is called once per frame
 
@@ -17,6 +19,8 @@ public class DebugRotate : MonoBehaviour
     }
     
     void Update(){
+        if (deltaTime < 0f) _deltaTime = Time.deltaTime;
+        else _deltaTime = deltaTime;
         Vector3 a;
         switch(axis) {
             case Axis.X:
@@ -34,10 +38,13 @@ public class DebugRotate : MonoBehaviour
             case Axis.YZ:
                 a = (Vector3.up + Vector3.forward).normalized;
                 break;
+            case Axis.XYZ:
+                a = (Vector3.up + Vector3.forward + Vector3.right).normalized;
+                break;
             default:
                 a = Vector3.forward;
                 break;
         }
-        transform.RotateAround(centerOfRotation.position, a, speed * Time.deltaTime);
+        transform.RotateAround(centerOfRotation.position, a, speed * _deltaTime);
     }
 }

@@ -15,6 +15,11 @@ public class MeshObsGPU : MonoBehaviour
     public class TestObstacle {
         public Transform obstacle;
         [Range(0f,1f)] public float frictionCoefficient = 0f;
+        public bool checkObstacleBounds = true;
+        public bool checkTriangleBounds = true;
+        [HideInInspector] public float prevFriction = 0f;
+        [HideInInspector] public bool prevCheckObstacleBounds = true;
+        [HideInInspector] public bool prevCheckTriangleBounds = true;
 
         public bool show_vertex_positions = true;
         public bool show_vertex_normals = true;
@@ -53,7 +58,7 @@ public class MeshObsGPU : MonoBehaviour
     private bool drawGizmos => drawObstacleGizmos || drawProjectionGizmos;
 
     private int numObstacles, numVertices, numTriangles, numEdges;
-    private int numParticles;
+    [HideInInspector] public int numParticles;
     
     public ComputeBuffer obstacles_static_buffer, obstacles_dynamic_buffer;
     public ComputeBuffer vertices_static_buffer, vertices_dynamic_buffer;
@@ -342,7 +347,7 @@ public class MeshObsGPU : MonoBehaviour
 
         // Initialize our buffers
         obstacles_static_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(uint)*7);
-        obstacles_dynamic_buffer = new ComputeBuffer(obstacles_dynamic.Count, sizeof(uint)*2 + sizeof(float)*17);
+        obstacles_dynamic_buffer = new ComputeBuffer(obstacles_dynamic.Count, sizeof(uint)*4 + sizeof(float)*17);
         vertices_static_buffer = new ComputeBuffer(vertices_static.Count, sizeof(uint) + sizeof(float)*6);
         vertices_dynamic_buffer = new ComputeBuffer(vertices_dynamic.Count, sizeof(uint) + sizeof(float)*6);
         triangles_static_buffer = new ComputeBuffer(triangles_static.Count, sizeof(uint)*7 + sizeof(float)*9);
@@ -420,6 +425,9 @@ public class MeshObsGPU : MonoBehaviour
         Mesh mesh = obstacle.obstacle.GetComponent<MeshFilter>().sharedMesh;
         var vs = mesh.vertices;
         var ts = mesh.triangles;
+        obstacle.prevFriction = obstacle.frictionCoefficient;
+        obstacle.prevCheckObstacleBounds = obstacle.checkObstacleBounds;
+        obstacle.prevCheckTriangleBounds = obstacle.checkTriangleBounds;
 
         // We initialize the details for the obstacles themselves
         OP.ObstacleStatic o_static = new OP.ObstacleStatic();
@@ -427,6 +435,8 @@ public class MeshObsGPU : MonoBehaviour
         o_static.index = (uint)index;
         o_dynamic.index = (uint)index;
         o_dynamic.frictionCoefficient = obstacle.frictionCoefficient;
+        o_dynamic.checkObstacleBounds = (obstacle.checkObstacleBounds) ? (uint)1 : (uint)0;
+        o_dynamic.checkTriangleBounds = (obstacle.checkTriangleBounds) ? (uint)1 : (uint)0;
         o_dynamic.hasChanged = 1;
 
         // ===== GENERATING VERTICES DATA ===== //
@@ -694,7 +704,13 @@ public class MeshObsGPU : MonoBehaviour
         for(int i = 0; i < obstacles.Count; i++) {
             // Check if the transform has been changed in any way
             t = obstacles[i].obstacle; 
-            if (t.hasChanged || forceUpdate) {
+            if (
+                    t.hasChanged 
+                    || obstacles[i].prevFriction != obstacles[i].frictionCoefficient 
+                    || obstacles[i].prevCheckObstacleBounds != obstacles[i].checkObstacleBounds
+                    || obstacles[i].prevCheckTriangleBounds != obstacles[i].checkTriangleBounds
+                    || forceUpdate
+            ) {
                 //  We need to update the associated TestObjectDynamic
                 obstacles_dynamic_array[i].index = (uint)i;
                 obstacles_dynamic_array[i].position = new(t.position.x, t.position.y, t.position.z);
@@ -703,7 +719,11 @@ public class MeshObsGPU : MonoBehaviour
                 obstacles_dynamic_array[i].lowerBound = obstacles_dynamic_array[i].position;
                 obstacles_dynamic_array[i].upperBound = obstacles_dynamic_array[i].position;
                 obstacles_dynamic_array[i].frictionCoefficient = obstacles[i].frictionCoefficient;
+                obstacles_dynamic_array[i].checkObstacleBounds = (obstacles[i].checkObstacleBounds) ? (uint)1 : (uint)0;
+                obstacles_dynamic_array[i].checkTriangleBounds = (obstacles[i].checkTriangleBounds) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].hasChanged = 1;
+                obstacles[i].prevFriction = obstacles[i].frictionCoefficient;
+                obstacles[i].prevCheckTriangleBounds = obstacles[i].checkTriangleBounds;
                 needsUpdating = true;
             }
         }

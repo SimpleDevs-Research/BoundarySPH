@@ -19,7 +19,9 @@ struct ObstacleDynamic {
     float3 lowerBound;          // The lower boundary position of this obstacle's bounding box.
     float3 upperBound;          // The upper boundary position of this obstacle's bounding box.
     float frictionCoefficient;  // The amount of friction the object is meant to exhibit on particles.
-    int hasChanged;             // A boolean indicator to determine if this obstacle had transformed in some way between the previous and current frame.
+    uint checkObstacleBounds;
+    uint checkTriangleBounds;
+    uint hasChanged;             // A boolean indicator to determine if this obstacle had transformed in some way between the previous and current frame.
 };
 
 /// Represents the STATIC properties of each vertex. These values do not change at any point after the pre-processing stage.
@@ -369,7 +371,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
         o_dynamic = obstacles_dynamic[oi];
         
         // Skip if the particle isn't in the boundaries of this obstacle
-        if (PointInsideBound(particle.position, o_dynamic.lowerBound, o_dynamic.upperBound) == 0) continue;
+        if (o_dynamic.checkObstacleBounds == 1 && PointInsideBound(particle.position, o_dynamic.lowerBound, o_dynamic.upperBound) == 0) continue;
 
         // grab the static obstacle
         o_static = obstacles_static[oi];
@@ -379,7 +381,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             TriangleDynamic tri_dynamic = triangles_dynamic[i];
     
             // Check if the particle is inside the triangle's boundaries
-            if (PointInsideBound(particle.position, tri_dynamic.lowerBound, tri_dynamic.upperBound) == 0) continue;
+            if (o_dynamic.checkTriangleBounds == 1 && PointInsideBound(particle.position, tri_dynamic.lowerBound, tri_dynamic.upperBound) == 0) continue;
     
             // More references
             TriangleStatic tri_static = triangles_static[i];

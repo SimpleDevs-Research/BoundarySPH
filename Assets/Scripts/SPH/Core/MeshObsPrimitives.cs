@@ -37,6 +37,8 @@ namespace ObstaclePrimitives {
         /// <param name="lowerBound">The lower boundary position of this obstacle's bounding box.</param>
         /// <param name="upperBound">The upper boundary position of this obstacle's bounding box.</param>
         /// <param name="frictionCoefficient">The amount of friction the object is meant to exhibit on particles.</param>
+        /// <param name="checkObstacleBounds">Determines if we should check if the particle is within the bounds of an obstacle or not</param>
+        /// <param name="checkTriangleBounds">Determines if we should check if the particle is within the bounds of a triangle or not</param>
         /// <param name="hasChanged">A boolean indicator to determine if this obstacle had transformed in some way between the previous and current frame</param>
         [System.Serializable]
         public class ObstacleDynamic {
@@ -47,7 +49,9 @@ namespace ObstaclePrimitives {
             public float3 lowerBound;
             public float3 upperBound;
             public float frictionCoefficient;
-            public int hasChanged;
+            public uint checkObstacleBounds;
+            public uint checkTriangleBounds;
+            public uint hasChanged;
         }
 
 
@@ -220,6 +224,8 @@ namespace ObstaclePrimitives {
         /// <param name="lowerBound">The lower boundary position of this obstacle's bounding box.</param>
         /// <param name="upperBound">The upper boundary position of this obstacle's bounding box.</param>
         /// <param name="frictionCoefficient">The amount of friction the object is meant to exhibit on particles.</param>
+        /// <param name="checkObstacleBounds">Determines if we should check if the particle is within the bounds of an obstacle or not</param>
+        /// <param name="checkTriangleBounds">Determines if we should check if the particle is within the bounds of a triangle or not</param>
         /// <param name="hasChanged">A boolean indicator to determine if this obstacle had transformed in some way between the previous and current frame</param>
         [System.Serializable]
         public struct ObstacleDynamic {
@@ -230,6 +236,8 @@ namespace ObstaclePrimitives {
             public float3 lowerBound;
             public float3 upperBound;
             public float frictionCoefficient;
+            public uint checkObstacleBounds;
+            public uint checkTriangleBounds;
             public uint hasChanged;
         }
 

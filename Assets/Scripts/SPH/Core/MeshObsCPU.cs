@@ -123,7 +123,7 @@ public class MeshObsCPU : MonoBehaviour
     }
 
     // Start is called before the first frame update
-    void Awake() {
+    void Start() {
         PreprocessObstacles();
     }
 
@@ -295,7 +295,7 @@ public class MeshObsCPU : MonoBehaviour
         
         // Before anything, we need to extract the mesh data! 
         // We also need to extract the vertex anbd triangle data from that mesh
-        Mesh mesh = obstacle.obstacle.GetComponent<MeshFilter>().sharedMesh;
+        Mesh mesh =  obstacle.obstacle.GetComponent<MeshFilter>().sharedMesh;
         var vs = mesh.vertices;
         var ts = mesh.triangles;
 
