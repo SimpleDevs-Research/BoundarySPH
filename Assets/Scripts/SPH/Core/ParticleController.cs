@@ -11,28 +11,6 @@ using OP = ObstaclePrimitives.Structs;
 
 public class ParticleController : MonoBehaviour
 {   
-    /*
-    // == STRUCTS ==
-    [System.Serializable]
-    public struct Particle {
-        public float3 position;
-    };
-    [System.Serializable]
-    public struct CellLimits {
-        public int3 id;
-        public float3 position;
-        public int3 lowerLimits;
-        public int3 upperLimits;
-    }
-    [System.Serializable]
-    public struct Projection {
-        public int intersections;
-        public float3 position;
-        public float3 normal;
-        public float distance;
-        public float frictionCoefficient;
-    }
-    */
 
     [Header("== REFERENCES ==")]
     [SerializeField, Tooltip("Reference to a ParticleGrid component that acts as this controller's grid system")]
@@ -66,6 +44,7 @@ public class ParticleController : MonoBehaviour
     [Header("== SPH CONFIGURATIONS ==")]
     [SerializeField, Tooltip("The delta time of the simulation. If set to any value < 0, then the simulation will default to using `Time.deltaTime`.")]
     private float _dt = 0.00825f;
+    public float dt => _dt;
     [SerializeField, Tooltip("What's the gravitational force exerted on all particles?")]
     private float[] _g = {0f, -9.81f, 0f};
     [SerializeField, Tooltip("`h` - the smoothing kernel radius used all across the SPH simulation")]
@@ -157,6 +136,7 @@ public class ParticleController : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _pressures_request_textbox = null;
     [SerializeField] private TextMeshProUGUI _fps_request_textbox = null;
 
+    [SerializeField, ReadOnly] private OP.Particle[] debug_particles_array;
     /*
     [SerializeField] private bool _record_online = true;
     [SerializeField, Tooltip("If recording online, this will be the HTTP url. If not, it will be the directory that you want to save the files in")] 
@@ -315,7 +295,7 @@ public class ParticleController : MonoBehaviour
         // GridCellSize is a global value across this grid. _particleRenderSize is unique to this controller
         int numParticlesPerCellAxis = Mathf.CeilToInt(_GRID.gridCellSize / _spawnDistanceBetweenParticles);
         // If we have a section index, we use that section's bounds. Otherwise, we use the grid's inner bounds
-        Vector3 bs = (_SECTION_INDEX >= 0) ? _GRID.sections[_SECTION_INDEX].boundsV3 : _GRID.innerBoundsV3;
+        Vector3 bs = (_SECTION_INDEX >= 0) ? _GRID.sections[_SECTION_INDEX].dimensionsV3 : _GRID.innerBoundsV3;
         // We store number of particles per axis; particle render size is unique to the controller
         _numParticlesPerAxis = new int[3] {
             Mathf.FloorToInt(bs[0] / _spawnDistanceBetweenParticles),
@@ -702,7 +682,8 @@ public class ParticleController : MonoBehaviour
         SPAWN_BOUNDS_BUFFER = new ComputeBuffer(6, sizeof(float));
         SPAWN_BOUNDS_BUFFER.SetData(_spawnBounds);
 
-        PARTICLES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float)*3);
+        PARTICLES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float)*6);
+        debug_particles_array = new OP.Particle[_numParticles];
         if (_DEBUG_MODE) {
             // If we are in debug mode, we pre-emptively fill the particles buffer with the positions of our debug particles
             UpdateDebugParticles();
@@ -733,13 +714,15 @@ public class ParticleController : MonoBehaviour
         VISCOSITY_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
         FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
 
-        PROJECTIONS_BUFFER = new ComputeBuffer(_numParticles, sizeof(uint) + sizeof(int) + sizeof(float)*10 + sizeof(float)*18);
+        PROJECTIONS_BUFFER = new ComputeBuffer(_numParticles, sizeof(uint) + sizeof(int) + sizeof(float)*34);
         OP.Projection[] projections = new OP.Projection[_numParticles];
         for(int i = 0; i < _numParticles; i++) {
             projections[i] = new OP.Projection();
             projections[i].projection = new(0f,0f,0f);
             projections[i].position = new(0f,0f,0f);
             projections[i].normal = new(0f,0f,0f);
+            projections[i].particle_force = new(0f,0f,0f);
+            projections[i].external_force = new(0f,0f,0f);
             projections[i].counter = 0;
             /*
             projections[i].intersections = 0;
@@ -892,6 +875,8 @@ public class ParticleController : MonoBehaviour
             _SPH_Shader.Dispatch(_INTEGRATE_DEBUG, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
             UpdateDebugParticles();
         }
+
+        PARTICLES_BUFFER.GetData(debug_particles_array);
 
         // If we're recording, record our session
         if (_record_statistics != RecordSettings.Off) {

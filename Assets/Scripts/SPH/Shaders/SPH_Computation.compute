@@ -43,7 +43,8 @@ uint numBlocks;                 // number of thread groups that run on the GPU
 
 // == STRUCTS ==
 struct Particle {
-    float3 position;
+    float3 position;            // The world position of the particle
+    float3 force;               // The force current experienced by the particle that is caused by pressure and viscosity
 };
 struct CellLimits {
     uint3 id;
@@ -56,6 +57,8 @@ struct Projection {
     float3 projection;
     float3 position;
     float3 normal;
+    float3 particle_force;      // force exerted into the boundary by the particle
+    float3 external_force;      // force exerted toward the particle by the boundary due to velocity
     int counter;
     float frictionCoefficient;
 
@@ -420,7 +423,10 @@ void ComputeInternalForces(uint3 id : SV_DispatchThreadID) {
     }
 
     pressureForces[id.x] = pressureForce;
-    viscosityForces[id.x] = viscosity_coefficient * viscosityForce;
+    float3 finalViscosityForce = viscosity_coefficient * viscosityForce;
+    viscosityForces[id.x] = finalViscosityForce;
+    //pressureForce[id.x] = pressureForce + (viscosity_coefficient * viscosityForce);
+    particles[id.x].force = pressureForce + finalViscosityForce + (density[id.x] * g);
 }
 
 #pragma kernel Integrate_Debug
@@ -446,14 +452,15 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
     float3 v = velocity[id.x];
     Projection projection = projections[id.x];
     
-    float3 a = (pressureForces[id.x] + viscosityForces[id.x] + density[id.x] * g) / density[id.x];
-    v += dt * a;
+    //float3 a = (pressureForces[id.x] + viscosityForces[id.x] + density[id.x] * g) / density[id.x];
+    //v += dt * a;
 
     // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
 
+    float3 a = p.force;
+    v += a * dt;
     float distfinal = distance(projection.position,p.position);
     float3 innermostPoint = p.position + normalize(projection.position - p.position) * min(particleRenderRadius,distfinal);
-
     if (projection.counter > 
         0 && (
             distfinal <= particleRenderRadius 
@@ -461,12 +468,17 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
         )
     ) {
         float3 n = normalize(projection.normal);
+        //v += dt dt * projection.external_force;
         //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
         v = v - 1.5 * dot(v,n) * projection.normal + projection.frictionCoefficient*(-v + dot(v,n)*projection.normal);
+        v += projection.external_force * dt;
         p.position = (projection.position + n * particleRenderRadius) + dt * v;
-    } else {
+    }
+    else {
         p.position += dt * v;
     }
+    //float3 a = totalForce / density[id.x];
+    //p.position += dt * v;
     /*
     if (projection.intersections > 0 && length(projection.normal)>0.0) {
         float3 n = normalize(projection.normal);

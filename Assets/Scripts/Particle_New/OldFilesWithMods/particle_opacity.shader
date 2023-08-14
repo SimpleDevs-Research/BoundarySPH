@@ -27,6 +27,7 @@ Shader "Instanced/particle_opacity"
 
 		struct particle {
 			float3 position;
+			float3 force;
 		};
 
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED

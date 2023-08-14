@@ -19,12 +19,14 @@ namespace ObstaclePrimitives {
         /// <param name="vs">[0] = starting index in the vertices arrays, [1] = the number of vertices</param>
         /// <param name="ts">[0] = starting index in the triangles arrays, [1] = the number of triangles</param>
         /// <param name="es">[0] = starting index in the edges arrays, [1] = the number of edges</param>
+        /// <param name="mass">The mass of the obstacle. Considered a "static" variable because mass doesn't change.</param>
         [System.Serializable]
         public class ObstacleStatic {
             public int index;
             public int2 vs;
             public int2 ts;
             public int2 es;
+            public float mass;
         }
 
         /// <summary>
@@ -78,11 +80,13 @@ namespace ObstaclePrimitives {
         /// <param name="obstacleIndex">Ref. index to its parent obstacle in the obstacles arrays.</param>
         /// <param name="position">The current world-space position of this vertex.</param>
         /// <param name="normal">The current world-space, 3D normal vector of this vertex. Direction only.</param>
+        /// <param name="force">The calculated force based on the current velocity and previous velocity, which is F=m*(v/t)</param>
         [System.Serializable]
         public class VertexDynamic {
             public int obstacleIndex;
             public float3 position;
             public float3 normal;
+            public float3 force;
         }
 
 
@@ -157,6 +161,78 @@ namespace ObstaclePrimitives {
         }
 
 
+        // =============================== //
+        // ===== GRID REPRESENTATION ===== //
+        // =============================== //
+
+        [System.Serializable]
+        public class ParticleGridSection {
+
+            [SerializeField, Tooltip("The transform reference for the lower bound of this subsection")]
+            public Transform LOWER_BOUND_REF = null;
+            [SerializeField, Tooltip("The transform reference for the upper bound of this subsection")]
+            public Transform UPPER_BOUND_REF = null;
+            [SerializeField, ReadOnly, Tooltip("The origin (center) of the section formed from the average of the bound refs")]
+            private Vector3 _origin;
+            public Vector3 origin => _origin;
+            public float[] originF => new float[3]{origin.x, origin.y, origin.z};
+            // Store the bounds formed by this section's upper and lower bounds
+            [SerializeField, ReadOnly]
+            private float[] _bounds = new float[6];
+            public float[] bounds => _bounds;
+            public Vector3 dimensionsV3 => new Vector3(_bounds[3]-_bounds[0], _bounds[4]-_bounds[1],_bounds[5]-_bounds[2]);
+            [SerializeField, Tooltip("Color the bounds of this subsection")]
+            private Color _gizmosColor = new Vector4(1f,1f,1f,0.5f);
+            public Color gizmosColor => _gizmosColor;
+
+            public void UpdateSegment(float[] restrictionBounds,  int[] numCellsPerAxis, float gridCellSize) {
+                if (LOWER_BOUND_REF == null || UPPER_BOUND_REF == null) return;
+                // First, make sure that the transforms for the bounds are within the inner bounds of the parent grid
+                LOWER_BOUND_REF.position = new Vector3(
+                    Mathf.Clamp(
+                        LOWER_BOUND_REF.position.x, 
+                        restrictionBounds[0], 
+                        Mathf.Min(UPPER_BOUND_REF.position.x, restrictionBounds[3])
+                    ),
+                    Mathf.Clamp(
+                        LOWER_BOUND_REF.position.y, 
+                    restrictionBounds[1], 
+                        Mathf.Min(UPPER_BOUND_REF.position.y, restrictionBounds[4])
+                    ),
+                    Mathf.Clamp(
+                        LOWER_BOUND_REF.position.z, 
+                        restrictionBounds[2], 
+                        Mathf.Min(UPPER_BOUND_REF.position.z, restrictionBounds[5])
+                    )
+                );
+                UPPER_BOUND_REF.position = new Vector3(
+                    Mathf.Clamp(
+                        UPPER_BOUND_REF.position.x, 
+                        Mathf.Max(LOWER_BOUND_REF.position.x, restrictionBounds[0]), 
+                        restrictionBounds[3]
+                    ),
+                    Mathf.Clamp(
+                        UPPER_BOUND_REF.position.y, 
+                        Mathf.Max(LOWER_BOUND_REF.position.y, restrictionBounds[1]), 
+                        restrictionBounds[4]
+                    ),
+                    Mathf.Clamp(
+                        UPPER_BOUND_REF.position.z, 
+                        Mathf.Max(
+                            LOWER_BOUND_REF.position.z, 
+                            restrictionBounds[2]), 
+                            restrictionBounds[5]
+                        )
+                );
+                _origin = (LOWER_BOUND_REF.position + UPPER_BOUND_REF.position) / 2f;
+                _bounds = new float[6] {
+                    LOWER_BOUND_REF.position.x, LOWER_BOUND_REF.position.y, LOWER_BOUND_REF.position.z,
+                    UPPER_BOUND_REF.position.x, UPPER_BOUND_REF.position.y, UPPER_BOUND_REF.position.z
+                };
+            }
+        }
+
+
         // ==================================== //
         // ===== PARTICLES REPRESENTATION ===== //
         // ==================================== //
@@ -169,6 +245,7 @@ namespace ObstaclePrimitives {
         [System.Serializable]
         public class Particle {
             public float3 position;
+            public float3 force;
         };
 
         /// <summary>
@@ -205,12 +282,14 @@ namespace ObstaclePrimitives {
         /// <param name="es">[0] = starting index in the edges arrays, [1] = the number of edges</param>
         /// <param name="localLowerBound">The local-space lower bound of this obstacle</param>
         /// <param name="localUpperBound">The local-space upper bound of this obstacle</param>
+        /// <param name="mass">The mass of the obstacle. Considered a "static" variable because mass doesn't change.</param>
         [System.Serializable]
         public struct ObstacleStatic {
             public uint index;
             public uint2 vs;
             public uint2 ts;
             public uint2 es;
+            public float mass;
         }
 
         /// <summary>
@@ -267,11 +346,13 @@ namespace ObstaclePrimitives {
         /// <param name="obstacleIndex">Ref. index to its parent obstacle in the obstacles arrays.</param>
         /// <param name="position">The current world-space position of this vertex.</param>
         /// <param name="normal">The current world-space, 3D normal vector of this vertex. Direction only.</param>
+        /// <param name="force">The calculated force based on the current velocity and previous velocity, which is F=m*(v/t)</param>
         [System.Serializable]
         public struct VertexDynamic {
             public uint obstacleIndex;
             public float3 position;
             public float3 normal;
+            public float3 force;
         }
 
 
@@ -349,6 +430,14 @@ namespace ObstaclePrimitives {
             public float3 localNormal;
         }
 
+
+        // =============================== //
+        // ===== GRID REPRESENTATION ===== //
+        // =============================== //
+
+        // PARTICLE GRID SECTION (in Classes) DOES NOT HAVE A STRUCT REPRESENTATION
+
+
         // ==================================== //
         // ===== PARTICLES REPRESENTATION ===== //
         // ==================================== //
@@ -361,6 +450,7 @@ namespace ObstaclePrimitives {
         [System.Serializable]
         public struct Particle {
             public float3 position;
+            public float3 force;
         };
 
         /// <summary>
@@ -378,17 +468,6 @@ namespace ObstaclePrimitives {
             public int3 lowerLimits;
             public int3 upperLimits;
         }
-
-        /*
-        [System.Serializable]
-        public struct Projection {
-            public int intersections;
-            public float3 position;
-            public float3 normal;
-            public float distance;
-            public float frictionCoefficient;
-        }
-        */
         
         [System.Serializable]
         public struct Projection {
@@ -396,6 +475,8 @@ namespace ObstaclePrimitives {
             public float3 projection;
             public float3 position;
             public float3 normal;
+            public float3 particle_force;
+            public float3 external_force;
             public int counter;
             public float frictionCoefficient;
 

@@ -8,6 +8,7 @@ struct ObstacleStatic {
     uint2 vs;                   // [0] = starting index in the vertices arrays, [1] = the number of vertices.
     uint2 ts;                   // [0] = starting index in the triangles arrays, [1] = the number of triangles.
     uint2 es;                   // [0] = starting index in the edges arrays, [1] = the number of edges.
+    float mass;                 // The mass of the obstacle. Considered a "static" variable because mass doesn't change.
 };
 
 /// Represents the DYNAMIC properties of an obstacle that change during the update lop.
@@ -35,6 +36,7 @@ struct VertexDynamic {
     uint obstacleIndex;         // Ref. index to its parent obstacle in the obstacles arrays.
     float3 position;            // The current world-space position of this vertex.
     float3 normal;              // The current world-space, 3D normal vector of this vertex.
+    float3 force;               // The calculated force based on the current velocity and previous velocity, which is F=m*(v/t)
 };
 
 /// Represents the STATIC properties of each triangle. These values never change after the pre-processing stage
@@ -71,12 +73,15 @@ struct EdgeStatic {
 // Represents a fluid particle in the simulation
 struct Particle {
     float3 position;
+    float3 force;
 };
 struct Projection {
     uint triangleID;
     float3 projection;
     float3 position;
     float3 normal;
+    float3 particle_force;      // The force exerted inward by the particle
+    float3 external_force;      // The force exerted outward by the boundary due to velocity
     int counter;
     float frictionCoefficient;
 
@@ -141,6 +146,8 @@ uint numEdges;
 uint numParticles;
 float particleRenderRadius;
 
+float dt;                       // delta time - The time difference between frames.
+
 StructuredBuffer<ObstacleStatic> obstacles_static;
 RWStructuredBuffer<ObstacleDynamic> obstacles_dynamic;
 StructuredBuffer<VertexStatic> vertices_static;
@@ -152,6 +159,13 @@ RWStructuredBuffer<float3> edges_dynamic;
 
 RWStructuredBuffer<Particle> particles;
 RWStructuredBuffer<Projection> projections;
+
+#pragma kernel ResetVertexForces
+[numthreads(64,1,1)]
+void ResetVertexForces(uint id : SV_DispatchThreadID) {
+    if (id >= numVertices) return;
+    vertices_dynamic[id].force = float3(0,0,0);
+}
 
 #pragma kernel UpdateVertices
 [numthreads(16,1,1)]
@@ -167,8 +181,10 @@ void UpdateVertices(uint id : SV_DispatchThreadID) {
     float3 worldPosition;
     for(uint i = o_static.vs[0]; i < o_static.vs[0]+o_static.vs[1]; i++) {
         v_static = vertices_static[i];
-        v_dynamic = vertices_dynamic[i];
+        v_dynamic = vertices_dynamic[i];        
         worldPosition = LocalPointToWorldPoint(o_dynamic.position, o_dynamic.rotation, o_dynamic.scale, v_static.localPosition);
+        // Update the exertion force the vertex will push onto particles.  Calculated first before the position is updated
+        v_dynamic.force = o_static.mass * (worldPosition - v_dynamic.position)/dt;
         // Update the world position of the current vertex
         v_dynamic.position = worldPosition;
         // Update the world normal of the current vertex
@@ -292,6 +308,8 @@ void ResetTempProjections(uint id : SV_DispatchThreadID) {
     projection.projection = particles[id].position;
     projection.position = particles[id].position;
     projection.normal = float3(0,0,0);
+    projection.particle_force = float3(0,0,0);
+    projection.external_force = float3(0,0,0);
     projection.counter = 0;
     projection.frictionCoefficient = 0.0;
 
@@ -406,6 +424,9 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             float3 e2_2DN = tri_dynamic.v1v3n;
             float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
             float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
+            float denom, u, v, distfinal;
+            float3 c, innermostPoint;
+            
             if (distance(particle.position, v2.position) < distance(particle.position, closestVertexPosition)) {
                 closestVertexPosition = v2.position;
                 closestVertexNormal = v2.normal;
@@ -445,6 +466,31 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 projection.projection = proj1;
                 projection.position = final_proj_position;
                 projection.normal = final_proj_normal;
+
+                // We have to calculate the force at this point
+                denom = dot(projection.normal, projection.normal);
+                c = cross(v3.position - v2.position, final_proj_position - v2.position);
+                u = dot(projection.normal, c) / denom;
+                c = cross(v1.position - v3.position, final_proj_position - v3.position);
+                v = dot(projection.normal, c) / denom;
+                projection.external_force = (u * v1.force) + (v * v2.force) + ((1-u-v) * v3.force);
+                // We also have to calculate the amount of force exerted by the particle.
+                // For now, we just calculate the orthogonal force based on the particle's current force
+                // To calculate the force component along the normal vector, we:
+                // 1) detect if the particle is within range or is intersecting with the triangle
+                // 2) if so, perform the follwing: dot(normal,particle force) / length(normal)
+                // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
+                distfinal = distance(final_proj_position, particle.position);
+                innermostPoint = particle.position + normalize(final_proj_position - particle.position) * min(particleRenderRadius,distfinal);
+                if (
+                    distfinal <= particleRenderRadius 
+                    || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
+                ) {
+                    projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                } else {
+                    projection.particle_force = float3(0,0,0);
+                }
+
                 projection.counter = isInTriangle;
                 projection.frictionCoefficient = o_dynamic.frictionCoefficient;
 

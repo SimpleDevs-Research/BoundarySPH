@@ -3,55 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Mathematics;
 using UnityEditor;
+using OP = ObstaclePrimitives.Classes;
 
 [ExecuteInEditMode]
 public class ParticleGrid : MonoBehaviour
 {
-
-    [System.Serializable]
-    public class ParticleGridSection {
-
-        [SerializeField, Tooltip("The transform reference for the lower bound of this subsection")]
-        public Transform LOWER_BOUND_REF = null;
-        [SerializeField, Tooltip("The transform reference for the upper bound of this subsection")]
-        public Transform UPPER_BOUND_REF = null;
-        [SerializeField, ReadOnly, Tooltip("The origin (center) of the section formed from the average of the bound refs")]
-        private Vector3 _origin;
-        public Vector3 origin => _origin;
-        public float[] originF => new float[3]{origin.x, origin.y, origin.z};
-        // Store the bounds formed by this section's upper and lower bounds
-        [SerializeField, ReadOnly]
-        private float[] _bounds = new float[6];
-        public float[] bounds => _bounds;
-        public Vector3 boundsV3 => new Vector3(_bounds[3]-_bounds[0], _bounds[4]-_bounds[1],_bounds[5]-_bounds[2]);
-        [SerializeField, Tooltip("Color the bounds of this subsection")]
-        private Color _gizmosColor = new Vector4(1f,1f,1f,0.5f);
-        public Color gizmosColor => _gizmosColor;
-
-        public void UpdateSegment(float[] restrictionBounds,  int[] numCellsPerAxis, float gridCellSize) {
-            if (LOWER_BOUND_REF == null || UPPER_BOUND_REF == null) return;
-            // First, make sure that the transforms for the bounds are within the inner bounds of the parent grid
-            LOWER_BOUND_REF.position = new Vector3(
-                Mathf.Clamp(LOWER_BOUND_REF.position.x, restrictionBounds[0], Mathf.Min(UPPER_BOUND_REF.position.x, restrictionBounds[3])),
-                Mathf.Clamp(LOWER_BOUND_REF.position.y, restrictionBounds[1], Mathf.Min(UPPER_BOUND_REF.position.y, restrictionBounds[4])),
-                Mathf.Clamp(LOWER_BOUND_REF.position.z, restrictionBounds[2], Mathf.Min(UPPER_BOUND_REF.position.z, restrictionBounds[5]))
-            );
-            UPPER_BOUND_REF.position = new Vector3(
-                Mathf.Clamp(UPPER_BOUND_REF.position.x, Mathf.Max(LOWER_BOUND_REF.position.x, restrictionBounds[0]), restrictionBounds[3]),
-                Mathf.Clamp(UPPER_BOUND_REF.position.y, Mathf.Max(LOWER_BOUND_REF.position.y, restrictionBounds[1]), restrictionBounds[4]),
-                Mathf.Clamp(UPPER_BOUND_REF.position.z, Mathf.Max(LOWER_BOUND_REF.position.z, restrictionBounds[2]), restrictionBounds[5])
-            );
-            _origin = (LOWER_BOUND_REF.position + UPPER_BOUND_REF.position) / 2f;
-            _bounds = new float[6] {
-                LOWER_BOUND_REF.position.x,
-                LOWER_BOUND_REF.position.y,
-                LOWER_BOUND_REF.position.z,
-                UPPER_BOUND_REF.position.x,
-                UPPER_BOUND_REF.position.y,
-                UPPER_BOUND_REF.position.z
-            };
-        }
-    }
 
     [Header("== GRID CONFIGURATIONS ==")]
         #if UNITY_EDITOR
@@ -151,7 +107,7 @@ public class ParticleGrid : MonoBehaviour
     }
 
     [Tooltip("Create subsections of this grid for other particle systems. Subsections adhere to the inner bounds of the grid and will adopt its grid cell size and other properties.")]
-    public List<ParticleGridSection> sections = new List<ParticleGridSection>();
+    public List<OP.ParticleGridSection> sections = new List<OP.ParticleGridSection>();
 
     [Header("== PARTICLE CONFIGURATIONS ==")]
         #if UNITY_EDITOR
@@ -184,9 +140,9 @@ public class ParticleGrid : MonoBehaviour
         Gizmos.DrawWireCube(origin, _UPPER_BOUND_TRANSFORM.position - _LOWER_BOUND_TRANSFORM.position);
 
         if (sections.Count > 0) {
-            foreach(ParticleGridSection section in sections) {
+            foreach(OP.ParticleGridSection section in sections) {
                 Gizmos.color = section.gizmosColor;
-                Gizmos.DrawCube(section.origin, section.boundsV3);
+                Gizmos.DrawCube(section.origin, section.dimensionsV3);
             }
         }
 
@@ -210,7 +166,7 @@ public class ParticleGrid : MonoBehaviour
             if (_LOWER_BOUND_TRANSFORM != null) _LOWER_BOUND_TRANSFORM.gameObject.SetActive(false);
             if (_UPPER_BOUND_TRANSFORM != null) _UPPER_BOUND_TRANSFORM.gameObject.SetActive(false);
             if (sections.Count > 0) {
-                foreach(ParticleGridSection section in sections) {
+                foreach(OP.ParticleGridSection section in sections) {
                     if (section.LOWER_BOUND_REF != null) section.LOWER_BOUND_REF.gameObject.SetActive(false);
                     if (section.UPPER_BOUND_REF != null) section.UPPER_BOUND_REF.gameObject.SetActive(false);
                 }
@@ -221,7 +177,7 @@ public class ParticleGrid : MonoBehaviour
             if (_LOWER_BOUND_TRANSFORM != null) _LOWER_BOUND_TRANSFORM.gameObject.SetActive(true);
             if (_UPPER_BOUND_TRANSFORM != null) _UPPER_BOUND_TRANSFORM.gameObject.SetActive(true);
             if (sections.Count > 0) {
-                foreach(ParticleGridSection section in sections) {
+                foreach(OP.ParticleGridSection section in sections) {
                     if (section.LOWER_BOUND_REF != null) section.LOWER_BOUND_REF.gameObject.SetActive(true);
                     if (section.UPPER_BOUND_REF != null) section.UPPER_BOUND_REF.gameObject.SetActive(true);
                 }
@@ -236,7 +192,7 @@ public class ParticleGrid : MonoBehaviour
         UpdateBounds();
         DetectControllers();
         if (sections.Count > 0) {
-            foreach(ParticleGridSection section in sections) {
+            foreach(OP.ParticleGridSection section in sections) {
                 section.UpdateSegment(_innerBounds, _numCellsPerAxis, _gridCellSize);
             }
         }
