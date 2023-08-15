@@ -27,6 +27,7 @@ namespace ObstaclePrimitives {
             public int2 ts;
             public int2 es;
             public float mass;
+            public uint has_rb;
         }
 
         /// <summary>
@@ -50,6 +51,7 @@ namespace ObstaclePrimitives {
             public float3 scale;
             public float3 lowerBound;
             public float3 upperBound;
+            public float3 centerOfMass;
             public float frictionCoefficient;
             public uint checkObstacleBounds;
             public uint checkTriangleBounds;
@@ -290,6 +292,7 @@ namespace ObstaclePrimitives {
             public uint2 ts;
             public uint2 es;
             public float mass;
+            public uint has_rb;
         }
 
         /// <summary>
@@ -314,6 +317,7 @@ namespace ObstaclePrimitives {
             public float3 scale;
             public float3 lowerBound;
             public float3 upperBound;
+            public float3 centerOfMass;
             public float frictionCoefficient;
             public uint checkObstacleBounds;
             public uint checkTriangleBounds;

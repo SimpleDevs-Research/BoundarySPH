@@ -9,6 +9,7 @@ struct ObstacleStatic {
     uint2 ts;                   // [0] = starting index in the triangles arrays, [1] = the number of triangles.
     uint2 es;                   // [0] = starting index in the edges arrays, [1] = the number of edges.
     float mass;                 // The mass of the obstacle. Considered a "static" variable because mass doesn't change.
+    uint has_rb;
 };
 
 /// Represents the DYNAMIC properties of an obstacle that change during the update lop.
@@ -19,6 +20,7 @@ struct ObstacleDynamic {
     float3 scale;               // The world-space scale of the transform. Typically via `Transform.LossyScale`.
     float3 lowerBound;          // The lower boundary position of this obstacle's bounding box.
     float3 upperBound;          // The upper boundary position of this obstacle's bounding box.
+    float3 centerOfMass;
     float frictionCoefficient;  // The amount of friction the object is meant to exhibit on particles.
     uint checkObstacleBounds;
     uint checkTriangleBounds;
@@ -156,6 +158,8 @@ StructuredBuffer<TriangleStatic> triangles_static;
 RWStructuredBuffer<TriangleDynamic> triangles_dynamic;
 StructuredBuffer<EdgeStatic> edges_static;
 RWStructuredBuffer<float3> edges_dynamic;
+RWStructuredBuffer<int3> translational_forces;
+RWStructuredBuffer<int3> torque_forces;
 
 RWStructuredBuffer<Particle> particles;
 RWStructuredBuffer<Projection> projections;
@@ -321,6 +325,9 @@ void ResetTempProjections(uint id : SV_DispatchThreadID) {
     projection.e2_3DN = float3(0,0,0);
 
     projections[id] = projection;
+
+    translational_forces[id] = int3(0,0,0);
+    torque_forces[id] = int3(0,0,0);
 }
 
 int CheckVoroniRegions(
@@ -482,6 +489,8 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
                 distfinal = distance(final_proj_position, particle.position);
                 innermostPoint = particle.position + normalize(final_proj_position - particle.position) * min(particleRenderRadius,distfinal);
+                //projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                
                 if (
                     distfinal <= particleRenderRadius 
                     || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
@@ -490,6 +499,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 } else {
                     projection.particle_force = float3(0,0,0);
                 }
+                
 
                 projection.counter = isInTriangle;
                 projection.frictionCoefficient = o_dynamic.frictionCoefficient;
@@ -589,4 +599,28 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
     */
 
     projections[id] = projection;
+}
+
+#pragma kernel CombineForces
+[numthreads(64,1,1)]
+void CombineForces(uint id : SV_DispatchThreadID) {
+    if (id >= numParticles) return;
+    // We do all the checks to get the relevant obstacle and further check if the obstacle even has a rigidbody or not.
+    Projection p = projections[id];
+    uint triangleID = p.triangleID;
+    if (triangleID >= numTriangles) return;
+    uint obstacleID = triangles_static[triangleID].obstacleIndex;
+    if (obstacles_static[obstacleID].has_rb == 0) return;
+    // We need to calculate translational and torque force.
+    // For translational force, we merely find the net force. This is merely the net force from summing all forces from particles
+    InterlockedAdd(translational_forces[obstacleID][0], (int)(p.particle_force[0] * 1024));
+    InterlockedAdd(translational_forces[obstacleID][1], (int)(p.particle_force[1] * 1024));
+    InterlockedAdd(translational_forces[obstacleID][2], (int)(p.particle_force[2] * 1024));
+    // For torque forces, we need the center of mass and calculate the cross product of the force and the relative vector from the center of mass to the position the force is applied
+    float3 com = obstacles_dynamic[obstacleID].centerOfMass;
+    float3 torque = cross((p.position - com),p.particle_force);
+    InterlockedAdd(torque_forces[obstacleID][0], (int)(torque[0] * 1024));
+    InterlockedAdd(torque_forces[obstacleID][1], (int)(torque[1] * 1024));
+    InterlockedAdd(torque_forces[obstacleID][2], (int)(torque[2] * 1024));
+    //translational_forces[obstacleID] += projections[id].particle_force;
 }
