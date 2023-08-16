@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 using Unity.Mathematics;
+using OP = ObstaclePrimitives.Structs;
 
 public class BoidsController : MonoBehaviour
 {
+
     [Header("== REFERENCES ==")]
     [SerializeField, Tooltip("Reference to a ParticleGrid component that acts as this controller's grid system")]
     public ParticleGrid _GRID = null;
@@ -17,9 +19,9 @@ public class BoidsController : MonoBehaviour
     private Transform _boidPrefab;
 
     [Header("== BOID SETTINGS ==")]
-    [SerializeField] private int _numBoids = 1;
-    public int numBoids => _numBoids;
-    [SerializeField] private Transform[] _boids;
+    [SerializeField] private List<MeshObsGPU.TestObstacle> _boids = new List<MeshObsGPU.TestObstacle>();
+    public List<MeshObsGPU.TestObstacle> boids => _boids;
+    public int numBoids => _boids.Count;
     //public float boidSize = 0.05f;
     //public Color boidColor = Color.red;
     [SerializeField, ReadOnly] private float _visualRange;
@@ -59,9 +61,9 @@ public class BoidsController : MonoBehaviour
         if (!Application.isPlaying || !showGizmos) return;
         for(int i = 0; i < numBoids; i++) {
             Gizmos.color = new Vector4(1f,0f,0f,0.25f);
-            Gizmos.DrawSphere(_boids[i].position, _visualRange);
+            Gizmos.DrawSphere(_boids[i].obstacle.position, _visualRange);
             Gizmos.color = new Vector4(0f,0f,1f,0.5f);
-            Gizmos.DrawSphere(_boids[i].position, _innerRange);
+            Gizmos.DrawSphere(_boids[i].obstacle.position, _innerRange);
         }
     }
 
@@ -258,7 +260,6 @@ public class BoidsController : MonoBehaviour
     private void GenerateBoidTransforms() {
         boidsBuffer.GetData(_gpuBoids);
         boidVelocitiesBuffer.GetData(_gpuBoidVelocities);
-        _boids = new Transform[_numBoids];
         for(int i = 0; i < numBoids; i++) {
             float3 v = _gpuBoidVelocities[i];
             Transform newBoid = Instantiate(
@@ -267,7 +268,7 @@ public class BoidsController : MonoBehaviour
                 Quaternion.LookRotation(new Vector3(v[0],v[1],v[2])),
                 this.transform
             ) as Transform;
-            _boids[i] = newBoid;
+            _boids[i].obstacle = newBoid;
         }
     }
 
@@ -276,8 +277,8 @@ public class BoidsController : MonoBehaviour
         boidVelocitiesBuffer.GetData(_gpuBoidVelocities);
         for(int i = 0; i < numBoids; i++) {
             float3 v = _gpuBoidVelocities[i];
-            _boids[i].position = _gpuBoids[i].position;
-            _boids[i].rotation = Quaternion.LookRotation(new Vector3(v[0],v[1],v[2]));
+            _boids[i].obstacle.position = _gpuBoids[i].position;
+            _boids[i].obstacle.rotation = Quaternion.LookRotation(new Vector3(v[0],v[1],v[2]));
         }
     }
 

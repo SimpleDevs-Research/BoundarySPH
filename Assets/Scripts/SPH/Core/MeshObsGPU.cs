@@ -38,7 +38,8 @@ public class MeshObsGPU : MonoBehaviour
     }
     
     public ComputeShader _SHADER;
-    public ParticleController _PARTICLE_CONTROLLER;
+    public ParticleController _PARTICLE_CONTROLLER = null;
+    public BoidsController _BOIDS_CONTROLLER = null;
     public List<TestObstacle> obstacles;
 
     public List<OP.ObstacleStatic> obstacles_static;
@@ -277,6 +278,10 @@ public class MeshObsGPU : MonoBehaviour
             if (printDebugs) Debug.LogError("MeshObsGPU - ERROR: Cannot preprocess obstacles due to missing particles");
             return;
         }
+        // Check if we have a boids controller. If we do, we add them to our list of obstacles
+        if (_BOIDS_CONTROLLER != null && _BOIDS_CONTROLLER.numBoids > 0) {
+            obstacles.AddRange(_BOIDS_CONTROLLER.boids);
+        } 
         PreprocessObstacles();
         UpdateObstacles(true);
     }   
@@ -487,7 +492,9 @@ public class MeshObsGPU : MonoBehaviour
         
         // Before anything, we need to extract the mesh data! 
         // We also need to extract the vertex anbd triangle data from that mesh
-        Mesh mesh = obstacle.obstacle.GetComponent<MeshFilter>().sharedMesh;
+        Mesh mesh = (obstacle.obstacle.GetComponent<SkinnedMeshRenderer>() != null) 
+            ? obstacle.obstacle.GetComponent<SkinnedMeshRenderer>().sharedMesh
+            : obstacle.obstacle.GetComponent<MeshFilter>().sharedMesh;
         var vs = mesh.vertices;
         var ts = mesh.triangles;
         obstacle.prevFriction = obstacle.frictionCoefficient;
@@ -825,11 +832,11 @@ public class MeshObsGPU : MonoBehaviour
     void UpdateParticlePositions() {
         // We only run this if _PARTICLE_CONTROLLER is null
         if (_PARTICLE_CONTROLLER != null) return;
-        float3[] particle_positions = new float3[numParticles];
+        OP.Particle[] particles = new OP.Particle[numParticles];
         for(int i = 0; i < numParticles; i++) {
-            particle_positions[i] = particles[i].position;
+            particles[i].position = particles[i].position;
         }
-        if (particles_buffer != null) particles_buffer.SetData(particle_positions);
+        if (particles_buffer != null) particles_buffer.SetData(particles);
     }
 
     void OnDestroy() {
