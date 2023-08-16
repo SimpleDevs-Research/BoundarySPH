@@ -48,6 +48,7 @@ public class MeshObsGPU : MonoBehaviour
 
     public float particleRenderRadius = 1f;
     public List<Transform> particles = new List<Transform>();
+    [SerializeField] private OP.Particle[] debug_particles;
     
     [SerializeField] private float _dt = 0.0165f;
 
@@ -196,7 +197,7 @@ public class MeshObsGPU : MonoBehaviour
         }
         
         if (drawProjectionGizmos) {
-            
+            projections_buffer.GetData(projections_array);
             for(int i = 0; i < numParticles; i++) {
                 int tri_index = (int)projections_array[i].triangleID;
                 if (tri_index == numTriangles) continue;
@@ -215,6 +216,7 @@ public class MeshObsGPU : MonoBehaviour
                 Gizmos.DrawRay(projections_array[i].position, projections_array[i].normal);
                 
                 // Rendering the two edges associated and 2D and 3D normal vectors. Yellow = first edge, grey = second edge
+                /*
                 Handles.color = Color.yellow;
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e1,3);
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e1_3DN,2);
@@ -223,6 +225,7 @@ public class MeshObsGPU : MonoBehaviour
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e2,3);
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e2_3DN,2);
                 Handles.DrawLine(t_dynamic.center, t_dynamic.center + projections_array[i].e2_2DN,2);
+                */
 
                 int v1i = (int)(o_static.vs[0] + t_static.vertices[0]);
                 int v2i = (int)(o_static.vs[0] + t_static.vertices[1]);
@@ -258,9 +261,16 @@ public class MeshObsGPU : MonoBehaviour
                     vertices_dynamic_array[v3i].position,
                     new Vector3(0.25f,0.25f,0.25f)
                 );
-
+                /*
                 Handles.color = Color.black;
                 Handles.DrawLine(projections_array[i].position, t_dynamic.center);
+                */
+                Handles.color = Color.grey;
+                Handles.DrawLine(
+                    projections_array[i].position, 
+                    projections_array[i].position + projections_array[i].external_force,
+                    2
+                );
             }
             
         }
@@ -307,6 +317,7 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.Dispatch(combineForcesKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
     }
 
+    /*
     void FixedUpdate() {
         // Finally, we update each obstacle by getting the projections and checking if any obstacles should be updated, assuming they have a rigidbody
         //projections_buffer.GetData(projections_array);
@@ -327,24 +338,8 @@ public class MeshObsGPU : MonoBehaviour
             obstacles[i].obstacle.GetComponent<Rigidbody>().AddForce(translation_force);
             obstacles[i].obstacle.GetComponent<Rigidbody>().AddTorque(torque_force);
         }
-        Debug.Log(Time.fixedDeltaTime);
-        /*
-        for(int i = 0; i < numParticles; i++) {
-            // Grab the projection
-            OP.Projection p = projections_array[i];
-            // Exit early if the projection's triangleID is == numTriangles
-            if (p.triangleID == numTriangles) continue;
-            // Get the associated triangle
-            OP.TriangleStatic tri = triangles_static[(int)p.triangleID];
-            // Get the associated obstacle
-            TestObstacle obs = obstacles[(int)tri.obstacleIndex];
-            // exit early if the associated obstacle doesn't have a rigidbody
-            if (obs.obstacle.GetComponent<Rigidbody>() == null) continue;
-            // If all else, apply the particle force onto the rigidbody at the position
-            obs.obstacle.GetComponent<Rigidbody>().AddForceAtPosition(p.particle_force, p.position);
-        }
-        */
     }
+    */
 
     public void PreprocessObstacles() {
 
@@ -413,6 +408,7 @@ public class MeshObsGPU : MonoBehaviour
         torque_forces_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
         particles_buffer = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.PARTICLES_BUFFER : new ComputeBuffer(numParticles, sizeof(float)*6);
         projections_buffer = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.PROJECTIONS_BUFFER : new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int) + sizeof(float)*34);
+        if (_PARTICLE_CONTROLLER == null) debug_particles = new OP.Particle[numParticles];
 
         // Update the buffers
         obstacles_static_buffer.SetData(obstacles_static.ToArray());
@@ -832,11 +828,12 @@ public class MeshObsGPU : MonoBehaviour
     void UpdateParticlePositions() {
         // We only run this if _PARTICLE_CONTROLLER is null
         if (_PARTICLE_CONTROLLER != null) return;
-        OP.Particle[] particles = new OP.Particle[numParticles];
+        particles_buffer.GetData(debug_particles);
         for(int i = 0; i < numParticles; i++) {
-            particles[i].position = particles[i].position;
+            debug_particles[i].force = new(0f,0f,0f);
+            debug_particles[i].position = particles[i].position;
         }
-        if (particles_buffer != null) particles_buffer.SetData(particles);
+        particles_buffer.SetData(debug_particles);
     }
 
     void OnDestroy() {
