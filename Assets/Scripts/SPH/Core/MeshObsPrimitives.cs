@@ -266,6 +266,19 @@ namespace ObstaclePrimitives {
             public int3 upperLimits;
         }
 
+
+        // ================================ //
+        // ===== BOIDS REPRESENTATION ===== //
+        // ================================ //
+
+        [System.Serializable]
+        public class Boid {
+            public int obstacleID;
+            public float3 position;
+            public int3 gridIndices;
+            public int projectedGridIndex;
+        }
+
     }
 
     namespace Structs {
@@ -490,7 +503,21 @@ namespace ObstaclePrimitives {
             public float3 e2_2DN;
             public float3 e1_3DN;
             public float3 e2_3DN;
-        };
+        }
+
+
+        // ================================ //
+        // ===== BOIDS REPRESENTATION ===== //
+        // ================================ //
+        
+        [System.Serializable]
+        public struct Boid {
+            public int obstacleID;
+            public float3 position;
+            public int3 gridIndices;
+            public int projectedGridIndex;
+        }
+
 
     }
 }

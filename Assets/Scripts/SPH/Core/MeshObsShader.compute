@@ -432,7 +432,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
             float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
             float denom, u, v, distfinal;
-            float3 c, innermostPoint, v1force, v2force, v3force;
+            float3 c, innermostPoint;
             
             if (distance(particle.position, v2.position) < distance(particle.position, closestVertexPosition)) {
                 closestVertexPosition = v2.position;
@@ -480,14 +480,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 u = dot(projection.normal, c) / denom;
                 c = cross(v1.position - v3.position, final_proj_position - v3.position);
                 v = dot(projection.normal, c) / denom;
-                if (dot(v1.force,projection.normal)<0) v1force = float3(0,0,0);
-                else v1force = v1.force;
-                if (dot(v2.force,projection.normal)<0) v2force = float3(0,0,0);
-                else v2force = v2.force;
-                if (dot(v3.force,projection.normal)<0) v3force = float3(0,0,0);
-                else v3force = v3.force;
-                projection.external_force = (u * v1force) + (v * v2force) + ((1-u-v) * v3force);
-                if (dot(projection.external_force,projection.normal)<0) projection.external_force = -projection.external_force;
+                projection.external_force = (u * v1.force) + (v * v2.force) + ((1-u-v) * v3.force);
                 // We also have to calculate the amount of force exerted by the particle.
                 // For now, we just calculate the orthogonal force based on the particle's current force
                 // To calculate the force component along the normal vector, we:

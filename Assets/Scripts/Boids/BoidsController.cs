@@ -1,9 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEditor;
 using Random = UnityEngine.Random;
 using Unity.Mathematics;
 using OP = ObstaclePrimitives.Structs;
+
 
 public class BoidsController : MonoBehaviour
 {
@@ -32,16 +34,16 @@ public class BoidsController : MonoBehaviour
     [SerializeField] private float _separationFactor = 30f;
     [SerializeField] private float _alignmentFactor = 5f;
     [SerializeField] private float _turnSpeed = 2f;
+    [SerializeField] private float _meshTranslateSpeed = 1f;
+    [SerializeField] private float _meshTurnSpeed = 1f;
     [SerializeField] private float _dt = -1f;
     [SerializeField] private float _sphFactor = 1f;
-    [System.Serializable]
-    public struct Boid {
-        public float3 position;
-        public int3 gridIndices;
-        public int projectedGridIndex;
-    };
-    [SerializeField, ReadOnly] private Boid[] _gpuBoids;
+    [SerializeField] private bool _restrictX = false, _restrictY = false, _restrictZ = false;
+
+    [SerializeField, ReadOnly] private OP.Boid[] _gpuBoids;
     [SerializeField, ReadOnly] private float3[] _gpuBoidVelocities;
+    [SerializeField, ReadOnly] private float3[] _gpuBoidCurrentDirections;
+    [SerializeField, ReadOnly] private float[] _gpuBoidDirectionDiffs;
 
     private int _CPU_LIMIT = 2048;
 
@@ -55,15 +57,37 @@ public class BoidsController : MonoBehaviour
     [SerializeField, ReadOnly] private int _numGridBlocks;
     [SerializeField, ReadOnly] private int _numBoidBlocks;
 
-    [SerializeField] private bool showGizmos = true;
+    [SerializeField] private bool showRadii = true;
+    [SerializeField] private bool showDirection = true;
+    [SerializeField] private bool showExternalForces = true;
+    private bool showGizmos => showRadii || showDirection || showExternalForces;
 
     void OnDrawGizmos() {
         if (!Application.isPlaying || !showGizmos) return;
+        int3[] external_forces = new int3[externalForcesBuffer.count];
+        externalForcesBuffer.GetData(external_forces);
         for(int i = 0; i < numBoids; i++) {
-            Gizmos.color = new Vector4(1f,0f,0f,0.25f);
-            Gizmos.DrawSphere(_boids[i].obstacle.position, _visualRange);
-            Gizmos.color = new Vector4(0f,0f,1f,0.5f);
-            Gizmos.DrawSphere(_boids[i].obstacle.position, _innerRange);
+            if (showRadii) {
+                Gizmos.color = new Vector4(1f,0f,0f,0.25f);
+                Gizmos.DrawSphere(_boids[i].obstacle.position, _visualRange);
+                Gizmos.color = new Vector4(0f,0f,1f,0.5f);
+                Gizmos.DrawSphere(_boids[i].obstacle.position, _innerRange);
+            }
+            if (showDirection) {
+                Handles.color = Color.red;
+                Handles.DrawLine(_gpuBoids[i].position, _gpuBoids[i].position + _gpuBoidVelocities[i] * 5f, 3);
+            }
+            if (showExternalForces) {
+                if (_boids[i].obstacleID == -1) continue;
+                int3 extInt3 = external_forces[_boids[i].obstacleID];
+                float3 external_force = new(
+                    (float)extInt3[0] / 1024f,
+                    (float)extInt3[1] / 1024f,
+                    (float)extInt3[2] / 1024f
+                );
+                Handles.color = Color.blue;
+                Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + external_force * 5f * _dt, 3);
+            }
         }
     }
 
@@ -78,7 +102,9 @@ public class BoidsController : MonoBehaviour
             Debug.LogError("BOIDS - ERROR: Cannot operate if `SHADER` is set to `null`. Please define this reference and restart the simulation.");
             return;
         }
-
+        // We prime the boids to have an obstacle ID of -1. This is the catch in the `UpdateBoids` gpu kernel.
+        // This will also be updated later after `Start()` is called in `MeshObsGPU`, if it is active in the scene.
+        foreach(MeshObsGPU.TestObstacle obs in _boids) obs.obstacleID = -1;
         // Initialize some key variables central to Boid behavior
         InitializeGlobalVariables();
         // Initialize the GPU-specific parameters and buffers
@@ -154,6 +180,9 @@ public class BoidsController : MonoBehaviour
         _SHADER.SetFloat("dt", deltaTime);
 
         _SHADER.SetFloat("sphFactor", _sphFactor);
+        _SHADER.SetInt("restrictX", (_restrictX) ? 1 : 0);
+        _SHADER.SetInt("restrictY", (_restrictY) ? 1 : 0);
+        _SHADER.SetInt("restrictZ", (_restrictZ) ? 1 : 0);
     }
 
     public ComputeBuffer gridBuffer, innerBoundsBuffer;
@@ -161,6 +190,11 @@ public class BoidsController : MonoBehaviour
     
     public ComputeBuffer boidsBuffer, boidVelocitiesBuffer;
     private ComputeBuffer boidOffsetsBuffer, rearrangedBoidsBuffer;
+
+    private ComputeBuffer boidCurrentDirectionBuffer;
+
+    private ComputeBuffer externalForcesBuffer;
+    private bool externalForcesSet = false;
 
     private void InitializeShaderBuffers() {
         // === CREATING COMPUTE BUFFERS === //
@@ -171,12 +205,17 @@ public class BoidsController : MonoBehaviour
             gridSumsBuffer1 = new ComputeBuffer(_numGridBlocks, sizeof(int));
             gridSumsBuffer2 = new ComputeBuffer(_numGridBlocks, sizeof(int));
         // Boids-specific buffers
-            boidsBuffer = new ComputeBuffer(numBoids, sizeof(float)*3 + sizeof(int)*4);
+            boidsBuffer = new ComputeBuffer(numBoids, sizeof(float)*3 + sizeof(int)*5);
             boidVelocitiesBuffer = new ComputeBuffer(numBoids, sizeof(float)*3);
-            _gpuBoids = new Boid[numBoids];
+            _gpuBoids = new OP.Boid[numBoids];
             _gpuBoidVelocities = new float3[numBoids];
             boidOffsetsBuffer = new ComputeBuffer(numBoids, sizeof(int));
             rearrangedBoidsBuffer = new ComputeBuffer(numBoids, sizeof(int));
+            boidCurrentDirectionBuffer = new ComputeBuffer(numBoids, sizeof(float)*3);
+            _gpuBoidCurrentDirections = new float3[numBoids];
+            _gpuBoidDirectionDiffs = new float[numBoids];
+        // Obstacle Interaction buffers
+            externalForcesBuffer = new ComputeBuffer(numBoids, sizeof(int)*3);
 
         // POPULATING COMPUTE BUFFERS
         // Grid-specific buffers
@@ -215,7 +254,18 @@ public class BoidsController : MonoBehaviour
             _SHADER.SetBuffer(updateBoidsKernel, "boidVelocities", boidVelocitiesBuffer);
             _SHADER.SetBuffer(updateBoidsKernel, "gridOffsets", gridOffsetsBuffer);
             _SHADER.SetBuffer(updateBoidsKernel, "innerBounds", innerBoundsBuffer);
+            _SHADER.SetBuffer(updateBoidsKernel, "boidCurrentDirections", boidCurrentDirectionBuffer);
+            _SHADER.SetBuffer(updateBoidsKernel, "externalForces", externalForcesBuffer);
+    }
 
+    public void SetExternalForcesBuffer(ComputeBuffer newBuffer) {
+        externalForcesBuffer.Release();
+        externalForcesBuffer = newBuffer;
+        _SHADER.SetBuffer(updateBoidsKernel, "externalForces", externalForcesBuffer);
+        boidsBuffer.GetData(_gpuBoids);
+        for(int i = 0; i < numBoids; i++) _gpuBoids[i].obstacleID = _boids[i].obstacleID;
+        boidsBuffer.SetData(_gpuBoids);
+        externalForcesSet = true;
     }
 
     // Update is called once per frame
@@ -269,17 +319,38 @@ public class BoidsController : MonoBehaviour
                 this.transform
             ) as Transform;
             _boids[i].obstacle = newBoid;
+            _gpuBoidCurrentDirections[i] = new(
+                newBoid.forward.x, 
+                newBoid.forward.y, 
+                newBoid.forward.z
+            );
         }
+        boidCurrentDirectionBuffer.SetData(_gpuBoidCurrentDirections);
     }
 
     private void UpdateBoidTransforms() {
         boidsBuffer.GetData(_gpuBoids);
         boidVelocitiesBuffer.GetData(_gpuBoidVelocities);
+        float posStep = _meshTranslateSpeed;
+        float rotStep = _meshTurnSpeed;
+        Vector3 targetPos;
+        Quaternion targetRot;
         for(int i = 0; i < numBoids; i++) {
             float3 v = _gpuBoidVelocities[i];
-            _boids[i].obstacle.position = _gpuBoids[i].position;
-            _boids[i].obstacle.rotation = Quaternion.LookRotation(new Vector3(v[0],v[1],v[2]));
+            float3 p = _gpuBoids[i].position;
+            targetPos = new Vector3(p[0],p[1],p[2]);
+            targetRot = Quaternion.LookRotation(new Vector3(v[0],v[1],v[2]));
+            //_boids[i].obstacle.position = new Vector3(_gpuBoids[i].position[0], _gpuBoids[i].position[1], _gpuBoids[i].position[2]);
+            _boids[i].obstacle.position = Vector3.MoveTowards(_boids[i].obstacle.position, targetPos, posStep);
+            //_boids[i].obstacle.rotation = targetRot
+            _boids[i].obstacle.rotation = Quaternion.RotateTowards(_boids[i].obstacle.rotation, targetRot, rotStep);
+            _gpuBoidCurrentDirections[i] = new(
+                _boids[i].obstacle.forward.x, 
+                _boids[i].obstacle.forward.y, 
+                _boids[i].obstacle.forward.z
+            );
         }
+        boidCurrentDirectionBuffer.SetData(_gpuBoidCurrentDirections);
     }
 
     void OnDestroy() {
@@ -292,5 +363,7 @@ public class BoidsController : MonoBehaviour
         boidVelocitiesBuffer.Release();
         boidOffsetsBuffer.Release();
         rearrangedBoidsBuffer.Release();
+        boidCurrentDirectionBuffer.Release();
+        externalForcesBuffer.Release();
     }
 }

@@ -1,4 +1,5 @@
 struct Boid {
+    int obstacleID;
     float3 position;
     int3 gridIndices;
     int projectedGridIndex;
@@ -32,12 +33,18 @@ float dt;
 
 float sphFactor;
 
+int restrictX;
+int restrictY;
+int restrictZ;
+
 int randomSeed;
 int state;
 RWStructuredBuffer<Boid> boids;
 RWStructuredBuffer<float3> boidVelocities;
 RWStructuredBuffer<int> boidOffsets;
 RWStructuredBuffer<uint> rearrangedBoids;
+RWStructuredBuffer<float3> boidCurrentDirections;
+RWStructuredBuffer<int3> externalForces;
 
 // === HELPER FUNCTIONS === //
 // Basic random generation
@@ -76,31 +83,42 @@ uint GetProjectedGridIndexFromXYZ(uint x, uint y, uint z) {
 #pragma kernel ClearGrid
 [numthreads(64,1,1)]
 void ClearGrid(uint id : SV_DispatchThreadID) {
-    if (id >= numGridCells) return;
+    if (id >= uint(numGridCells)) return;
     grid[id] = 0;
 }
 
 #pragma kernel GenerateBoids
 [numthreads(64, 1, 1)]
 void GenerateBoids(uint id : SV_DispatchThreadID) {
-  if (id >= numBoids) return;
+  if (id >= uint(numBoids)) return;
   state = randomSeed + id;
-  boids[id].position = float3(
-    randRange(innerBounds[0], innerBounds[3]), 
-    randRange(innerBounds[1], innerBounds[4]), 
-    randRange(innerBounds[2], innerBounds[5])
-  );
-  boidVelocities[id] = float3(
-    randRange(-maxSpeed, maxSpeed), 
-    randRange(-maxSpeed, maxSpeed), 
-    randRange(-maxSpeed, maxSpeed)
-  );
+  float posX = (innerBounds[3] + innerBounds[0])/2.0;
+  float rotX = 0.0;
+  if (restrictX == 0) {
+    posX = randRange(innerBounds[0], innerBounds[3]);
+    rotX = randRange(-maxSpeed, maxSpeed);
+  }
+  float posY = (innerBounds[4] + innerBounds[1])/2.0;
+  float rotY = 0.0;
+  if (restrictY == 0) {
+    posY = randRange(innerBounds[1], innerBounds[4]);
+    rotY = randRange(-maxSpeed, maxSpeed);
+  }
+  float posZ = (innerBounds[5] + innerBounds[2])/2.0;
+  float rotZ = 0.0;
+  if (restrictZ == 0) {
+    posZ = randRange(innerBounds[2], innerBounds[5]);
+    rotZ = randRange(-maxSpeed, maxSpeed);
+  }
+  boids[id].obstacleID = -1;
+  boids[id].position = float3(posX, posY, posZ);
+  boidVelocities[id] = float3(rotX, rotY, rotZ);
 }
 
 #pragma kernel UpdateGridCellCounts
 [numthreads(64,1,1)]
 void UpdateGridCellCounts(uint id : SV_DispatchThreadID) {
-    if (id >= numBoids) return;
+    if (id >= uint(numBoids)) return;
     Boid b = boids[id];
     int3 gridIndices = GetGridXYZIndices(b.position);
     int projectedGridIndex = GetProjectedGridIndexFromXYZ(gridIndices);
@@ -145,7 +163,7 @@ void PrefixSum(uint projectedCellID : SV_DispatchThreadID, uint threadID : SV_Gr
 #pragma kernel SumBlocks
 [numthreads(64, 1, 1)]
 void SumBlocks(uint id : SV_DISPATCHTHREADID) {
-  if (id >= numGridBlocks) return;
+  if (id >= uint(numGridBlocks)) return;
 
   uint k = id;
   if (k < d) gridSumsBuffer[k] = gridSumsBufferIn[k];
@@ -155,7 +173,7 @@ void SumBlocks(uint id : SV_DISPATCHTHREADID) {
 #pragma kernel AddSums
 [numthreads(64, 1, 1)]
 void AddSums(uint projectedGridIndex : SV_DispatchThreadID, uint groupID : SV_GroupID) {
-  if (groupID == 0 || projectedGridIndex > numGridCells) return;
+  if (groupID == 0 || projectedGridIndex > uint(numGridCells)) return;
   // Output to `gridOffsets`
   gridOffsets[projectedGridIndex] += gridSumsBufferIn[groupID - 1];
 }
@@ -163,7 +181,7 @@ void AddSums(uint projectedGridIndex : SV_DispatchThreadID, uint groupID : SV_Gr
 #pragma kernel RearrangeBoids
 [numthreads(64, 1, 1)]
 void RearrangeBoids(uint id : SV_DispatchThreadID) {
-  if (id >= numBoids) return;
+  if (id >= uint(numBoids)) return;
   
   int projectedGridIndex = boids[id].projectedGridIndex;
   int index = gridOffsets[projectedGridIndex] - 1 - boidOffsets[id];
@@ -226,26 +244,53 @@ void LimitSpeed(inout Boid boid, uint id) {
 void KeepInBounds(inout Boid boid, uint id) {
   float3 v = boidVelocities[id];
 
-  if (boid.position[0] < innerBounds[0]) v[0] += dt * turnSpeed;
-  else if (boid.position[0] > innerBounds[3]) v[0] -= dt * turnSpeed;
+  if (restrictX == 0) {
+    if (boid.position[0] < innerBounds[0]) v[0] += dt * turnSpeed;
+    else if (boid.position[0] > innerBounds[3]) v[0] -= dt * turnSpeed;
+  }
 
-  if (boid.position[1] < innerBounds[1]) v[1] += dt * turnSpeed;
-  else if (boid.position[1] > innerBounds[4]) v[1] -= dt * turnSpeed;
+  if (restrictY == 0) {
+    if (boid.position[1] < innerBounds[1]) v[1] += dt * turnSpeed;
+    else if (boid.position[1] > innerBounds[4]) v[1] -= dt * turnSpeed;
+  }
 
-  if (boid.position[2] < innerBounds[2]) v[2] += dt * turnSpeed;
-  else if (boid.position[2] > innerBounds[5]) v[2] -= dt * turnSpeed;
-
+  if (restrictZ == 0) {
+    if (boid.position[2] < innerBounds[2]) v[2] += dt * turnSpeed;
+    else if (boid.position[2] > innerBounds[5]) v[2] -= dt * turnSpeed;
+  }
+    
   boidVelocities[id] = v;
 }
 
 # pragma kernel UpdateBoids
 [numthreads(64, 1, 1)]
 void UpdateBoids(uint id : SV_DispatchThreadID) {
-    if (id >= numBoids) return;
+    if (id >= uint(numBoids)) return;
     Boid boid = boids[id];
     MergedBehaviors(boid, id);
     LimitSpeed(boid, id);
     KeepInBounds(boid, id);
-    boid.position += boidVelocities[id] * dt;
+    float dirSimiliarity = dot(
+      normalize(boidCurrentDirections[id]),
+      normalize(boidVelocities[id])
+    );
+    float3 boidVel = float3(0,0,0);
+    if (dirSimiliarity >= 0.5) boidVel = ((dirSimiliarity - 0.5)/0.5) * boidVelocities[id];
+    if (boid.obstacleID != -1) {
+      // Grab the external force from the `externalForces` buffer
+      int3 externalForceInt = externalForces[boid.obstacleID];
+      // convert into float3
+      float3 externalForce = float3(
+        float(externalForceInt[0] / 1024.0),
+        float(externalForceInt[1] / 1024.0),
+        float(externalForceInt[2] / 1024.0)
+      );
+      // external force is an acceleration. So we multiply it by delta time to get the velocity.
+      boidVel += externalForce * dt;
+    }
+
+    //if (dirSimiliarity >= 0.5) boid.position += ((dirSimiliarity - 0.5)/0.5) * boidVelocities[id] * dt;
+    //boid.position += boidVelocities[id] * dt;
+    boid.position += boidVel * dt;
     boids[id] = boid;
 }
