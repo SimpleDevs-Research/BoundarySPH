@@ -46,6 +46,10 @@ RWStructuredBuffer<uint> rearrangedBoids;
 RWStructuredBuffer<float3> boidCurrentDirections;
 RWStructuredBuffer<int3> externalForces;
 
+StructuredBuffer<float3> targetPos;
+float targetBias;
+float targetRange;
+
 // === HELPER FUNCTIONS === //
 // Basic random generation
 float wangHash() {
@@ -220,6 +224,9 @@ void MergedBehaviors(inout Boid boid, uint id) {
     }
   }
 
+  float distToTarget = distance(targetPos[0], boid.position) - targetRange;
+  if (distToTarget > 0.0) boidVelocities[id] += (targetPos[0] - boid.position) * targetBias * dt;
+
   if (neighbors > 0) {
     center /= neighbors;
     avgVel /= neighbors;
@@ -229,6 +236,8 @@ void MergedBehaviors(inout Boid boid, uint id) {
   }
 
   boidVelocities[id] += close * (separationFactor * dt);
+
+  //boidVelocities[id] = (1.0 - targetBias) * boidVelocities[id] + targetBias * normalize(targetPos[0] - boid.position) * length(boidVelocities[id]);
 
   //if (particles[id].)
   //boidVelocities[id] += float3(0,-9.81,0) * dt;

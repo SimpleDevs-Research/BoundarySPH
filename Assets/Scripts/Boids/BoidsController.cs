@@ -21,6 +21,7 @@ public class BoidsController : MonoBehaviour
     private Transform _boidPrefab;
 
     [Header("== BOID SETTINGS ==")]
+    [SerializeField] private bool _autoGenerateBoids = true;
     [SerializeField] private List<MeshObsGPU.TestObstacle> _boids = new List<MeshObsGPU.TestObstacle>();
     public List<MeshObsGPU.TestObstacle> boids => _boids;
     public int numBoids => _boids.Count;
@@ -39,6 +40,10 @@ public class BoidsController : MonoBehaviour
     [SerializeField] private float _dt = -1f;
     [SerializeField] private float _sphFactor = 1f;
     [SerializeField] private bool _restrictX = false, _restrictY = false, _restrictZ = false;
+
+    [SerializeField] private Transform _targetPosition = null;
+    [SerializeField, Range(0f,1f)] private float _targetBias = 0.5f;
+    [SerializeField] private float _targetRange = 1f;
 
     [SerializeField, ReadOnly] private OP.Boid[] _gpuBoids;
     [SerializeField, ReadOnly] private float3[] _gpuBoidVelocities;
@@ -112,9 +117,17 @@ public class BoidsController : MonoBehaviour
         InitializeShaderVariables();
         InitializeShaderBuffers();
         _SHADER.Dispatch(clearGridKernel, _numGridBlocks, 1, 1);
-        _SHADER.Dispatch(generateBoidsKernel, _numBoidBlocks, 1, 1);
-        // Reposition the relevant transforms inside of the `boids` array
-        GenerateBoidTransforms();
+        // If we need to auto-generate the boids, we do so via the boolean check. Generating boids is done via the GPU
+        if (_autoGenerateBoids) {
+            _SHADER.Dispatch(generateBoidsKernel, _numBoidBlocks, 1, 1);
+            // Reposition the relevant transforms inside of the `boids` array
+            GenerateBoidTransforms();
+        } 
+        // In this case, we already have the boids set already. All that's needed is to update the boid transforms in the buffer
+        else {
+            SetBoidTransforms();
+        }
+        
     }
 
     private void InitializeGlobalVariables() {
@@ -183,6 +196,9 @@ public class BoidsController : MonoBehaviour
         _SHADER.SetInt("restrictX", (_restrictX) ? 1 : 0);
         _SHADER.SetInt("restrictY", (_restrictY) ? 1 : 0);
         _SHADER.SetInt("restrictZ", (_restrictZ) ? 1 : 0);
+
+        _SHADER.SetFloat("targetBias", (_targetPosition == null) ? 0f : _targetBias);
+        _SHADER.SetFloat("targetRange", (_targetPosition == null) ? 0f : _targetRange);
     }
 
     public ComputeBuffer gridBuffer, innerBoundsBuffer;
@@ -192,6 +208,7 @@ public class BoidsController : MonoBehaviour
     private ComputeBuffer boidOffsetsBuffer, rearrangedBoidsBuffer;
 
     private ComputeBuffer boidCurrentDirectionBuffer;
+    private ComputeBuffer boidTargetPositionBuffer;
 
     private ComputeBuffer externalForcesBuffer;
     private bool externalForcesSet = false;
@@ -214,6 +231,13 @@ public class BoidsController : MonoBehaviour
             boidCurrentDirectionBuffer = new ComputeBuffer(numBoids, sizeof(float)*3);
             _gpuBoidCurrentDirections = new float3[numBoids];
             _gpuBoidDirectionDiffs = new float[numBoids];
+            boidTargetPositionBuffer = new ComputeBuffer(1, sizeof(float)*3);
+            float3[] tempTargetPositionArray = new float3[1]; 
+            tempTargetPositionArray[0] = (_targetPosition == null) 
+                ? new(0f,0f,0f)
+                : new(_targetPosition.position.x, _targetPosition.position.y, _targetPosition.position.z);
+            boidTargetPositionBuffer.SetData(tempTargetPositionArray);
+            
         // Obstacle Interaction buffers
             externalForcesBuffer = new ComputeBuffer(numBoids, sizeof(int)*3);
 
@@ -256,6 +280,7 @@ public class BoidsController : MonoBehaviour
             _SHADER.SetBuffer(updateBoidsKernel, "innerBounds", innerBoundsBuffer);
             _SHADER.SetBuffer(updateBoidsKernel, "boidCurrentDirections", boidCurrentDirectionBuffer);
             _SHADER.SetBuffer(updateBoidsKernel, "externalForces", externalForcesBuffer);
+            _SHADER.SetBuffer(updateBoidsKernel, "targetPos", boidTargetPositionBuffer);
     }
 
     public void SetExternalForcesBuffer(ComputeBuffer newBuffer) {
@@ -325,6 +350,33 @@ public class BoidsController : MonoBehaviour
                 newBoid.forward.z
             );
         }
+        boidCurrentDirectionBuffer.SetData(_gpuBoidCurrentDirections);
+    }
+
+    private void SetBoidTransforms() {
+        boidsBuffer.GetData(_gpuBoids);
+        boidVelocitiesBuffer.GetData(_gpuBoidVelocities);
+        for(int i = 0; i < numBoids; i++) {
+            _gpuBoids[i] = new OP.Boid();
+            _gpuBoids[i].obstacleID = _boids[i].obstacleID;
+            _gpuBoids[i].position = new(
+                _boids[i].obstacle.position.x,
+                _boids[i].obstacle.position.y,
+                _boids[i].obstacle.position.z
+            );
+            _gpuBoidVelocities[i] = (float3)new(
+                _boids[i].obstacle.forward.x, 
+                _boids[i].obstacle.forward.y, 
+                _boids[i].obstacle.forward.z
+            ) * _maxSpeed;
+            _gpuBoidCurrentDirections[i] = new(
+                _boids[i].obstacle.forward.x, 
+                _boids[i].obstacle.forward.y, 
+                _boids[i].obstacle.forward.z
+            );
+        }
+        boidsBuffer.SetData(_gpuBoids);
+        boidVelocitiesBuffer.SetData(_gpuBoidVelocities);
         boidCurrentDirectionBuffer.SetData(_gpuBoidCurrentDirections);
     }
 

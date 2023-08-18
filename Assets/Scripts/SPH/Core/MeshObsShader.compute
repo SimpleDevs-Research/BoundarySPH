@@ -488,7 +488,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 // 2) if so, perform the follwing: dot(normal,particle force) / length(normal)
                 // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
                 distfinal = distance(final_proj_position, particle.position);
-                innermostPoint = particle.position + normalize(final_proj_position - particle.position) * min(particleRenderRadius,distfinal);
+                innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
                 //projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
                 
                 if (

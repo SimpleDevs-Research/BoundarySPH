@@ -49,6 +49,7 @@ public class ParticleController : MonoBehaviour
     private float[] _g = {0f, -9.81f, 0f};
     [SerializeField, Tooltip("`h` - the smoothing kernel radius used all across the SPH simulation")]
     private float _h = 1.5f;
+    public float h => _h;
     [SerializeField, Tooltip("The `p_0` part of the SPH equations - the resting density the fluid")]
     private float _rest_density = 1000f;
     [SerializeField, Tooltip("`mu` - the viscosity coefficient of the fluid")]

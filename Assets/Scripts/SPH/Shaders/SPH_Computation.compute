@@ -426,7 +426,7 @@ void ComputeInternalForces(uint3 id : SV_DispatchThreadID) {
     float3 finalViscosityForce = viscosity_coefficient * viscosityForce;
     viscosityForces[id.x] = finalViscosityForce;
     //pressureForce[id.x] = pressureForce + (viscosity_coefficient * viscosityForce);
-    particles[id.x].force = pressureForce + finalViscosityForce + (density[id.x] * g);
+    particles[id.x].force = particleMass * (pressureForce + finalViscosityForce + (density[id.x] * g));
 }
 
 #pragma kernel Integrate_Debug
@@ -457,10 +457,10 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
 
     // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
 
-    float3 a = p.force;
+    float3 a = pressureForces[id.x] + viscosityForces[id.x] + (density[id.x] * g) / density[id.x];
     v += a * dt;
     float distfinal = distance(projection.position,p.position);
-    float3 innermostPoint = p.position + normalize(projection.position - p.position) * min(particleRenderRadius,distfinal);
+    float3 innermostPoint = p.position - projection.normal * smoothingRadius;
     if (projection.counter > 
         0 && (
             distfinal <= particleRenderRadius 
@@ -472,7 +472,7 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
         //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
         v = v - 1.5 * dot(v,n) * projection.normal + projection.frictionCoefficient*(-v + dot(v,n)*projection.normal);
         v += projection.external_force * dt;
-        p.position = (projection.position + n * particleRenderRadius) + dt * v;
+        p.position = (projection.position + n * smoothingRadius) + dt * v;
     }
     else {
         p.position += dt * v;

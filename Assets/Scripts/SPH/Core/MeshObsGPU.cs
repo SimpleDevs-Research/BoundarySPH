@@ -198,7 +198,9 @@ public class MeshObsGPU : MonoBehaviour
         }
         
         if (drawProjectionGizmos) {
-            
+            projections_buffer.GetData(projections_array);
+            OP.Particle[] debug_particles = new OP.Particle[particles_buffer.count];
+            particles_buffer.GetData(debug_particles);
             for(int i = 0; i < numParticles; i++) {
                 int tri_index = (int)projections_array[i].triangleID;
                 if (tri_index == numTriangles) continue;
@@ -213,10 +215,27 @@ public class MeshObsGPU : MonoBehaviour
                 Gizmos.color = new Vector4(0f,0f,1f,0.25f);
                 Gizmos.DrawSphere(projections_array[i].position,particleRenderRadius);
                 // Rendering the normal vector
-                Gizmos.color = Color.green;
+                Gizmos.color = Color.blue;
                 Gizmos.DrawRay(projections_array[i].position, projections_array[i].normal);
                 
+                // Rendering the external force felt by the particle
+                Handles.color = Color.yellow;
+                Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].external_force, 2);
+                // Rendering the particle force exerted by the particle
+                Handles.color = Color.red;
+                Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].particle_force, 2);
+                // Rendering the resulting force exerted by the obstacle onto the particle
+                float3 pForce = projections_array[i].particle_force;
+                float3 externalForce = projections_array[i].external_force + (pForce - 1.5f * Unity.Mathematics.math.dot(pForce, projections_array[i].normal) * projections_array[i].normal);
+                Handles.color = Color.black;
+                Handles.DrawLine(projections_array[i].position, projections_array[i].position + externalForce, 2);
+                // Calculating the resulting force
+                Handles.color = Color.blue;
+                float3 finalForce = pForce + externalForce;
+                Handles.DrawLine(projections_array[i].position, projections_array[i].position + finalForce, 10);
+
                 // Rendering the two edges associated and 2D and 3D normal vectors. Yellow = first edge, grey = second edge
+                /*
                 Handles.color = Color.yellow;
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e1,3);
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e1_3DN,2);
@@ -225,6 +244,7 @@ public class MeshObsGPU : MonoBehaviour
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e2,3);
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e2_3DN,2);
                 Handles.DrawLine(t_dynamic.center, t_dynamic.center + projections_array[i].e2_2DN,2);
+                */
 
                 int v1i = (int)(o_static.vs[0] + t_static.vertices[0]);
                 int v2i = (int)(o_static.vs[0] + t_static.vertices[1]);
@@ -387,7 +407,7 @@ public class MeshObsGPU : MonoBehaviour
         numTriangles = triangles_static.Count;
         numEdges = edges_static.Count;
         numParticles = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.numParticles : particles.Count;
-        if (_PARTICLE_CONTROLLER != null) particleRenderRadius = _PARTICLE_CONTROLLER.particleRenderRadius;
+        if (_PARTICLE_CONTROLLER != null) particleRenderRadius = _PARTICLE_CONTROLLER.h;
         if (_PARTICLE_CONTROLLER != null) _dt = _PARTICLE_CONTROLLER.dt;
         _SHADER.SetInt("numObstacles", numObstacles);
         _SHADER.SetInt("numVertices", numVertices);
