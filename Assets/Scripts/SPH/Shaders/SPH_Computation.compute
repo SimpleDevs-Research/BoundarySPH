@@ -475,6 +475,7 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
             v += projection.external_force * dt;
         }
         
+        
         //p.position = (projection.position + n * smoothingRadius) + dt * v;
         p.position += dt * v;
     }
