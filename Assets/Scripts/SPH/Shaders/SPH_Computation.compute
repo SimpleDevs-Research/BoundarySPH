@@ -470,9 +470,13 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
         float3 n = normalize(projection.normal);
         //v += dt dt * projection.external_force;
         //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
-        v = v - 1.5 * dot(v,n) * projection.normal + projection.frictionCoefficient*(-v + dot(v,n)*projection.normal);
-        v += projection.external_force * dt;
-        p.position = (projection.position + n * smoothingRadius) + dt * v;
+        if (dot(v,n) < 0.0) {
+            v = v - 1.5 * dot(v,n) * projection.normal + projection.frictionCoefficient*(-v + dot(v,n)*projection.normal);
+            v += projection.external_force * dt;
+        }
+        
+        //p.position = (projection.position + n * smoothingRadius) + dt * v;
+        p.position += dt * v;
     }
     else {
         p.position += dt * v;
