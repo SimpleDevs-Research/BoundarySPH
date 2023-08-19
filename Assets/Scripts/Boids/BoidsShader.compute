@@ -28,10 +28,10 @@ float minSpeed;
 float cohesionFactor;
 float separationFactor;
 float alignmentFactor;
+float externalForceFactor;
 float turnSpeed;
 float dt;
-
-float sphFactor;
+int useGravity;
 
 int restrictX;
 int restrictY;
@@ -154,7 +154,7 @@ void PrefixSum(uint projectedCellID : SV_DispatchThreadID, uint threadID : SV_Gr
         GroupMemoryBarrierWithGroupSync();
     }
 
-    if (projectedCellID >= numGridCells) return;
+    if (projectedCellID >= uint(numGridCells)) return;
 
     // We output to `gridOffsets`
     gridOffsets[projectedCellID] = temp[pout * 64 + threadID];
@@ -237,6 +237,8 @@ void MergedBehaviors(inout Boid boid, uint id) {
 
   boidVelocities[id] += close * (separationFactor * dt);
 
+  if (useGravity == 1) boidVelocities[id] += float3(0.0,-9.81,0.0) * dt;
+
   //boidVelocities[id] = (1.0 - targetBias) * boidVelocities[id] + targetBias * normalize(targetPos[0] - boid.position) * length(boidVelocities[id]);
 
   //if (particles[id].)
@@ -248,6 +250,17 @@ void LimitSpeed(inout Boid boid, uint id) {
   float speed = length(boidVelocities[id]);
   if (speed > maxSpeed) boidVelocities[id] = (boidVelocities[id] / speed) * maxSpeed;
   else if (speed < minSpeed) boidVelocities[id] = (boidVelocities[id] / speed) * minSpeed;
+}
+
+void AddExternalForces(inout Boid boid, uint id) {
+  if (boid.obstacleID == -1 || externalForceFactor <= 0.0) return;
+  int3 externalForceInt = externalForces[boid.obstacleID];
+  float3 externalForce = float3(
+    float(externalForceInt[0] / 1024.0),
+    float(externalForceInt[1] / 1024.0),
+    float(externalForceInt[2] / 1024.0)
+  );
+  boidVelocities[id] += externalForce * externalForceFactor * dt;
 }
 
 void KeepInBounds(inout Boid boid, uint id) {
@@ -278,25 +291,16 @@ void UpdateBoids(uint id : SV_DispatchThreadID) {
     Boid boid = boids[id];
     MergedBehaviors(boid, id);
     LimitSpeed(boid, id);
+    AddExternalForces(boid, id);
     KeepInBounds(boid, id);
     float dirSimiliarity = dot(
       normalize(boidCurrentDirections[id]),
       normalize(boidVelocities[id])
     );
-    float3 boidVel = float3(0,0,0);
-    if (dirSimiliarity >= 0.5) boidVel = ((dirSimiliarity - 0.5)/0.5) * boidVelocities[id];
-    if (boid.obstacleID != -1) {
-      // Grab the external force from the `externalForces` buffer
-      int3 externalForceInt = externalForces[boid.obstacleID];
-      // convert into float3
-      float3 externalForce = float3(
-        float(externalForceInt[0] / 1024.0),
-        float(externalForceInt[1] / 1024.0),
-        float(externalForceInt[2] / 1024.0)
-      );
-      // external force is an acceleration. So we multiply it by delta time to get the velocity.
-      boidVel += externalForce * dt;
-    }
+
+    float3 boidVel = boidVelocities[id];
+    //float3 boidVel = float3(0,0,0);
+    //if (dirSimiliarity >= 0.5) boidVel = ((dirSimiliarity - 0.5)/0.5) * boidVelocities[id];
 
     //if (dirSimiliarity >= 0.5) boid.position += ((dirSimiliarity - 0.5)/0.5) * boidVelocities[id] * dt;
     //boid.position += boidVelocities[id] * dt;

@@ -14,7 +14,7 @@ public class MeshObsGPU : MonoBehaviour
     [System.Serializable]
     public class TestObstacle {
         [ReadOnly] public int obstacleID;
-        public Transform obstacle;
+        public MeshObs obstacle;
         public float mass = 1f;
         [Range(0f,1f)] public float frictionCoefficient = 0f;
         public bool checkObstacleBounds = true;
@@ -78,10 +78,11 @@ public class MeshObsGPU : MonoBehaviour
     public OP.Projection[] projections_array;
 
     [SerializeField] private bool printDebugs = true;
+    private bool _initialized = false;
 
     void OnDrawGizmos() {
         
-        if (!Application.isPlaying) return;
+        if (!Application.isPlaying || !_initialized) return;
         if (!drawGizmos) return;
 
         obstacles_dynamic_buffer.GetData(obstacles_dynamic_array);
@@ -102,7 +103,7 @@ public class MeshObsGPU : MonoBehaviour
                         Vector3 vn = new Vector3(v_dynamic.normal[0],v_dynamic.normal[1],v_dynamic.normal[2]).normalized;
                         if (obstacles[i].show_vertex_positions) {
                             Gizmos.color = Color.red;
-                            Gizmos.DrawSphere(vp,1f);
+                            Gizmos.DrawSphere(vp,0.1f);
                         }
                         if (obstacles[i].show_vertex_normals) {
                             Handles.color = Color.blue;
@@ -302,10 +303,12 @@ public class MeshObsGPU : MonoBehaviour
         }
         // Check if we have a boids controller. If we do, we add them to our list of obstacles
         if (_BOIDS_CONTROLLER != null && _BOIDS_CONTROLLER.numBoids > 0) {
+            Debug.Log("Adding Boids");
             obstacles.AddRange(_BOIDS_CONTROLLER.boids);
         } 
         PreprocessObstacles();
         UpdateObstacles(true);
+        _initialized = true;
     }   
 
     void Update() {
@@ -397,7 +400,7 @@ public class MeshObsGPU : MonoBehaviour
                 ref triangles_static, ref triangles_dynamic,
                 ref edges_static, ref edges_dynamic
             );
-            obstacle.obstacle.hasChanged = true;
+            obstacle.obstacle.position_transform.hasChanged = true;
             obstacle.obstacleID = i;
         }
 
@@ -455,6 +458,14 @@ public class MeshObsGPU : MonoBehaviour
             projections_array = new OP.Projection[numParticles];
             projections_buffer.SetData(projections_array);
         }
+        translational_forces_array = new int3[numObstacles];
+        torque_forces_array = new int3[numObstacles];
+        for(int i = 0; i < obstacles_static.Count; i++) {
+            translational_forces_array[i] = new(0,0,0);
+            torque_forces_array[i] = new(0,0,0);
+        }
+        translational_forces_buffer.SetData(translational_forces_array);
+        torque_forces_buffer.SetData(torque_forces_array);
 
         // Associate our buffers with our kernels
         // Reset Vertex Forces
@@ -504,8 +515,6 @@ public class MeshObsGPU : MonoBehaviour
         triangles_dynamic_array = new OP.TriangleDynamic[numTriangles];
         projections_array = new OP.Projection[numParticles];
         edges_dynamic_array = new float3[numEdges];
-        translational_forces_array = new int3[numObstacles];
-        torque_forces_array = new int3[numObstacles];
 
         if (_BOIDS_CONTROLLER != null) _BOIDS_CONTROLLER.SetExternalForcesBuffer(translational_forces_buffer);
     }
@@ -521,9 +530,7 @@ public class MeshObsGPU : MonoBehaviour
         
         // Before anything, we need to extract the mesh data! 
         // We also need to extract the vertex anbd triangle data from that mesh
-        Mesh mesh = (obstacle.obstacle.GetComponent<SkinnedMeshRenderer>() != null) 
-            ? obstacle.obstacle.GetComponent<SkinnedMeshRenderer>().sharedMesh
-            : obstacle.obstacle.GetComponent<MeshFilter>().sharedMesh;
+        Mesh mesh = obstacle.obstacle.GetMesh();
         var vs = mesh.vertices;
         var ts = mesh.triangles;
         obstacle.prevFriction = obstacle.frictionCoefficient;
@@ -801,7 +808,7 @@ public class MeshObsGPU : MonoBehaviour
     }
 
     public void UpdateObstacles(bool forceUpdate = false) {
-        Transform t;
+        MeshObs mo;
         bool needsUpdating = false;
 
         // We always reset the vertex forces
@@ -809,9 +816,9 @@ public class MeshObsGPU : MonoBehaviour
 
         for(int i = 0; i < obstacles.Count; i++) {
             // Check if the transform has been changed in any way
-            t = obstacles[i].obstacle; 
+            mo = obstacles[i].obstacle; 
             if (
-                    t.hasChanged 
+                    mo.position_transform.hasChanged 
                     || obstacles[i].prevFriction != obstacles[i].frictionCoefficient 
                     || obstacles[i].prevCheckObstacleBounds != obstacles[i].checkObstacleBounds
                     || obstacles[i].prevCheckTriangleBounds != obstacles[i].checkTriangleBounds
@@ -819,12 +826,12 @@ public class MeshObsGPU : MonoBehaviour
             ) {
                 //  We need to update the associated TestObjectDynamic
                 obstacles_dynamic_array[i].index = (uint)i;
-                obstacles_dynamic_array[i].position = new(t.position.x, t.position.y, t.position.z);
-                obstacles_dynamic_array[i].rotation = new(t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w);
-                obstacles_dynamic_array[i].scale = new(t.lossyScale.x, t.lossyScale.y, t.lossyScale.z);
+                obstacles_dynamic_array[i].position = new(mo.position_transform.position.x, mo.position_transform.position.y, mo.position_transform.position.z);
+                obstacles_dynamic_array[i].rotation = new(mo.position_transform.rotation.x, mo.position_transform.rotation.y, mo.position_transform.rotation.z, mo.position_transform.rotation.w);
+                obstacles_dynamic_array[i].scale = new(mo.position_transform.lossyScale.x, mo.position_transform.lossyScale.y, mo.position_transform.lossyScale.z);
                 obstacles_dynamic_array[i].lowerBound = obstacles_dynamic_array[i].position;
                 obstacles_dynamic_array[i].upperBound = obstacles_dynamic_array[i].position;
-                Rigidbody rb = obstacles[i].obstacle.GetComponent<Rigidbody>();
+                Rigidbody rb = obstacles[i].obstacle.rb;
                 if (rb != null) obstacles_dynamic_array[i].centerOfMass = new(rb.centerOfMass.x, rb.centerOfMass.y, rb.centerOfMass.z);
                 obstacles_dynamic_array[i].frictionCoefficient = obstacles[i].frictionCoefficient;
                 obstacles_dynamic_array[i].checkObstacleBounds = (obstacles[i].checkObstacleBounds) ? (uint)1 : (uint)0;
@@ -853,7 +860,7 @@ public class MeshObsGPU : MonoBehaviour
             // Finally reset
             _SHADER.Dispatch(resetHasChangedKernel, Mathf.CeilToInt((float)numObstacles / 64f), 1, 1);
             for(int i = 0; i < obstacles.Count; i++) {
-                obstacles[i].obstacle.hasChanged = false;
+                obstacles[i].obstacle.position_transform.hasChanged = false;
             }
         }
     }

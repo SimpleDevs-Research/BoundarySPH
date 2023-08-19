@@ -496,6 +496,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                     || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
                 ) {
                     projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                    if (dot(projection.particle_force,final_proj_normal) > 0.0) projection.particle_force = float3(0,0,0);
                 } else {
                     projection.particle_force = float3(0,0,0);
                 }

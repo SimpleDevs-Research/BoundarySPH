@@ -18,7 +18,7 @@ public class BoidsController : MonoBehaviour
     [SerializeField, Tooltip("The compute shader that handles all of our GPU calculations.")]
     private ComputeShader _SHADER = null;
     [SerializeField, Tooltip("Prefab for the boid")]
-    private Transform _boidPrefab;
+    private MeshObs _boidPrefab;
 
     [Header("== BOID SETTINGS ==")]
     [SerializeField] private bool _autoGenerateBoids = true;
@@ -34,11 +34,12 @@ public class BoidsController : MonoBehaviour
     [SerializeField] private float _cohesionFactor = 1f;
     [SerializeField] private float _separationFactor = 30f;
     [SerializeField] private float _alignmentFactor = 5f;
+    [SerializeField] private float _externalForceFactor = 1f;
     [SerializeField] private float _turnSpeed = 2f;
     [SerializeField] private float _meshTranslateSpeed = 1f;
     [SerializeField] private float _meshTurnSpeed = 1f;
     [SerializeField] private float _dt = -1f;
-    [SerializeField] private float _sphFactor = 1f;
+    [SerializeField] private bool _useGravity = true;
     [SerializeField] private bool _restrictX = false, _restrictY = false, _restrictZ = false;
 
     [SerializeField] private Transform _targetPosition = null;
@@ -74,9 +75,9 @@ public class BoidsController : MonoBehaviour
         for(int i = 0; i < numBoids; i++) {
             if (showRadii) {
                 Gizmos.color = new Vector4(1f,0f,0f,0.25f);
-                Gizmos.DrawSphere(_boids[i].obstacle.position, _visualRange);
+                Gizmos.DrawSphere(_boids[i].obstacle.position_transform.position, _visualRange);
                 Gizmos.color = new Vector4(0f,0f,1f,0.5f);
-                Gizmos.DrawSphere(_boids[i].obstacle.position, _innerRange);
+                Gizmos.DrawSphere(_boids[i].obstacle.position_transform.position, _innerRange);
             }
             if (showDirection) {
                 Handles.color = Color.red;
@@ -92,6 +93,8 @@ public class BoidsController : MonoBehaviour
                 );
                 Handles.color = Color.blue;
                 Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + external_force * 5f * _dt, 3);
+                Handles.color = Color.black;
+                Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + (float3)new(0f,-9.81f,0f) * 5f * _dt, 3);
             }
         }
     }
@@ -189,10 +192,11 @@ public class BoidsController : MonoBehaviour
         _SHADER.SetFloat("cohesionFactor", _cohesionFactor);
         _SHADER.SetFloat("separationFactor", _separationFactor);
         _SHADER.SetFloat("alignmentFactor", _alignmentFactor);
+        _SHADER.SetFloat("externalForceFactor", _externalForceFactor);
         _SHADER.SetFloat("turnSpeed", _turnSpeed);
         _SHADER.SetFloat("dt", deltaTime);
 
-        _SHADER.SetFloat("sphFactor", _sphFactor);
+        _SHADER.SetInt("useGravity", (_useGravity) ? 1 : 0);
         _SHADER.SetInt("restrictX", (_restrictX) ? 1 : 0);
         _SHADER.SetInt("restrictY", (_restrictY) ? 1 : 0);
         _SHADER.SetInt("restrictZ", (_restrictZ) ? 1 : 0);
@@ -337,17 +341,17 @@ public class BoidsController : MonoBehaviour
         boidVelocitiesBuffer.GetData(_gpuBoidVelocities);
         for(int i = 0; i < numBoids; i++) {
             float3 v = _gpuBoidVelocities[i];
-            Transform newBoid = Instantiate(
+            MeshObs newBoid = Instantiate(
                 _boidPrefab, 
                 _gpuBoids[i].position, 
                 Quaternion.LookRotation(new Vector3(v[0],v[1],v[2])),
                 this.transform
-            ) as Transform;
+            ) as MeshObs;
             _boids[i].obstacle = newBoid;
             _gpuBoidCurrentDirections[i] = new(
-                newBoid.forward.x, 
-                newBoid.forward.y, 
-                newBoid.forward.z
+                newBoid.position_transform.forward.x, 
+                newBoid.position_transform.forward.y, 
+                newBoid.position_transform.forward.z
             );
         }
         boidCurrentDirectionBuffer.SetData(_gpuBoidCurrentDirections);
@@ -360,19 +364,19 @@ public class BoidsController : MonoBehaviour
             _gpuBoids[i] = new OP.Boid();
             _gpuBoids[i].obstacleID = _boids[i].obstacleID;
             _gpuBoids[i].position = new(
-                _boids[i].obstacle.position.x,
-                _boids[i].obstacle.position.y,
-                _boids[i].obstacle.position.z
+                _boids[i].obstacle.position_transform.position.x,
+                _boids[i].obstacle.position_transform.position.y,
+                _boids[i].obstacle.position_transform.position.z
             );
             _gpuBoidVelocities[i] = (float3)new(
-                _boids[i].obstacle.forward.x, 
-                _boids[i].obstacle.forward.y, 
-                _boids[i].obstacle.forward.z
+                _boids[i].obstacle.position_transform.forward.x, 
+                _boids[i].obstacle.position_transform.forward.y, 
+                _boids[i].obstacle.position_transform.forward.z
             ) * _maxSpeed;
             _gpuBoidCurrentDirections[i] = new(
-                _boids[i].obstacle.forward.x, 
-                _boids[i].obstacle.forward.y, 
-                _boids[i].obstacle.forward.z
+                _boids[i].obstacle.position_transform.forward.x, 
+                _boids[i].obstacle.position_transform.forward.y, 
+                _boids[i].obstacle.position_transform.forward.z
             );
         }
         boidsBuffer.SetData(_gpuBoids);
@@ -383,23 +387,27 @@ public class BoidsController : MonoBehaviour
     private void UpdateBoidTransforms() {
         boidsBuffer.GetData(_gpuBoids);
         boidVelocitiesBuffer.GetData(_gpuBoidVelocities);
-        float posStep = _meshTranslateSpeed;
+        //float posStep = _meshTranslateSpeed;
         float rotStep = _meshTurnSpeed;
-        Vector3 targetPos;
+        Vector3 targetPos, targetRotEuler;
         Quaternion targetRot;
+        Vector3 localEuler;
         for(int i = 0; i < numBoids; i++) {
             float3 v = _gpuBoidVelocities[i];
             float3 p = _gpuBoids[i].position;
+
             targetPos = new Vector3(p[0],p[1],p[2]);
-            targetRot = Quaternion.LookRotation(new Vector3(v[0],v[1],v[2]));
-            //_boids[i].obstacle.position = new Vector3(_gpuBoids[i].position[0], _gpuBoids[i].position[1], _gpuBoids[i].position[2]);
-            _boids[i].obstacle.position = Vector3.MoveTowards(_boids[i].obstacle.position, targetPos, posStep);
-            //_boids[i].obstacle.rotation = targetRot
-            _boids[i].obstacle.rotation = Quaternion.RotateTowards(_boids[i].obstacle.rotation, targetRot, rotStep);
+            targetRotEuler = new Vector3(v[0],v[1],v[2]);
+            targetRot = Quaternion.LookRotation(targetRotEuler);
+
+            _boids[i].obstacle.position_transform.position = targetPos;
+            //_boids[i].obstacle.position = Vector3.MoveTowards(_boids[i].obstacle.position, targetPos, posStep);
+            _boids[i].obstacle.position_transform.rotation = Quaternion.RotateTowards(_boids[i].obstacle.position_transform.rotation, targetRot, rotStep);
+ 
             _gpuBoidCurrentDirections[i] = new(
-                _boids[i].obstacle.forward.x, 
-                _boids[i].obstacle.forward.y, 
-                _boids[i].obstacle.forward.z
+                _boids[i].obstacle.position_transform.forward.x, 
+                _boids[i].obstacle.position_transform.forward.y, 
+                _boids[i].obstacle.position_transform.forward.z
             );
         }
         boidCurrentDirectionBuffer.SetData(_gpuBoidCurrentDirections);
@@ -416,6 +424,7 @@ public class BoidsController : MonoBehaviour
         boidOffsetsBuffer.Release();
         rearrangedBoidsBuffer.Release();
         boidCurrentDirectionBuffer.Release();
+        boidTargetPositionBuffer.Release();
         externalForcesBuffer.Release();
     }
 }
