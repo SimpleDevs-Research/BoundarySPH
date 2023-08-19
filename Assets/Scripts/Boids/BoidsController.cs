@@ -46,6 +46,8 @@ public class BoidsController : MonoBehaviour
     [SerializeField, Range(0f,1f)] private float _targetBias = 0.5f;
     [SerializeField] private float _targetRange = 1f;
 
+    [SerializeField] private bool updateSceneBoids = true;
+
     [SerializeField, ReadOnly] private OP.Boid[] _gpuBoids;
     [SerializeField, ReadOnly] private float3[] _gpuBoidVelocities;
     [SerializeField, ReadOnly] private float3[] _gpuBoidCurrentDirections;
@@ -387,6 +389,7 @@ public class BoidsController : MonoBehaviour
     private void UpdateBoidTransforms() {
         boidsBuffer.GetData(_gpuBoids);
         boidVelocitiesBuffer.GetData(_gpuBoidVelocities);
+        if (!updateSceneBoids) return;
         //float posStep = _meshTranslateSpeed;
         float rotStep = _meshTurnSpeed;
         Vector3 targetPos, targetRotEuler;

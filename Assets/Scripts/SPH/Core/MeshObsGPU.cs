@@ -77,6 +77,8 @@ public class MeshObsGPU : MonoBehaviour
     public int3[] translational_forces_array, torque_forces_array;
     public OP.Projection[] projections_array;
 
+    public bool alwaysUpdateTransforms = false;
+
     [SerializeField] private bool printDebugs = true;
     private bool _initialized = false;
 
@@ -322,7 +324,7 @@ public class MeshObsGPU : MonoBehaviour
             if (printDebugs) Debug.LogError("MeshObsGPU - ERROR: Cannot update obstacles due to missing particles");
             return;
         }
-        UpdateObstacles();
+        UpdateObstacles(alwaysUpdateTransforms);
         UpdateParticlePositions();
         // Reset projections
         _SHADER.Dispatch(resetTempProjectionsKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
