@@ -198,12 +198,12 @@ void UpdateVertices(uint id : SV_DispatchThreadID) {
         // Upate our entry in Vertices_Dynamic
         vertices_dynamic[i] = v_dynamic;
         // Update the bounds of our object
-        o_dynamic.lowerBound[0] = min(o_dynamic.lowerBound[0], v_dynamic.position[0]-particleRenderRadius);
-        o_dynamic.lowerBound[1] = min(o_dynamic.lowerBound[1], v_dynamic.position[1]-particleRenderRadius);
-        o_dynamic.lowerBound[2] = min(o_dynamic.lowerBound[2], v_dynamic.position[2]-particleRenderRadius);
-        o_dynamic.upperBound[0] = max(o_dynamic.upperBound[0], v_dynamic.position[0]+particleRenderRadius);
-        o_dynamic.upperBound[1] = max(o_dynamic.upperBound[1], v_dynamic.position[1]+particleRenderRadius);
-        o_dynamic.upperBound[2] = max(o_dynamic.upperBound[2], v_dynamic.position[2]+particleRenderRadius);
+        o_dynamic.lowerBound[0] = min(o_dynamic.lowerBound[0], v_dynamic.position[0]-2.0*particleRenderRadius);
+        o_dynamic.lowerBound[1] = min(o_dynamic.lowerBound[1], v_dynamic.position[1]-2.0*particleRenderRadius);
+        o_dynamic.lowerBound[2] = min(o_dynamic.lowerBound[2], v_dynamic.position[2]-2.0*particleRenderRadius);
+        o_dynamic.upperBound[0] = max(o_dynamic.upperBound[0], v_dynamic.position[0]+2.0*particleRenderRadius);
+        o_dynamic.upperBound[1] = max(o_dynamic.upperBound[1], v_dynamic.position[1]+2.0*particleRenderRadius);
+        o_dynamic.upperBound[2] = max(o_dynamic.upperBound[2], v_dynamic.position[2]+2.0*particleRenderRadius);
     }
     obstacles_dynamic[id] = o_dynamic;
     /*
