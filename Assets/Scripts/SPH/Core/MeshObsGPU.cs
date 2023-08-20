@@ -219,7 +219,8 @@ public class MeshObsGPU : MonoBehaviour
                 Gizmos.DrawSphere(projections_array[i].position,particleRenderRadius);
                 // Rendering the normal vector
                 Gizmos.color = Color.blue;
-                Gizmos.DrawRay(projections_array[i].position, projections_array[i].normal);
+                Vector3 n = new Vector3((float)projections_array[i].normal[0] / 1024f, (float)projections_array[i].normal[1] / 1024f, (float)projections_array[i].normal[2] / 1024f);
+                Gizmos.DrawRay(projections_array[i].position, n);
                 
                 // Rendering the external force felt by the particle
                 Handles.color = Color.yellow;
@@ -229,7 +230,12 @@ public class MeshObsGPU : MonoBehaviour
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].particle_force, 2);
                 // Rendering the resulting force exerted by the obstacle onto the particle
                 float3 pForce = projections_array[i].particle_force;
-                float3 externalForce = projections_array[i].external_force + (pForce - 1.5f * Unity.Mathematics.math.dot(pForce, projections_array[i].normal) * projections_array[i].normal);
+                float3 pN = new(
+                    (float)projections_array[i].normal[0] / 1024f,
+                    (float)projections_array[i].normal[1] / 1024f,
+                    (float)projections_array[i].normal[2] / 1024f 
+                );
+                float3 externalForce = projections_array[i].external_force + (pForce - 1.5f * Unity.Mathematics.math.dot(pForce, pN) * pN);
                 Handles.color = Color.black;
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + externalForce, 2);
                 // Calculating the resulting force
@@ -329,9 +335,14 @@ public class MeshObsGPU : MonoBehaviour
         // Reset projections
         _SHADER.Dispatch(resetTempProjectionsKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
         // Get those projections
-        _SHADER.Dispatch(checkForProjectionKernel, Mathf.CeilToInt((float)numParticles / 16f), 1, 1);
+        _SHADER.Dispatch(
+            checkForProjectionKernel, 
+            Mathf.CeilToInt((float)numParticles / 32f), 
+            Mathf.CeilToInt((float)numTriangles / 16f), 
+            1
+        );
         // Combine projection forces
-        _SHADER.Dispatch(combineForcesKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
+        //_SHADER.Dispatch(combineForcesKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
 
         translational_forces_buffer.GetData(translational_forces_array);
         torque_forces_buffer.GetData(torque_forces_array);
@@ -428,7 +439,7 @@ public class MeshObsGPU : MonoBehaviour
         updateEdgesKernel = _SHADER.FindKernel("UpdateEdges");
         updateTrianglesKernel = _SHADER.FindKernel("UpdateTriangles");
         resetHasChangedKernel = _SHADER.FindKernel("ResetHasChanged");
-        checkForProjectionKernel = _SHADER.FindKernel("CheckForProjection");
+        checkForProjectionKernel = _SHADER.FindKernel("CheckForProjection2");
         resetTempProjectionsKernel = _SHADER.FindKernel("ResetTempProjections");
         combineForcesKernel = _SHADER.FindKernel("CombineForces");
 
@@ -438,13 +449,13 @@ public class MeshObsGPU : MonoBehaviour
         vertices_static_buffer = new ComputeBuffer(vertices_static.Count, sizeof(uint) + sizeof(float)*6);
         vertices_dynamic_buffer = new ComputeBuffer(vertices_dynamic.Count, sizeof(uint) + sizeof(float)*9);
         triangles_static_buffer = new ComputeBuffer(triangles_static.Count, sizeof(uint)*7 + sizeof(float)*9);
-        triangles_dynamic_buffer = new ComputeBuffer(triangles_dynamic.Count, sizeof(uint) + sizeof(float)*22);
+        triangles_dynamic_buffer = new ComputeBuffer(triangles_dynamic.Count, sizeof(uint)*7 + sizeof(float)*22);
         edges_static_buffer = new ComputeBuffer(edges_static.Count, sizeof(uint)*5 + sizeof(float)*6);
         edges_dynamic_buffer = new ComputeBuffer(edges_dynamic.Count, sizeof(float)*3);
         translational_forces_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
         torque_forces_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
         particles_buffer = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.PARTICLES_BUFFER : new ComputeBuffer(numParticles, sizeof(float)*6);
-        projections_buffer = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.PROJECTIONS_BUFFER : new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int) + sizeof(float)*34);
+        projections_buffer = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.PROJECTIONS_BUFFER : new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
 
         // Update the buffers
         obstacles_static_buffer.SetData(obstacles_static.ToArray());
@@ -496,13 +507,14 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.SetBuffer(resetTempProjectionsKernel,"torque_forces",torque_forces_buffer);
         // Check For Projections
         _SHADER.SetBuffer(checkForProjectionKernel,"particles",particles_buffer);
+        _SHADER.SetBuffer(checkForProjectionKernel,"projections",projections_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"triangles_dynamic",triangles_dynamic_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"triangles_static",triangles_static_buffer);
+        //_SHADER.SetBuffer(checkForProjectionKernel,"triangles_static",triangles_static_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_static",obstacles_static_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_dynamic",obstacles_dynamic_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"vertices_dynamic",vertices_dynamic_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"projections",projections_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic",edges_dynamic_buffer);
+        _SHADER.SetBuffer(checkForProjectionKernel,"translational_forces",translational_forces_buffer);
         // Combine Forces Kernel
         _SHADER.SetBuffer(combineForcesKernel,"projections",projections_buffer);
         _SHADER.SetBuffer(combineForcesKernel,"triangles_static",triangles_static_buffer);
@@ -649,6 +661,7 @@ public class MeshObsGPU : MonoBehaviour
                 vs_map[ts[(int)i+1]], 
                 vs_map[ts[(int)i+2]]
             );
+            ts_dynamic[(int)ti].vertices = ts_static[(int)ti].vertices;
             
             // We need to calculate the angles for each vertex. To do so, we need to reference the local positions of each vertex.
             float3 v1f = vs_static[(int)ts_static[(int)ti].vertices[0]].localPosition;
@@ -759,6 +772,8 @@ public class MeshObsGPU : MonoBehaviour
 
             // Add `es_map_index_v1v2` , `es_map_index_v1v3`, and `es_map_index_v2v3` to `ts_static[ti].edges
             ts_static[(int)ti].edges = new((uint)es_map_index_v1v2,(uint)es_map_index_v1v3,(uint)es_map_index_v2v3);
+            // We populate the ts_dynamic with our edges too
+            ts_dynamic[(int)ti].edges = ts_static[(int)ti].edges;
         }
 
         // At this point, we have to attribute the vertex normals to their respective localNormalEnds in each item in vs_static

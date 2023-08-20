@@ -189,8 +189,9 @@ public class GPU_ObstacleManager : MonoBehaviour
                     Gizmos.DrawSphere(proj.position,0.1f);
                 }
                 if (show_projection_normals) {
+                    Vector3 n = new Vector3((float)proj.normal[0] / 1024f, (float)proj.normal[1] / 1024f, (float)proj.normal[2] / 1024f);
                     Gizmos.color = gizmos_projection_normals_color;
-                    Gizmos.DrawRay(proj.position, proj.normal);
+                    Gizmos.DrawRay(proj.position, n);
                 }
             }
         }

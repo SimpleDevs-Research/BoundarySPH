@@ -56,11 +56,11 @@ struct Projection {
     uint triangleID;
     float3 projection;
     float3 position;
-    float3 normal;
+    int3 normal;
     float3 particle_force;      // force exerted into the boundary by the particle
-    float3 external_force;      // force exerted toward the particle by the boundary due to velocity
+    int3 external_force;      // force exerted toward the particle by the boundary due to velocity
     int counter;
-    float frictionCoefficient;
+    int frictionCoefficient;
 
     float3 e1;
     float3 e2;
@@ -456,7 +456,40 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
     //v += dt * a;
 
     // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
-
+    float3 a = pressureForces[id.x] + viscosityForces[id.x] + (density[id.x] * g) / density[id.x];
+    v += a * dt;
+    
+    if (projection.counter > 0) {
+        
+        float3 projN = float3(
+            float(projection.normal[0]),
+            float(projection.normal[1]),
+            float(projection.normal[2])
+        );
+        float3 n = normalize(projN);
+        if (dot(v,n) < 0.0) {
+            
+            v = v - 1.5 * dot(v,n) * n; 
+            float frictionF = float(projection.frictionCoefficient) / 1024.0;
+            float frictionCoefficient = min(1.0, frictionF / float(projection.counter));
+            v += frictionCoefficient * (-v + dot(v,n)*n);
+            float3 e = float3(
+                float(projection.external_force[0]) / 1024.0,
+                float(projection.external_force[1]) / 1024.0,
+                float(projection.external_force[2]) / 1024.0
+            );
+            v += e * dt;
+            p.position += dt * v;
+        } else {
+            p.position += dt * v;
+        }
+    } else {
+        p.position += dt * v;
+    }
+    
+    //p.position += dt * v;
+    
+    /*
     float3 a = pressureForces[id.x] + viscosityForces[id.x] + (density[id.x] * g) / density[id.x];
     v += a * dt;
     float distfinal = distance(projection.position,p.position);
@@ -482,6 +515,7 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
     else {
         p.position += dt * v;
     }
+    */
     //float3 a = totalForce / density[id.x];
     //p.position += dt * v;
     /*

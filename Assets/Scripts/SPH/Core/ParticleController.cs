@@ -715,16 +715,17 @@ public class ParticleController : MonoBehaviour
         VISCOSITY_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
         FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
 
-        PROJECTIONS_BUFFER = new ComputeBuffer(_numParticles, sizeof(uint) + sizeof(int) + sizeof(float)*34);
+        PROJECTIONS_BUFFER = new ComputeBuffer(_numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
         OP.Projection[] projections = new OP.Projection[_numParticles];
         for(int i = 0; i < _numParticles; i++) {
             projections[i] = new OP.Projection();
             projections[i].projection = new(0f,0f,0f);
             projections[i].position = new(0f,0f,0f);
-            projections[i].normal = new(0f,0f,0f);
+            projections[i].normal = new(0,0,0);
             projections[i].particle_force = new(0f,0f,0f);
-            projections[i].external_force = new(0f,0f,0f);
+            projections[i].external_force = new(0,0,0);
             projections[i].counter = 0;
+            projections[i].frictionCoefficient = 0;
             /*
             projections[i].intersections = 0;
             projections[i].position = new(0f,0f,0f);

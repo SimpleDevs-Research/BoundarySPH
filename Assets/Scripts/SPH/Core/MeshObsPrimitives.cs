@@ -133,6 +133,8 @@ namespace ObstaclePrimitives {
             public float3 center;
             public float3 normal;
             public float d;
+            public uint3 vertices;
+            public uint3 edges;
             public float3 v1v2n;
             public float3 v1v3n;
             public float3 v2v3n;
@@ -417,6 +419,8 @@ namespace ObstaclePrimitives {
             public float3 center;
             public float3 normal;
             public float d;
+            public uint3 vertices;
+            public uint3 edges;
             public float3 v1v2n;
             public float3 v1v3n;
             public float3 v2v3n;
@@ -491,11 +495,11 @@ namespace ObstaclePrimitives {
             public uint triangleID;
             public float3 projection;
             public float3 position;
-            public float3 normal;
+            public int3 normal;
             public float3 particle_force;
-            public float3 external_force;
+            public int3 external_force;
             public int counter;
-            public float frictionCoefficient;
+            public int frictionCoefficient;
 
             public float3 e1;
             public float3 e2;
