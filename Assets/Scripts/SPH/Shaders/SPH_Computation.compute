@@ -462,13 +462,12 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
     if (projection.counter > 0) {
         
         float3 projN = float3(
-            float(projection.normal[0]),
-            float(projection.normal[1]),
-            float(projection.normal[2])
+            float(projection.normal[0]) / 1024.0,
+            float(projection.normal[1]) / 1024.0,
+            float(projection.normal[2]) / 1024.0
         );
         float3 n = normalize(projN);
         if (dot(v,n) < 0.0) {
-            
             v = v - 1.5 * dot(v,n) * n; 
             float frictionF = float(projection.frictionCoefficient) / 1024.0;
             float frictionCoefficient = min(1.0, frictionF / float(projection.counter));
@@ -479,13 +478,9 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
                 float(projection.external_force[2]) / 1024.0
             );
             v += e * dt;
-            p.position += dt * v;
-        } else {
-            p.position += dt * v;
-        }
-    } else {
-        p.position += dt * v;
-    }
+       }
+    } 
+    p.position += dt * v;
     
     //p.position += dt * v;
     

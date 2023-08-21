@@ -205,6 +205,16 @@ public class MeshObsGPU : MonoBehaviour
             OP.Particle[] debug_particles = new OP.Particle[particles_buffer.count];
             particles_buffer.GetData(debug_particles);
             for(int i = 0; i < numParticles; i++) {
+                float3 n = new(
+                    (float)projections_array[i].normal[0] / 1024f,
+                    (float)projections_array[i].normal[1] / 1024f,
+                    (float)projections_array[i].normal[2] / 1024f
+                );
+                Handles.color = Color.red;
+                Handles.DrawLine(
+                    debug_particles[i].position, 
+                    debug_particles[i].position + n, 3);
+                /*
                 int tri_index = (int)projections_array[i].triangleID;
                 if (tri_index == numTriangles) continue;
                 OP.TriangleStatic t_static = triangles_static[tri_index];
@@ -254,11 +264,11 @@ public class MeshObsGPU : MonoBehaviour
                 Handles.DrawLine(projections_array[i].position, projections_array[i].position + projections_array[i].e2_3DN,2);
                 Handles.DrawLine(t_dynamic.center, t_dynamic.center + projections_array[i].e2_2DN,2);
                 */
-
+                /*
                 int v1i = (int)(o_static.vs[0] + t_static.vertices[0]);
                 int v2i = (int)(o_static.vs[0] + t_static.vertices[1]);
                 int v3i = (int)(o_static.vs[0] + t_static.vertices[2]);
-                
+                */
                 //Handles.color = Color.red;
                 //Handles.DrawLine(
                 //    vertices_dynamic_array[v1i].position,
@@ -276,6 +286,7 @@ public class MeshObsGPU : MonoBehaviour
                 //    3
                 //);
                 
+                /*
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawCube(
                     vertices_dynamic_array[v1i].position,
@@ -292,6 +303,7 @@ public class MeshObsGPU : MonoBehaviour
 
                 Handles.color = Color.black;
                 Handles.DrawLine(projections_array[i].position, t_dynamic.center);
+                */
             }
             
         }
@@ -681,6 +693,9 @@ public class MeshObsGPU : MonoBehaviour
             ts_static[ti].localCenter = (v1f+v2f+v3f)/3f;
             // Now, we can calculate the LOCAL normal's end point for the triangle face. We do this by calculating the local centroid + normalized cross product.
             Vector3 localNormal = Vector3.Cross(v2-v1, v3-v1).normalized;
+            if (localNormal.magnitude == 0) {
+                Debug.Log($"{ts[(int)i]}|{ts[(int)i+1]}|{ts[(int)i+2]}\t{vs[ts[(int)i]]}|{vs[ts[(int)i+1]]}|{vs[ts[(int)i+2]]}\t{v1}, {v2}, {v3}");
+            }
             float3 localNormalF = new(localNormal.x,localNormal.y,localNormal.z);
             ts_static[ti].localNormal = localNormalF;
 

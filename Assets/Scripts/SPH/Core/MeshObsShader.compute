@@ -266,9 +266,11 @@ void UpdateTriangles(uint id : SV_DispatchThreadID) {
     float3 v3 = v3f.position;
     
     // Updating center
-    t_dynamic.center = LocalPointToWorldPoint(o_dynamic.position, o_dynamic.rotation, o_dynamic.scale, t_static.localCenter);
+    //t_dynamic.center = LocalPointToWorldPoint(o_dynamic.position, o_dynamic.rotation, o_dynamic.scale, t_static.localCenter);
+    t_dynamic.center = (v1 + v2 + v3)/3.0;
     // Updating normal
-    t_dynamic.normal = normalize(RotMultVec3(o_dynamic.rotation, t_static.localNormal));
+    //t_dynamic.normal = normalize(RotMultVec3(o_dynamic.rotation, t_static.localNormal));
+    t_dynamic.normal = normalize(cross(v2-v1, v3-v1));
     // Updating d
     t_dynamic.d = dot(-1.0 * t_dynamic.center, t_dynamic.normal);
     
@@ -353,9 +355,9 @@ int CheckVoroniRegions(
         closestPoint = v;
         closestNormal = vN;
         // We need to check if the point is actually the vertex 
-        //if (d1 == 0 && d2 == 0) return 1;
-        //return 0;
-        return 1;
+        if (d1 == 0 && d2 == 0) return 1;
+        return 0;
+        //return 1;
     }
     
     // At this point, we need to check if position is closer to edge1 or edge2. This is via dot product comparison
@@ -364,24 +366,24 @@ int CheckVoroniRegions(
     if (d3 >= threshold) {
         closestPoint = v+ e1 * abs((d1 / dot(e1, e1)));
         closestNormal = e1_3DN;
-        //if (d3 == threshold) return 1;
-        //return 0;
-        return 2;
+        if (d3 == threshold) return 1;
+        return 0;
+        //return 2;
     }
     float d4 = dot(e2_2DN, v_to_p);
     if (d4 >= threshold) {
         closestPoint = v + e2 * abs((d2 / dot(e2, e2)));
         closestNormal = e2_3DN;
-        //if (d4 == threshold) return 1;
-        //return 0;
-        return 2;
+        if (d4 == threshold) return 1;
+        return 0;
+        //return 2;
     }
 
     // At this point, the point is inside the triangle. No need to reproject
     closestPoint = proj;
     closestNormal = tri_N;
-    //return 1;
-    return 3;
+    return 1;
+    //return 3;
 }
 #pragma kernel CheckForProjection
 [numthreads(16,1,1)]
@@ -679,7 +681,7 @@ void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
         final_proj_position,        // reference to the projection position
         final_proj_normal           // reference the projection normal
     );
-
+    
     float3 projN = tri_dynamic.normal 
         * (max(0.0,dot(tri_dynamic.normal,normalize(particle.position - proj1)))) 
         * (max(0.0,min(1.0,2.0*particleRenderRadius - distance(particle.position,proj1)/particleRenderRadius)));
@@ -688,7 +690,8 @@ void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
     float3 innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
 
     if (
-        length(projN) > 0.0 
+        isInTriangle == 1 
+        //&& length(projN) > 0.0 
         && (
             distfinal <= particleRenderRadius 
             || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
