@@ -468,7 +468,7 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
         );
         float3 n = normalize(projN);
         if (dot(v,n) < 0.0) {
-            v = v - 1.5 * dot(v,n) * n; 
+            v = v - 1.25 * dot(v,n) * n; 
             float frictionF = float(projection.frictionCoefficient) / 1024.0;
             float frictionCoefficient = min(1.0, frictionF / float(projection.counter));
             v += frictionCoefficient * (-v + dot(v,n)*n);

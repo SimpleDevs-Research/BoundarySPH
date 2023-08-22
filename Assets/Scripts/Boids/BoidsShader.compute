@@ -237,8 +237,6 @@ void MergedBehaviors(inout Boid boid, uint id) {
 
   boidVelocities[id] += close * (separationFactor * dt);
 
-  if (useGravity == 1) boidVelocities[id] += float3(0.0,-9.81,0.0) * dt;
-
   //boidVelocities[id] = (1.0 - targetBias) * boidVelocities[id] + targetBias * normalize(targetPos[0] - boid.position) * length(boidVelocities[id]);
 
   //if (particles[id].)
@@ -261,6 +259,7 @@ void AddExternalForces(inout Boid boid, uint id) {
     float(externalForceInt[2] / 1024.0)
   );
   boidVelocities[id] += externalForce * externalForceFactor * dt;
+  if (useGravity == 1) boidVelocities[id] += float3(0.0,-9.81,0.0) * dt;
 }
 
 void KeepInBounds(inout Boid boid, uint id) {
