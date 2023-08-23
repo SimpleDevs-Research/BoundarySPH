@@ -10,6 +10,7 @@ struct ObstacleStatic {
     uint2 es;                   // [0] = starting index in the edges arrays, [1] = the number of edges.
     float mass;                 // The mass of the obstacle. Considered a "static" variable because mass doesn't change.
     uint has_rb;
+    uint has_smr;
 };
 
 /// Represents the DYNAMIC properties of an obstacle that change during the update lop.
@@ -188,11 +189,19 @@ void UpdateVertices(uint id : SV_DispatchThreadID) {
     for(uint i = o_static.vs[0]; i < o_static.vs[0]+o_static.vs[1]; i++) {
         v_static = vertices_static[i];
         v_dynamic = vertices_dynamic[i];        
-        worldPosition = LocalPointToWorldPoint(o_dynamic.position, o_dynamic.rotation, o_dynamic.scale, v_static.localPosition);
-        // Update the exertion force the vertex will push onto particles.  Calculated first before the position is updated
-        v_dynamic.force = o_static.mass * (worldPosition - v_dynamic.position)/dt;
-        // Update the world position of the current vertex
-        v_dynamic.position = worldPosition;
+        // If the obstacle has a skinned mesh renderer, then we have already updated the world positions of the vertices
+        if (o_static.has_smr == 0) {
+            worldPosition = LocalPointToWorldPoint(o_dynamic.position, o_dynamic.rotation, o_dynamic.scale, v_static.localPosition);
+            // Update the exertion force the vertex will push onto particles.  Calculated first before the position is updated
+            v_dynamic.force = o_static.mass * (worldPosition - v_dynamic.position)/dt;
+            // Update the world position of the current vertex
+            v_dynamic.position = worldPosition;
+        }
+        else {
+            // We already have the world position and forces set
+            worldPosition = v_dynamic.position;
+        }
+        
         // Update the world normal of the current vertex
         v_dynamic.normal = normalize(RotMultVec3(o_dynamic.rotation, v_static.localNormal));
         // Upate our entry in Vertices_Dynamic

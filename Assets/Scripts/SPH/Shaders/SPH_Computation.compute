@@ -342,7 +342,7 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
 // Helper function: calculates pressure force between the current particle and a neighbor particle
 float3 CalculatePressureForce(float3 diffPosition, float diffPositionLength, float currentDensity, float neighborDensity) {
     float c1 = particleMass * bulkModulus;
-    float c2 = (currentDensity + neighborDensity - (2.0 * rest_density)) / neighborDensity;
+    float c2 = min(0.0,(currentDensity + neighborDensity - (2.0 * rest_density)) / neighborDensity);
     float c3 = -45.0 / (2 * pi * radius6);
     float3 c4 = diffPosition / diffPositionLength;
     float c5 = pow(smoothingRadius - diffPositionLength, 2);
@@ -468,7 +468,7 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
         );
         float3 n = normalize(projN);
         if (dot(v,n) < 0.0) {
-            v = v - 1.25 * dot(v,n) * n; 
+            v = v - 1.5 * dot(v,n) * n; 
             float frictionF = float(projection.frictionCoefficient) / 1024.0;
             float frictionCoefficient = min(1.0, frictionF / float(projection.counter));
             v += frictionCoefficient * (-v + dot(v,n)*n);

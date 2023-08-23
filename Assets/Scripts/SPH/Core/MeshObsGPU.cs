@@ -20,6 +20,7 @@ public class MeshObsGPU : MonoBehaviour
         public bool checkObstacleBounds = true;
         public bool checkTriangleBounds = true;
         public bool enable_external_forces = false;
+        public bool alwaysUpdate = false;
         [HideInInspector] public float prevFriction = 0f;
         [HideInInspector] public bool prevCheckObstacleBounds = true;
         [HideInInspector] public bool prevCheckTriangleBounds = true;
@@ -456,7 +457,7 @@ public class MeshObsGPU : MonoBehaviour
         combineForcesKernel = _SHADER.FindKernel("CombineForces");
 
         // Initialize our buffers
-        obstacles_static_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(uint)*8 + sizeof(float));
+        obstacles_static_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(uint)*9 + sizeof(float));
         obstacles_dynamic_buffer = new ComputeBuffer(obstacles_dynamic.Count, sizeof(uint)*4 + sizeof(float)*20);
         vertices_static_buffer = new ComputeBuffer(vertices_static.Count, sizeof(uint) + sizeof(float)*6);
         vertices_dynamic_buffer = new ComputeBuffer(vertices_dynamic.Count, sizeof(uint) + sizeof(float)*9);
@@ -557,8 +558,8 @@ public class MeshObsGPU : MonoBehaviour
         // Before anything, we need to extract the mesh data! 
         // We also need to extract the vertex anbd triangle data from that mesh
         Mesh mesh = obstacle.obstacle.GetMesh();
-        var vs = mesh.vertices;
-        var ts = mesh.triangles;
+        var vs = obstacle.obstacle.vertices;
+        var ts = obstacle.obstacle.triangles;
         obstacle.prevFriction = obstacle.frictionCoefficient;
         obstacle.prevCheckObstacleBounds = obstacle.checkObstacleBounds;
         obstacle.prevCheckTriangleBounds = obstacle.checkTriangleBounds;
@@ -570,6 +571,7 @@ public class MeshObsGPU : MonoBehaviour
         o_dynamic.index = (uint)index;
         o_static.mass = obstacle.mass;
         o_static.has_rb = (obstacle.enable_external_forces) ? (uint)1 : (uint)0;
+        o_static.has_smr = (obstacle.obstacle.hasSkinnedMeshFilter) ? (uint)1 : (uint)0;
         o_dynamic.frictionCoefficient = obstacle.frictionCoefficient;
         o_dynamic.checkObstacleBounds = (obstacle.checkObstacleBounds) ? (uint)1 : (uint)0;
         o_dynamic.checkTriangleBounds = (obstacle.checkTriangleBounds) ? (uint)1 : (uint)0;
@@ -586,8 +588,8 @@ public class MeshObsGPU : MonoBehaviour
         //  5) `lowerBound` : float3 = the lower bounds of the obstacle
         //  6) `upperBound` : float3 = the upper bounds of the obstacle 
         //  7) `vertex_normals` : List<float3> = stores normal vectors for vertices. Will be added at the end.
-        List<float3> fixed_vs = new List<float3>();
-        uint[] vs_map = new uint[vs.Length];
+        obstacle.obstacle.fixed_vs = new List<float3>();
+        obstacle.obstacle.vs_map = new uint[vs.Length];
         List<OP.VertexStatic> vs_static = new List<OP.VertexStatic>();
         List<OP.VertexDynamic> vs_dynamic = new List<OP.VertexDynamic>();
         //float3 lowerBound = new(0f,0f,0f);
@@ -599,12 +601,12 @@ public class MeshObsGPU : MonoBehaviour
         float3 localPosition;
         for(int i = 0; i < vs.Length; i++) {
             // We save the current vertex's local position
-            mi = fixed_vs.IndexOf(vs[i]);
+            mi = obstacle.obstacle.fixed_vs.IndexOf(vs[i]);
             // If the mapped index is -1, then there's no entry in `fixed_vs`
             if (mi == -1) {
                 // Grab the current index, and add the local position to `fixed_vs`
-                mi = fixed_vs.Count;
-                fixed_vs.Add(vs[i]);
+                mi = obstacle.obstacle.fixed_vs.Count;
+                obstacle.obstacle.fixed_vs.Add(vs[i]);
                 // Initialize the corresponding entriers in `vs_static` and `vs_dynamic`
                 OP.VertexStatic v_static = new OP.VertexStatic();
                 OP.VertexDynamic v_dynamic = new OP.VertexDynamic();
@@ -633,11 +635,11 @@ public class MeshObsGPU : MonoBehaviour
                 //upperBound[2] = Mathf.Max(upperBound[2],localPosition[2]);
             }
             // Now, we merely have to update `vs_map`
-            vs_map[i] = (uint)mi;
+            obstacle.obstacle.vs_map[i] = (uint)mi;
         }
         // We update `o_static` with number of filtered vertices
         // we know [0] because it's merely the current count of `vertices_static`
-        o_static.vs = new((uint)vertices_static.Count,(uint)fixed_vs.Count);
+        o_static.vs = new((uint)vertices_static.Count,(uint)obstacle.obstacle.fixed_vs.Count);
 
         // ===== GENERATING TRIANGLES AND EDGES DATA ==== //
         
@@ -669,9 +671,9 @@ public class MeshObsGPU : MonoBehaviour
             // In case it's confusing, know that `ts[i]` is an integer index for the original entry in `vs`.
             //  We have to get the corresponding index in `fixed_vs`. Hence `vs_map[ts[i]]`
             ts_static[(int)ti].vertices = new(
-                vs_map[ts[(int)i]], 
-                vs_map[ts[(int)i+1]], 
-                vs_map[ts[(int)i+2]]
+                obstacle.obstacle.vs_map[ts[(int)i]], 
+                obstacle.obstacle.vs_map[ts[(int)i+1]], 
+                obstacle.obstacle.vs_map[ts[(int)i+2]]
             );
             ts_dynamic[(int)ti].vertices = ts_static[(int)ti].vertices;
             
@@ -693,9 +695,9 @@ public class MeshObsGPU : MonoBehaviour
             ts_static[ti].localCenter = (v1f+v2f+v3f)/3f;
             // Now, we can calculate the LOCAL normal's end point for the triangle face. We do this by calculating the local centroid + normalized cross product.
             Vector3 localNormal = Vector3.Cross(v2-v1, v3-v1).normalized;
-            if (localNormal.magnitude == 0) {
-                Debug.Log($"{ts[(int)i]}|{ts[(int)i+1]}|{ts[(int)i+2]}\t{vs[ts[(int)i]]}|{vs[ts[(int)i+1]]}|{vs[ts[(int)i+2]]}\t{v1}, {v2}, {v3}");
-            }
+            //if (localNormal.magnitude == 0) {
+            //    Debug.Log($"{ts[(int)i]}|{ts[(int)i+1]}|{ts[(int)i+2]}\t{vs[ts[(int)i]]}|{vs[ts[(int)i+1]]}|{vs[ts[(int)i+2]]}\t{v1}, {v2}, {v3}");
+            //}
             float3 localNormalF = new(localNormal.x,localNormal.y,localNormal.z);
             ts_static[ti].localNormal = localNormalF;
 
@@ -850,7 +852,8 @@ public class MeshObsGPU : MonoBehaviour
             // Check if the transform has been changed in any way
             mo = obstacles[i].obstacle; 
             if (
-                    mo.position_transform.hasChanged 
+                    obstacles[i].alwaysUpdate
+                    || mo.position_transform.hasChanged 
                     || obstacles[i].prevFriction != obstacles[i].frictionCoefficient 
                     || obstacles[i].prevCheckObstacleBounds != obstacles[i].checkObstacleBounds
                     || obstacles[i].prevCheckTriangleBounds != obstacles[i].checkTriangleBounds
@@ -863,14 +866,29 @@ public class MeshObsGPU : MonoBehaviour
                 obstacles_dynamic_array[i].scale = new(mo.position_transform.lossyScale.x, mo.position_transform.lossyScale.y, mo.position_transform.lossyScale.z);
                 obstacles_dynamic_array[i].lowerBound = obstacles_dynamic_array[i].position;
                 obstacles_dynamic_array[i].upperBound = obstacles_dynamic_array[i].position;
-                Rigidbody rb = obstacles[i].obstacle.rb;
-                if (rb != null) obstacles_dynamic_array[i].centerOfMass = new(rb.centerOfMass.x, rb.centerOfMass.y, rb.centerOfMass.z);
+                //Rigidbody rb = obstacles[i].obstacle.rb;
+                //if (rb != null) obstacles_dynamic_array[i].centerOfMass = new(rb.centerOfMass.x, rb.centerOfMass.y, rb.centerOfMass.z);
                 obstacles_dynamic_array[i].frictionCoefficient = obstacles[i].frictionCoefficient;
                 obstacles_dynamic_array[i].checkObstacleBounds = (obstacles[i].checkObstacleBounds) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].checkTriangleBounds = (obstacles[i].checkTriangleBounds) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].hasChanged = 1;
                 obstacles[i].prevFriction = obstacles[i].frictionCoefficient;
                 obstacles[i].prevCheckTriangleBounds = obstacles[i].checkTriangleBounds;
+                if (obstacles[i].obstacle.hasSkinnedMeshFilter) {
+                    // We have to grab the vertices manually
+                    float3[] vs = obstacles[i].obstacle.GetWorldVertices();
+                    if (vs != null) {
+                        // We can update the vertices in the VS buffer
+                        OP.VertexDynamic[] vd = new OP.VertexDynamic[numVertices];
+                        vertices_dynamic_buffer.GetData(vd);
+                        for(int vi = 0; vi < vs.Length; vi++) {
+                            int vi2 = vi + (int)obstacles_static[i].vs[0];
+                            vd[vi2].force = obstacles_static[i].mass * (vs[vi] - vd[vi2].position)/_dt;
+                            vd[vi2].position = vs[vi];
+                        }
+                        vertices_dynamic_buffer.SetData(vd);
+                    }
+                }
                 needsUpdating = true;
             }
         }

@@ -28,6 +28,7 @@ namespace ObstaclePrimitives {
             public int2 es;
             public float mass;
             public uint has_rb;
+            public uint has_smr;
         }
 
         /// <summary>
@@ -308,6 +309,7 @@ namespace ObstaclePrimitives {
             public uint2 es;
             public float mass;
             public uint has_rb;
+            public uint has_smr;
         }
 
         /// <summary>
