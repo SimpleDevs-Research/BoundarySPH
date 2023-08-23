@@ -88,15 +88,16 @@ public class BoidsController : MonoBehaviour
             if (showExternalForces) {
                 if (_boids[i].obstacleID == -1) continue;
                 int3 extInt3 = external_forces[_boids[i].obstacleID];
-                float3 external_force = new(
+                Vector3 external_force = new Vector3(
                     (float)extInt3[0] / 1024f,
                     (float)extInt3[1] / 1024f,
                     (float)extInt3[2] / 1024f
                 );
+                Vector3 external_force_along_direction = (Vector3.Dot(external_force,_boids[i].obstacle.position_transform.forward)/Vector3.Dot(_boids[i].obstacle.position_transform.forward,_boids[i].obstacle.position_transform.forward)) * _boids[i].obstacle.position_transform.forward;
                 Handles.color = Color.blue;
-                Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + external_force * 5f * _dt, 3);
-                Handles.color = Color.black;
-                Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + (float3)new(0f,-9.81f,0f) * 5f * _dt, 3);
+                Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + (float3)new(external_force_along_direction.x,external_force_along_direction.y,external_force_along_direction.z), 3);
+                //Handles.color = Color.black;
+                //Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + (float3)new(0f,-9.81f,0f) * 5f, 3);
             }
         }
     }

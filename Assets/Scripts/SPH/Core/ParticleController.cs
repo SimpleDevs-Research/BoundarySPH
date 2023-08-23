@@ -96,6 +96,8 @@ public class ParticleController : MonoBehaviour
     private RecordSettings _record_statistics = RecordSettings.Off;
     [SerializeField, Tooltip("If recording online, then this identifies if we got a response."), ReadOnly] 
     private bool _recording_verified = false;
+    [SerializeField] private bool _record_on_start = true;
+    [SerializeField,ReadOnly] private bool _recording_started = false;
 
     [SerializeField, Tooltip("Files are saved as JSONs. Do not include the file extension in the name.")] 
     private string _record_name = "SPH_Findings";
@@ -241,6 +243,7 @@ public class ParticleController : MonoBehaviour
     private RecordingSession _pressures_recording_session = null;
     private RecordingSession _fps_recording_session = null;
     private string _recording_save_name;
+
     private bool _recording_saved = false;
 
     void OnDrawGizmos() {
@@ -379,6 +382,9 @@ public class ParticleController : MonoBehaviour
         if (_time_between_requests <= 0f) _time_between_requests = 0.01f;
         // Get the current timestamp
         string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+
+        // We need to let the system know if we want to start the recording or not upon the startign of the simulation.
+        _recording_started = _record_on_start;
         
         // Create our recording sessions
         string session_data;
@@ -446,6 +452,7 @@ public class ParticleController : MonoBehaviour
             // The callback function `OnlineRecordingCallback` determines if we record during the update loop
             StartCoroutine(WebRequests.PostRequestWithJSON(_record_pressures_url+"create",session_data,false,OnlineRecordingCallback));
         }
+
         /*
         if (_record_fps_url.Length > 0) {
             _fps_recording_session = new RecordingSession(
@@ -505,6 +512,10 @@ public class ParticleController : MonoBehaviour
         */
     }
 
+    public void StartRecording() {
+        _recording_started = true;
+    }
+
     private void OnlineRecordingCallback(WebRequests.Response response) {
         if (!response.success) {
             _record_statistics = RecordSettings.Off;
@@ -517,7 +528,7 @@ public class ParticleController : MonoBehaviour
         if (_record_densities_url.Length > 0) StartCoroutine(DensitiesBatchRequester());
         if (_record_pressures_url.Length > 0) StartCoroutine(PressuresBatchRequester());
         // Record our first entry
-        Record();
+        if (_recording_started) Record();
     }
 
     private int _BLOCK_SIZE = 512;
@@ -820,10 +831,6 @@ public class ParticleController : MonoBehaviour
         // Update shader variables!
         UpdateShaderVariables(true);
 
-        // Update time elapsed
-        _time_elapsed += _dt;
-        _frames_elapsed += 1;
-
         //DebugBufferParticle("POSITIONS",1000,PARTICLES_BUFFER);
 
         // Reset the grid and num neighbors buffer, if we are debugging
@@ -881,7 +888,11 @@ public class ParticleController : MonoBehaviour
         PARTICLES_BUFFER.GetData(debug_particles_array);
 
         // If we're recording, record our session
-        if (_record_statistics != RecordSettings.Off) {
+        // Also note: if we're waiting for the recording to start, we won't actually record anything yet.
+        if (_record_statistics != RecordSettings.Off && _recording_started) {
+            // Update time elapsed
+            _time_elapsed += _dt;
+            _frames_elapsed += 1;
             // Still record if we haven't saved yet
             if (!_recording_saved && _time_elapsed <= _record_duration) Record();
             // If we've reached our time limit, do indicate that we've saved!
