@@ -25,9 +25,9 @@ float smoothingRadius;          // `h`: the smoothing kernel radius for SPH. For
 float radius2;
 float radius3;
 //float radius4;
-//float radius5;
+float radius5;
 float radius6;
-//float radius8;
+float radius8;
 float radius9;
 //float radius16;
 float particleMass;             // How much mass does each particle have?
@@ -289,6 +289,15 @@ float Poly6Kernel3D(float3 currentPos, float3 otherPos, float kernelSmoothingRad
     float d2 = dLength * dLength;
     return (315.0 / (64.0 * pi * radius9)) * pow(k2 - d2,3);
 }
+float Poly6Kernel2D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+    float dLength = length(currentPos - otherPos);
+    // We have to exit early by returning 0 if the length of the displacement is greater than the kernel smoothing radius
+    if (dLength > kernelSmoothingRadius) return 0.0;
+    // Otherwise, we continue as normal
+    float k2 = kernelSmoothingRadius * kernelSmoothingRadius;
+    float d2 = dLength * dLength;
+    return (4.0 / (pi * radius8)) * pow(k2 - d2,3);
+}
 
 float3 SpikyKernelGradient3D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
     float3 displacement = currentPos - otherPos;
@@ -301,6 +310,17 @@ float3 SpikyKernelGradient3D(float3 currentPos, float3 otherPos, float kernelSmo
     // Otherwise, we calculate the kernel and get out
     return dNormalized * ((-45.0 / (pi * radius6)) * pow(kernelSmoothingRadius - dLength,3));
 }
+float3 SpikyKernelGradient2D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+    float3 displacement = currentPos - otherPos;
+    float dLength = length(displacement);
+    // If the length of the displacement is greater than the smoothing radius, we dip out early
+    if (dLength > kernelSmoothingRadius) return float3(0,0,0);
+    // We have an issue if the length of the displacement == 0, because we're normalizing. So we only normalize if the length is greater than 0
+    float3 dNormalized = displacement;
+    if (dLength > 0.0) dNormalized = normalize(displacement);
+    // Otherwise, we calculate the kernel and get out
+    return dNormalized * ((-30.0 / (pi * radius5)) * pow(kernelSmoothingRadius - dLength,3));
+}
 
 float MullerViscosityKernelLaplacian3D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
     float dLength = length(currentPos - otherPos);
@@ -308,6 +328,13 @@ float MullerViscosityKernelLaplacian3D(float3 currentPos, float3 otherPos, float
     if (dLength > kernelSmoothingRadius) return 0.0;
     // Otherwise, we calcualte the kernel and go out for a snack
     return (45.0 / (pi * radius6)) * (kernelSmoothingRadius - dLength);
+}
+float MullerViscosityKernelLaplacian2D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+    float dLength = length(currentPos - otherPos);
+    // If the length of the displacement is greater than the smoothing radius, we dip out early
+    if (dLength > kernelSmoothingRadius) return 0.0;
+    // Otherwise, we calcualte the kernel and go out for a snack
+    return (40.0 / (pi * radius5)) * (kernelSmoothingRadius - dLength);
 }
 
 /*

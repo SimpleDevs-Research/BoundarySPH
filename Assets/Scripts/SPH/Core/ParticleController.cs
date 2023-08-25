@@ -41,6 +41,7 @@ public class ParticleController : MonoBehaviour
     [SerializeField, Tooltip("The mass of each particle. We generally assume all particles have the same particle mass.")]
     private float _particleMass = 1f;
 
+
     [Header("== SPH CONFIGURATIONS ==")]
     [SerializeField, Tooltip("The delta time of the simulation. If set to any value < 0, then the simulation will default to using `Time.deltaTime`.")]
     private float _dt = 0.00825f;
@@ -622,9 +623,9 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetFloat("radius2", _h * _h);
         _SPH_Shader.SetFloat("radius3", Mathf.Pow(_h,3));
         //_SPH_Shader.SetFloat("radius4", Mathf.Pow(_h,4));
-        //_SPH_Shader.SetFloat("radius5", Mathf.Pow(_h,5));
+        _SPH_Shader.SetFloat("radius5", Mathf.Pow(_h,5));
         _SPH_Shader.SetFloat("radius6", Mathf.Pow(_h,6));
-        //_SPH_Shader.SetFloat("radius8",  Mathf.Pow(_h,8));
+        _SPH_Shader.SetFloat("radius8",  Mathf.Pow(_h,8));
         _SPH_Shader.SetFloat("radius9", Mathf.Pow(_h,9));
         //_SPH_Shader.SetFloat("radius16", Mathf.Pow(_h,16));
 
