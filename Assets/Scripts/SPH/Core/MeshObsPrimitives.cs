@@ -459,7 +459,13 @@ namespace ObstaclePrimitives {
         // =============================== //
 
         // PARTICLE GRID SECTION (in Classes) DOES NOT HAVE A STRUCT REPRESENTATION
-
+        
+        [System.Serializable]
+        public struct GridCell {
+            public int n;
+            public float3 worldPosition;
+            public int cellPressure;
+        }
 
         // ==================================== //
         // ===== PARTICLES REPRESENTATION ===== //

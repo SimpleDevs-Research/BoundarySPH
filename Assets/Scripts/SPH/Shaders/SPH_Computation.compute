@@ -42,6 +42,11 @@ int processType;                // What kind of neighbor search and parsing shou
 uint numBlocks;                 // number of thread groups that run on the GPU
 
 // == STRUCTS ==
+struct GridCell {
+    int n;
+    float3 worldPosition;
+    int cellPressure;
+};
 struct Particle {
     float3 position;            // The world position of the particle
     float3 force;               // The force current experienced by the particle that is caused by pressure and viscosity
@@ -86,7 +91,7 @@ struct Projection {
     // To get grid cell count: 
     //  1) Find projected grid cell hash index
     //  2) grid[projected_index] <- the # of particles in that grid cell.
-RWStructuredBuffer<uint> grid;
+RWStructuredBuffer<GridCell> grid;
 // Stores the limits of each grid cell, in terms of neighbors. Same size as `grid`
 RWStructuredBuffer<CellLimits> cellLimits;
 // Stores all particle data in the system. 
@@ -175,9 +180,15 @@ void GetNeighborCellProjectedIDs(int3 currentCellXYZ, out int neighborCells[27])
     for(int c = count; c < 27; c++) result[c] = -1;
     neighborCells = result;
 }
+float3 GetWorldPositionFromXYZ(int3 xyz) {
+    return float3(
+        bounds[0] + (gridCellSize * 0.5) + (gridCellSize * xyz[0]),
+        bounds[1] + (gridCellSize * 0.5) + (gridCellSize * xyz[1]),
+        bounds[2] + (gridCellSize * 0.5) + (gridCellSize * xyz[2])
+    );
+}
 
 // == CORE METHODS
-
 #pragma kernel GenerateParticles
 [numthreads(_BLOCK_SIZE, 1, 1)]
 // Generate particles. Better done in the GPU than the CPU.
@@ -224,11 +235,20 @@ void GenerateGridNeighbors(uint3 id : SV_DispatchThreadID) {
 
 
 #pragma kernel ClearGrid
-[numthreads(256, 1, 1)]
+[numthreads(8, 8, 8)]
 // Reset the particle counts for each grid cell back to 0
 void ClearGrid(uint3 id : SV_DispatchThreadID) {
-    if (id.x > total_number_of_cells) return;
-    grid[id.x] = 0;
+    //if (id > total_number_of_cells) return;
+    if (
+        id.x >= uint(numCellsPerAxis[0])
+        || id.y >= uint(numCellsPerAxis[1])
+        || id.z >= uint(numCellsPerAxis[2])
+    ) return;
+    int projectedID = GetProjectedGridIndexFromXYZ(id);
+    grid[projectedID].n = 0;
+    grid[projectedID].cellPressure = 0;
+    // We also set the world position of the grid cell here
+    grid[projectedID].worldPosition = GetWorldPositionFromXYZ(id);
 }
 
 #pragma kernel ClearForces
@@ -250,7 +270,7 @@ void UpdateGridCellCounts(uint3 id : SV_DispatchThreadID) {
     float3 p = particles[id.x].position;                                           // Get the current particle...
     int3 grid_indices = GetGridXYZIndices(p);                      // ... its XYZ grid indices ...
     int projected_index = GetProjectedGridIndexFromXYZ(grid_indices);       // ... then its 1D projected index.
-    InterlockedAdd(grid[projected_index], 1, particleOffsets[id.x]);        // Add to the total count for that grid cell
+    InterlockedAdd(grid[projected_index].n, 1, particleOffsets[id.x]);        // Add to the total count for that grid cell
     
     uint particleNeighborsStartingIndex = GetParticleNeighborStartingIndex(projected_index);  // Update `particleNeighbors`...
     if (particleOffsets[id.x] >= numParticlesPerGridCell) return;                       // ... but only if our number of particles in that cell does not exceed the limit per grid cell
@@ -260,8 +280,41 @@ void UpdateGridCellCounts(uint3 id : SV_DispatchThreadID) {
 // == DENSITY CALCULATION ==
 // We'll be using THIS methodology, described by https://www.cs.cornell.edu/~bindel/class/cs5220-f11/code/sph.pdf
 
+float Poly6Kernel3D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+    float dLength = length(currentPos - otherPos);
+    // We have to exit early by returning 0 if the length of the displacement is greater than the kernel smoothing radius
+    if (dLength > kernelSmoothingRadius) return 0.0;
+    // Otherwise, we continue as normal
+    float k2 = kernelSmoothingRadius * kernelSmoothingRadius;
+    float d2 = dLength * dLength;
+    return (315.0 / (64.0 * pi * radius9)) * pow(k2 - d2,3);
+}
+
+float3 SpikyKernelGradient3D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+    float3 displacement = currentPos - otherPos;
+    float dLength = length(displacement);
+    // If the length of the displacement is greater than the smoothing radius, we dip out early
+    if (dLength > kernelSmoothingRadius) return float3(0,0,0);
+    // We have an issue if the length of the displacement == 0, because we're normalizing. So we only normalize if the length is greater than 0
+    float3 dNormalized = displacement;
+    if (dLength > 0.0) dNormalized = normalize(displacement);
+    // Otherwise, we calculate the kernel and get out
+    return dNormalized * ((-45.0 / (pi * radius6)) * pow(kernelSmoothingRadius - dLength,3));
+}
+
+float MullerViscosityKernelLaplacian3D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+    float dLength = length(currentPos - otherPos);
+    // If the length of the displacement is greater than the smoothing radius, we dip out early
+    if (dLength > kernelSmoothingRadius) return 0.0;
+    // Otherwise, we calcualte the kernel and go out for a snack
+    return (45.0 / (pi * radius6)) * (kernelSmoothingRadius - dLength);
+}
+
+/*
 // Helper function: calculates density for a current particle and its potential neighbor.
 float CalculateDensity(float3 currentPos, float3 otherPos, float3 otherVel) {
+    //return particleMass * Poly6Kernel3D(currentPos - otherPos, smoothingRadius);
+    
     float3 diffPosition = currentPos - otherPos;
     float diffPosLength = length(diffPosition);
     if (diffPosLength == 0.0) {
@@ -275,6 +328,7 @@ float CalculateDensity(float3 currentPos, float3 otherPos, float3 otherVel) {
     float modDensity = ((315.0 * particleMass * pow(z,3)) / (64.0 * pi * radius9));
     return modDensity;
 }
+*/
 
 // The method to call by the CPU
 // The general methodology is as follows:
@@ -310,36 +364,39 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
     uint upY = limits.upperLimits[1];
     uint upZ = limits.upperLimits[2];
     
-    /*
-    float3 cellPosDiff = p - limits.position;
-    if (cellPosDiff[0] >= 0.0) lowX = limits.id[0];
-    else upX = limits.id[0];
-    if (cellPosDiff[1] >= 0.0) lowY = limits.id[1];
-    else upY = limits.id[1];
-    if (cellPosDiff[2] >= 0.0) lowZ = limits.id[2];
-    else upZ = limits.id[2];
-    */
-    
     for(uint x = lowX; x <= upX; x++) {
         for(uint y = lowY; y <= upY; y++) {
             for(uint z = lowZ; z <= upZ; z++) {
                 int neighborProjectedID = GetProjectedGridIndexFromXYZ(x,y,z);
                 int particleNeighborsStartingIndex = GetParticleNeighborStartingIndex(neighborProjectedID);
-                int numParticlesInGridCell = grid[neighborProjectedID];
+                int numParticlesInGridCell = grid[neighborProjectedID].n;
                 for(uint j = particleNeighborsStartingIndex; j < particleNeighborsStartingIndex + min(numParticlesPerGridCell, numParticlesInGridCell); j++) {
                     uint otherId = particleNeighbors[j];
+                    // Skip if we're looking at ourselves
                     if (otherId == id.x) continue;
-                    _density += CalculateDensity(p, particles[otherId].position, velocity[otherId]);
+                    // Otherwise, continue calculating density1
+                    //_density += CalculateDensity(p, particles[otherId].position, velocity[otherId]);
+                    _density += particleMass * Poly6Kernel3D(p, particles[otherId].position, smoothingRadius);
                 }
             }
         }
     }
+
+    // We contribute density to our grid cell's pressure
+    InterlockedAdd(grid[projectedID].cellPressure, int(bulkModulus * _density * 1024.0)); 
 
     density[id.x] = _density;
 }
 
 // == PRESSURE FORCE CALCULATION ==
 // Helper function: calculates pressure force between the current particle and a neighbor particle
+float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentDensity, float otherDensity) {
+    // We limit the pressure calculation to outward to prevent grouping and inward forces
+    float currentPressure = min(bulkModulus * (currentDensity - rest_density), 0.0);
+    float otherPressure = min(bulkModulus * (otherDensity - rest_density), 0.0);
+    return particleMass * ((currentPressure + otherPressure)/(2.0 * otherDensity)) * SpikyKernelGradient3D(currentPos, otherPos, smoothingRadius);
+}
+/*
 float3 CalculatePressureForce(float3 diffPosition, float diffPositionLength, float currentDensity, float neighborDensity) {
     float c1 = particleMass * bulkModulus;
     float c2 = min(0.0,(currentDensity + neighborDensity - (2.0 * rest_density)) / neighborDensity);
@@ -348,15 +405,21 @@ float3 CalculatePressureForce(float3 diffPosition, float diffPositionLength, flo
     float c5 = pow(smoothingRadius - diffPositionLength, 2);
     return c1 * c2 * c3 * c4 * c5;
 }
+*/
 
 // == VISCOSITY FORCE CALCULATION ==
 // Helper function: calculates viscosity force
+float3 CalculateViscosityForce(float3 currentPos, float3 otherPos, float3 currentVel, float3 otherVel, float otherDensity) {
+    return viscosity_coefficient * particleMass * ((otherVel - currentVel)/otherDensity) * MullerViscosityKernelLaplacian3D(currentPos, otherPos, smoothingRadius);
+}
+/*
 float3 CalculateViscosityForce(float3 diffPosition, float diffPositionLength, float neighborDensity, float3 currentVelocity, float3 otherVelocity) {
     float3 c1 = (currentVelocity - otherVelocity) / neighborDensity;
     float c2 =  -45.0 / (pi * radius6);
     float c3 = smoothingRadius - diffPositionLength;
     return particleMass * c1 * c2 * c3;
 }
+*/
 
 // == INTERNAL FORCE CALCULATION - COMBINING PRESSURE AND VISCOSITY EQUATIONS
 #pragma kernel ComputeInternalForces
@@ -368,6 +431,7 @@ void ComputeInternalForces(uint3 id : SV_DispatchThreadID) {
     float3 viscosityForce = float3(0,0,0);
 
     float3 p = particles[id.x].position;
+    float3 otherP;
     float3 diffPos;
     float diffPosLength;
 
@@ -385,26 +449,24 @@ void ComputeInternalForces(uint3 id : SV_DispatchThreadID) {
     uint upY = limits.upperLimits[1];
     uint upZ = limits.upperLimits[2];
 
-    /*
-    float3 cellPosDiff = p - limits.position;
-    if (cellPosDiff[0] >= 0.0) lowX = limits.id[0];
-    else upX = limits.id[0];
-    if (cellPosDiff[1] >= 0.0) lowY = limits.id[1];
-    else upY = limits.id[1];
-    if (cellPosDiff[2] >= 0.0) lowZ = limits.id[2];
-    else upZ = limits.id[2];
-    */
-
     for(uint x = lowX; x <= upX; x++) {
         for(uint y = lowY; y <= upY; y++) {
             for(uint z = lowZ; z <= upZ; z++) {
                 int neighborProjectedID = GetProjectedGridIndexFromXYZ(x,y,z);
                 int particleNeighborsStartingIndex = GetParticleNeighborStartingIndex(neighborProjectedID);
-                int numParticlesInGridCell = grid[neighborProjectedID];
+                int numParticlesInGridCell = grid[neighborProjectedID].n;
                 for(uint j = particleNeighborsStartingIndex; j < particleNeighborsStartingIndex + min(numParticlesPerGridCell, numParticlesInGridCell); j++) {
                     uint otherId = particleNeighbors[j];
                     // Skip if we encountered each other
                     if (otherId == id.x) continue;
+                    // Grab the other particle's properties
+                    otherP = particles[otherId].position;
+                    otherD = density[otherId];
+                    // Contribute to pressure force
+                    pressureForce += CalculatePressureForce(p, otherP, d, otherD);
+                    // Contribute to viscosity force
+                    viscosityForce += CalculateViscosityForce(p, otherP, v, velocity[otherId], otherD);
+                    /*
                     // Skip if we are outside the smoothing radius;
                     diffPos = p - particles[otherId].position;
                     diffPosLength = length(diffPos);
@@ -417,6 +479,7 @@ void ComputeInternalForces(uint3 id : SV_DispatchThreadID) {
                     otherD = density[otherId];
                     pressureForce += CalculatePressureForce(diffPos, diffPosLength, d, otherD);
                     viscosityForce += CalculateViscosityForce(diffPos, diffPosLength, otherD, v, velocity[otherId]);
+                    */
                 }
             }
         }

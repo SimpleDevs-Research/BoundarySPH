@@ -76,6 +76,8 @@ public class ParticleController : MonoBehaviour
 
     private float t;
 
+    [SerializeField] private bool gizmos_grid_cell = false;
+    [SerializeField] private Color gizmos_grid_cell_color = Color.red;
     [SerializeField] private bool gizmos_particles = false;
     [SerializeField] private Color gizmos_particle_color = Color.blue;
     [SerializeField] private bool gizmos_velocities = false;
@@ -248,6 +250,26 @@ public class ParticleController : MonoBehaviour
 
     void OnDrawGizmos() {
         if (!Application.isPlaying) return;
+
+        
+        if (gizmos_grid_cell) {
+            int tempNumGridCells = Mathf.Min(1500,_GRID.numGridCells);
+            OP.GridCell[] temp_grid_cells = new OP.GridCell[tempNumGridCells];
+            GRID_BUFFER.GetData(temp_grid_cells);
+            for(int i = 0; i < tempNumGridCells; i++) {
+                float p = (temp_grid_cells[i].n == 0) 
+                    ? 0f 
+                    : Mathf.Clamp(
+                        (((float)temp_grid_cells[i].cellPressure / 1024f) / (float)temp_grid_cells[i].n), 
+                        0f, 
+                        1f
+                    );
+                Gizmos.color = Color.red * p + Color.blue * (1f-p);
+                //Gizmos.color = new Vector4(255f,0f,0f,1f);
+                Gizmos.DrawCube(temp_grid_cells[i].worldPosition, new Vector3(_GRID.gridCellSize, _GRID.gridCellSize, _GRID.gridCellSize));
+            }
+        }
+        
 
         // For now, just render particles
         OP.Particle[] temp_particles = new OP.Particle[_numParticles];
@@ -623,7 +645,7 @@ public class ParticleController : MonoBehaviour
     private int _CLEAR_GRID;
     private int _CLEAR_FORCES;
     private int _GENERATE_PARTICLES;
-    private int _GENERATE_GRID_NEIGHBORS;
+    //private int _GENERATE_GRID_NEIGHBORS; 
     private int _UPDATE_GRID;
     private int _COMPUTE_DENSITY;
     private int _COMPUTE_INTERNAL_FORCES;
@@ -634,7 +656,7 @@ public class ParticleController : MonoBehaviour
         _CLEAR_GRID = _SPH_Shader.FindKernel("ClearGrid");
         _CLEAR_FORCES = _SPH_Shader.FindKernel("ClearForces");
         _GENERATE_PARTICLES = _SPH_Shader.FindKernel("GenerateParticles");
-        _GENERATE_GRID_NEIGHBORS = _SPH_Shader.FindKernel("GenerateGridNeighbors");
+        //_GENERATE_GRID_NEIGHBORS = _SPH_Shader.FindKernel("GenerateGridNeighbors");
         // These are run during each update loop
         _UPDATE_GRID = _SPH_Shader.FindKernel("UpdateGridCellCounts");
         _COMPUTE_DENSITY = _SPH_Shader.FindKernel("CV_ComputeDensity");
@@ -659,9 +681,9 @@ public class ParticleController : MonoBehaviour
         ARG_BUFFER = new ComputeBuffer(1, arg.Length * sizeof(uint), ComputeBufferType.IndirectArguments);
         ARG_BUFFER.SetData(arg);
         
-        GRID_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(int));
+        GRID_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(int)*2 + sizeof(float)*3);
         BOUNDS_BUFFER = new ComputeBuffer(6, sizeof(float));
-        BOUNDS_BUFFER.SetData(_GRID.innerBounds);
+        BOUNDS_BUFFER.SetData(_GRID.outerBounds);
 
         CELL_LIMITS_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(int)*9 + sizeof(float)*3);
         OP.CellLimits[] cellLimits = new OP.CellLimits[_GRID.numGridCells];
@@ -749,6 +771,7 @@ public class ParticleController : MonoBehaviour
         // Setting the buffers
 
         _SPH_Shader.SetBuffer(_CLEAR_GRID, "grid", GRID_BUFFER);
+        _SPH_Shader.SetBuffer(_CLEAR_GRID, "bounds", BOUNDS_BUFFER);
 
         _SPH_Shader.SetBuffer(_CLEAR_FORCES, "density", DENSITIES_BUFFER);
         _SPH_Shader.SetBuffer(_CLEAR_FORCES, "force", FORCES_BUFFER);
@@ -778,7 +801,7 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "particleNeighbors", PARTICLE_NEIGHBORS_BUFFER);
         _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "density", DENSITIES_BUFFER);
         _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "velocity", VELOCITIES_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "pressureForces", PRESSURE_FORCES_BUFFER);    
+        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "pressureForces", PRESSURE_FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "viscosityForces", VISCOSITY_FORCES_BUFFER);
 
         _SPH_Shader.SetBuffer(_INTEGRATE, "particles", PARTICLES_BUFFER);
@@ -787,7 +810,7 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetBuffer(_INTEGRATE, "pressureForces", PRESSURE_FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "viscosityForces", VISCOSITY_FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "density", DENSITIES_BUFFER);
-        _SPH_Shader.SetBuffer(_INTEGRATE, "bounds", BOUNDS_BUFFER);
+        //_SPH_Shader.SetBuffer(_INTEGRATE, "bounds", BOUNDS_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "projections", PROJECTIONS_BUFFER);
 
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "particles", PARTICLES_BUFFER);
@@ -824,17 +847,27 @@ public class ParticleController : MonoBehaviour
         // We can't do anything if `grid` is null or if our compute shader is null
         if (_GRID == null || _SPH_Shader == null) return;
         if (_record_statistics != RecordSettings.Off && !_recording_verified) return;
-        UpdateParticles();
-    }
-
-    public void UpdateParticles() {
         // Update shader variables!
         UpdateShaderVariables(true);
+        // Update Particles!
+        UpdateMullerParticles();
+    }
+    
+    // =====================================
+    // ===== MULLER'S COMPRESSIBLE SPH =====
+    // =====================================
 
+    public void UpdateMullerParticles() {
         //DebugBufferParticle("POSITIONS",1000,PARTICLES_BUFFER);
 
         // Reset the grid and num neighbors buffer, if we are debugging
-        _SPH_Shader.Dispatch(_CLEAR_GRID, Mathf.CeilToInt((float)_GRID.numGridCells / 256f),1,1);
+        //_SPH_Shader.Dispatch(_CLEAR_GRID, Mathf.CeilToInt((float)_GRID.numGridCells / 256f),1,1);
+        _SPH_Shader.Dispatch(
+            _CLEAR_GRID, 
+            Mathf.CeilToInt((float)_GRID.numCellsPerAxis[0] / 8f),
+            Mathf.CeilToInt((float)_GRID.numCellsPerAxis[1] / 8f),
+            Mathf.CeilToInt((float)_GRID.numCellsPerAxis[2] / 8f)
+        );
         
         // Calculate how many particles are in each grid cell, and get each particle's offset for their particular grid cell
         _SPH_Shader.Dispatch(_UPDATE_GRID, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f),1,1);
@@ -844,11 +877,8 @@ public class ParticleController : MonoBehaviour
             DebugBufferFloat3("Particles", debugNumParticles, particle_buffer);
         }
         */
-        /*
-        if (verbose_offsets) {
-            DebugBufferInt("Particle Offsets", debugNumParticles, particleOffsetsBuffer);
-        }
-        */
+        
+        // if (verbose_offsets) DebugBufferInt("Particle Offsets", debugNumParticles, particleOffsetsBuffer);
 
         // We perform the updates for density, pressure, and force/acceleration. 
         _SPH_Shader.Dispatch(_COMPUTE_DENSITY, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f), 1, 1);
