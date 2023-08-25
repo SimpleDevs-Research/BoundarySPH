@@ -115,8 +115,8 @@ public class MeshObsGPU : MonoBehaviour
                         if (obstacles[i].show_vertex_forces) {
                             // We show vertex forces just because...
                             Vector3 vf = new Vector3(v_dynamic.force[0], v_dynamic.force[1], v_dynamic.force[2]);
-                            Handles.color = Color.black;
-                            Handles.DrawLine(vp,vp+vf,3);
+                            Handles.color = new Vector4(0f,0f,0f,0.5f);
+                            Handles.DrawLine(vp,vp+vf,2);
                         }
                         
                     }
