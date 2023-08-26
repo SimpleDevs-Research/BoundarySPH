@@ -40,7 +40,7 @@ Shader "Instanced/water"
 			float3 position;
 		};
 
-		/* #ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
+		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
 			StructuredBuffer<particle> particle_buffer;
 		#endif
 
@@ -56,7 +56,7 @@ Shader "Instanced/water"
 			unity_WorldToObject._14_24_34 *= -1;
 			unity_WorldToObject._11_22_33 = 1.0f / unity_WorldToObject._11_22_33;
 		#endif
-		} */
+		}
 
         half _Glossiness;
         half _Metallic;

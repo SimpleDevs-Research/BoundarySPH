@@ -1,0 +1,106 @@
+// == VARIABLES ==
+float gridCellSize;
+int3 numCellsPerAxis;
+int total_number_of_cells;
+float gridScalingX;
+float gridScalingY;
+float gridScalingZ;
+
+int numParticles;
+float bulkModulus;
+
+// == STRUCTS ==
+struct GridCell {
+    int n;
+    float3 worldPosition;
+    int cellPressure;
+};
+struct Particle {
+    float3 position;            // The world position of the particle
+    float3 force;               // The force current experienced by the particle that is caused by pressure and viscosity
+};
+
+// == BUFFERS ==
+RWStructuredBuffer<GridCell> grid;
+RWStructuredBuffer<float> bounds;   // What are the limits of this simulation, in world space?
+RWStructuredBuffer<Particle> particles;
+RWStructuredBuffer<float> density;  // Stores the density of each particle
+RWStructuredBuffer<float> pressures;
+
+//RWStructuredBuffer<int> tempParticles;
+
+// == HELPER FUNCTIONTS ==
+int3 GetGridXYZIndices(float3 position) {
+    return int3(
+        floor((position[0] - gridScalingX)/gridCellSize),
+        floor((position[1] - gridScalingY)/gridCellSize),
+        floor((position[2] - gridScalingZ)/gridCellSize)
+    );
+}
+int GetProjectedGridIndexFromXYZ(int3 xyz) {
+    return xyz[0] + (numCellsPerAxis[0] * xyz[1]) + (numCellsPerAxis[0] * numCellsPerAxis[1] * xyz[2]);
+}
+float3 GetWorldPositionFromXYZ(int3 xyz) {
+    return float3(
+        bounds[0] + (gridCellSize * 0.5) + (gridCellSize * xyz[0]),
+        bounds[1] + (gridCellSize * 0.5) + (gridCellSize * xyz[1]),
+        bounds[2] + (gridCellSize * 0.5) + (gridCellSize * xyz[2])
+    );
+}
+int GetProjectedGridIndexFromGivenPosition(float3 position) {
+    int3 xyz = GetGridXYZIndices(position);
+    return GetProjectedGridIndexFromXYZ(xyz);
+}
+
+#pragma kernel ClearGrid
+[numthreads(8,8,8)]
+void ClearGrid(uint3 id : SV_DispatchThreadID) {
+    if (
+        id.x >= uint(numCellsPerAxis[0])
+        || id.y >= uint(numCellsPerAxis[1])
+        || id.z >= uint(numCellsPerAxis[2])
+    ) return;
+
+    // Update the grid cell
+    int projectedID = GetProjectedGridIndexFromXYZ(id);
+    grid[projectedID].n = 0;
+    grid[projectedID].cellPressure = 0;
+    // We also set the world position of the grid cell here
+    grid[projectedID].worldPosition = GetWorldPositionFromXYZ(id);
+    // Finally, reset the pressure floats
+    pressures[projectedID] = 0.0;
+    // return
+    return;
+}
+
+#pragma kernel UpdatePressures
+[numthreads(256,1,1)]
+void UpdatePressures(uint id : SV_DispatchThreadID) {
+    if (id >= (uint)numParticles) return;
+    // Get the grid cell index from the position of the particle
+    float3 p = particles[id].position;
+    int projectedID = GetProjectedGridIndexFromGivenPosition(p);
+    // We contribute density to our grid cell's pressure
+    //InterlockedAdd(grid[projectedID].cellPressure, int(bulkModulus * density[id] * 1024.0)); 
+    InterlockedAdd(grid[projectedID].n, 1);
+    InterlockedAdd(grid[projectedID].cellPressure, int(bulkModulus * density[id] * 1024.0)); 
+
+    //tempParticles[id] = projectedID;
+}
+
+#pragma kernel CondensePressures
+[numthreads(8,8,8)]
+void CondensePressures(uint3 id : SV_DispatchThreadID) {
+    if (
+        id.x >= uint(numCellsPerAxis[0])
+        || id.y >= uint(numCellsPerAxis[1])
+        || id.z >= uint(numCellsPerAxis[2])
+    ) return;
+    int projectedID = GetProjectedGridIndexFromXYZ(id);
+    // update the corresponding float in `pressures`
+    if (grid[projectedID].n == 0) {
+        pressures[projectedID] = 0.0;
+    } else {
+        pressures[projectedID] = (float(grid[projectedID].cellPressure) / 1024.0)/float(grid[projectedID].n);
+    }
+}

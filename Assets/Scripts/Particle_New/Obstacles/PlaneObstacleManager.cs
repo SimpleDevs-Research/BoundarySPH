@@ -454,12 +454,12 @@ public class PlaneObstacleManager : Grid3D
     }
 
     private int3[] GetClosestVertexIndex(Vector3 pos) {
-        float closestDistance = Mathf.Infinity;
+        //float closestDistance = Mathf.Infinity;
         //closestObstacle = obstacles[vertexTriangleCount[0][0]];
         
-        float dist;
-        Vector3 worldVertex;
-        PlaneObstacle obstacle;
+        //float dist;
+        //Vector3 worldVertex;
+        //PlaneObstacle obstacle;
 
         // return early if our position is outside the bounds of the grid
         if (

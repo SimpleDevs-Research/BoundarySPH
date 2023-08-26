@@ -87,7 +87,7 @@ public class BoidManager_GPU : MonoBehaviour
     [Tooltip("The Compute Shader for Boid Behavior")]
         public ComputeShader boidShader;
     
-    [SerializeField] private float updateTimeDelay = 0.1f;
+    //[SerializeField] private float updateTimeDelay = 0.1f;
     [Header("= BOID CONFIGURATIONS =")]
     [Tooltip("The visual range in XYZ grid dimensions that the boid is allowed to see")]
         public int visualRange = 5;
@@ -252,7 +252,7 @@ public class BoidManager_GPU : MonoBehaviour
     */
 
     private void InitializeBoids() {
-        int totalNumBoidsAttachedToTarget = 0;
+        //int totalNumBoidsAttachedToTarget = 0;
         boids = new Boid[numBoids];
         for(int i = 0; i < numBoids; i++) {
             Vector3 initPosition = new Vector3(

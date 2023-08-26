@@ -131,6 +131,14 @@ namespace SerializableTypes {
  
         public override string ToString() 
             => $"[{x}, {y}, {z}, {w}]";
+        
+        public override int GetHashCode()
+            => x.GetHashCode() ^ (y.GetHashCode() << 2) ^ (z.GetHashCode() >> 2) ^ (w.GetHashCode() >> 1);
+
+        public override bool Equals(object other) {
+            if (!(other is SVector4)) return false;
+            return Equals((SVector4)other);
+        }
  
         public static implicit operator Vector4(SVector4 s) 
             => new Vector4(s.x, s.y, s.z, s.w);
@@ -169,6 +177,10 @@ namespace SerializableTypes {
             => (Vector4)a != b;
         public static bool operator !=(Vector4 a, SVector4 b)
             => a != (Vector4)b;
+
+        public float magnitude {
+            get { return (float)Mathf.Sqrt(this.x * this.x + this.y * this.y + this.z * this.z + this.w * this.w); }
+        }
     }
  
     /// <summary> Serializable version of UnityEngine.Quaternion. </summary>

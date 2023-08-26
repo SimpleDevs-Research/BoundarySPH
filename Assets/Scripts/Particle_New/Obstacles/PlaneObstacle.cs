@@ -118,7 +118,7 @@ public class PlaneObstacle : MonoBehaviour
     public void GeneratePlanes() {
         // Initialize some local-global variables
         Mesh mesh = meshFilter.sharedMesh;
-        float3 normalVector;
+        //float3 normalVector;
         ObsPlane newPlane;
         
         // Initialize the ObsPlane list

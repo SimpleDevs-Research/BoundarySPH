@@ -1,4 +1,4 @@
-Shader "Instanced/particle_opacity"
+Shader "SPH/ParticleOpacity"
 {
 	Properties
 	{
@@ -56,7 +56,7 @@ Shader "Instanced/particle_opacity"
 	void surf(Input IN, inout SurfaceOutputStandard o)
 	{
 		// blue
-		float4 defaultColor = float4(0.25, 0.5, 1.0, 0.1);
+		float4 defaultColor = float4(0.25, 0.5, 1.0, 1.0);
 		// yellow
 		float4 secondaryColor = float4(1.0, 1.0, 0.0, 1.0);
 		float4 finalColor = defaultColor;

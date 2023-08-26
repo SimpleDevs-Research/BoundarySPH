@@ -176,11 +176,11 @@ public class fluid_gpu_2 : MonoBehaviour
     int size_property = Shader.PropertyToID("size"),
     particle_buffer_property = Shader.PropertyToID("particle_buffer");
 
-    int n = 8,
-    n_bound = 6,
-    thread_group_size,
-    grid_size_over_2,
-    n_debug = 64;
+    //int n = 8;
+    //int n_bound = 6;
+    int thread_group_size;
+    int grid_size_over_2;
+    //int n_debug = 64;
     Particle[] particles;
     int[] neighbor_list,
     neighbor_tracker,

@@ -6,6 +6,8 @@ using OP = ObstaclePrimitives.Structs;
 
 public class CheckProjectionAccuracy : MonoBehaviour
 {
+    public BufferManager _BM;
+
     [System.Serializable]
     public class DebugSetup {
         [HideInInspector] public Vector3 particlePosition;
@@ -40,8 +42,8 @@ public class CheckProjectionAccuracy : MonoBehaviour
         OP.Particle[] particles_array = new OP.Particle[obstacleManager.numParticles];
         OP.Projection[] projections_array = new OP.Projection[obstacleManager.numParticles];
 
-        obstacleManager.particles_buffer.GetData(particles_array);
-        obstacleManager.projections_buffer.GetData(projections_array);
+        _BM.PARTICLES_BUFFER.GetData(particles_array);
+        _BM.PARTICLES_EXTERNAL_FORCES_BUFFER.GetData(projections_array);
         
         for(int i = 0; i < debugSetups.Count; i++) {
             // Get the projection position. This is the one calculated by our method

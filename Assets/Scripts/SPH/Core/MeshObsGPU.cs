@@ -9,6 +9,8 @@ using OP = ObstaclePrimitives.Structs;
 public class MeshObsGPU : MonoBehaviour
 {
 
+
+
     // This one stays in the CPU and simply stores basic info about the obstacle. 
     // This one is NOT sent over to the GPU in any way
     [System.Serializable]
@@ -40,6 +42,7 @@ public class MeshObsGPU : MonoBehaviour
         public bool show_gizmos => show_vertices || show_triangles;
     }
     
+    public BufferManager _BM;
     public ComputeShader _SHADER;
     public ParticleController _PARTICLE_CONTROLLER = null;
     public BoidsController _BOIDS_CONTROLLER = null;
@@ -65,8 +68,6 @@ public class MeshObsGPU : MonoBehaviour
     public ComputeBuffer vertices_static_buffer, vertices_dynamic_buffer;
     public ComputeBuffer triangles_static_buffer, triangles_dynamic_buffer;
     public ComputeBuffer edges_static_buffer, edges_dynamic_buffer;
-    public ComputeBuffer translational_forces_buffer, torque_forces_buffer;
-    public ComputeBuffer particles_buffer, projections_buffer;
 
     private int resetVertexForcesKernel, updateVerticesKernel, updateTrianglesKernel, updateEdgesKernel, resetHasChangedKernel;
     private int resetTempProjectionsKernel, checkForProjectionKernel, combineForcesKernel;
@@ -202,9 +203,9 @@ public class MeshObsGPU : MonoBehaviour
         }
         
         if (drawProjectionGizmos) {
-            projections_buffer.GetData(projections_array);
-            OP.Particle[] debug_particles = new OP.Particle[particles_buffer.count];
-            particles_buffer.GetData(debug_particles);
+            _BM.PARTICLES_EXTERNAL_FORCES_BUFFER.GetData(projections_array);
+            OP.Particle[] debug_particles = new OP.Particle[_BM.PARTICLES_BUFFER.count];
+            _BM.PARTICLES_BUFFER.GetData(debug_particles);
             for(int i = 0; i < numParticles; i++) {
                 float3 n = new(
                     (float)projections_array[i].normal[0] / 1024f,
@@ -357,15 +358,15 @@ public class MeshObsGPU : MonoBehaviour
         // Combine projection forces
         //_SHADER.Dispatch(combineForcesKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
 
-        translational_forces_buffer.GetData(translational_forces_array);
-        torque_forces_buffer.GetData(torque_forces_array);
+        _BM.MESHOBS_TRANSLATION_FORCES_BUFFER.GetData(translational_forces_array);
+        _BM.MESHOBS_TORQUE_FORCES_BUFFER.GetData(torque_forces_array);
     }
 
     void FixedUpdate() {
         // Finally, we update each obstacle by getting the projections and checking if any obstacles should be updated, assuming they have a rigidbody
-        //projections_buffer.GetData(projections_array);
-        //translational_forces_buffer.GetData(translational_forces_array);
-        //torque_forces_buffer.GetData(torque_forces_array);
+        //_BM.PARTICLES_EXTERNAL_FORCES_BUFFER.GetData(projections_array);
+        //_BM.MESHOBS_TRANSLATION_FORCES_BUFFER.GetData(translational_forces_array);
+        //_BM.MESHOBS_TORQUE_FORCES_BUFFER.GetData(torque_forces_array);
         /*
         for(int i = 0; i < numObstacles; i++) {
             if (obstacles_static[i].has_rb == (int)0) continue;
@@ -465,10 +466,11 @@ public class MeshObsGPU : MonoBehaviour
         triangles_dynamic_buffer = new ComputeBuffer(triangles_dynamic.Count, sizeof(uint)*7 + sizeof(float)*22);
         edges_static_buffer = new ComputeBuffer(edges_static.Count, sizeof(uint)*5 + sizeof(float)*6);
         edges_dynamic_buffer = new ComputeBuffer(edges_dynamic.Count, sizeof(float)*3);
-        translational_forces_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
-        torque_forces_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
-        particles_buffer = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.PARTICLES_BUFFER : new ComputeBuffer(numParticles, sizeof(float)*6);
-        projections_buffer = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.PROJECTIONS_BUFFER : new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
+        
+        _BM.MESHOBS_TRANSLATION_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
+        _BM.MESHOBS_TORQUE_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
+        if (_BM.PARTICLES_BUFFER == null) _BM.PARTICLES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*6);
+        if (_BM.PARTICLES_EXTERNAL_FORCES_BUFFER == null) _BM.PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
 
         // Update the buffers
         obstacles_static_buffer.SetData(obstacles_static.ToArray());
@@ -482,7 +484,7 @@ public class MeshObsGPU : MonoBehaviour
         UpdateParticlePositions();
         if (_PARTICLE_CONTROLLER != null) {
             projections_array = new OP.Projection[numParticles];
-            projections_buffer.SetData(projections_array);
+            _BM.PARTICLES_EXTERNAL_FORCES_BUFFER.SetData(projections_array);
         }
         translational_forces_array = new int3[numObstacles];
         torque_forces_array = new int3[numObstacles];
@@ -490,8 +492,8 @@ public class MeshObsGPU : MonoBehaviour
             translational_forces_array[i] = new(0,0,0);
             torque_forces_array[i] = new(0,0,0);
         }
-        translational_forces_buffer.SetData(translational_forces_array);
-        torque_forces_buffer.SetData(torque_forces_array);
+        _BM.MESHOBS_TRANSLATION_FORCES_BUFFER.SetData(translational_forces_array);
+        _BM.MESHOBS_TORQUE_FORCES_BUFFER.SetData(torque_forces_array);
 
         // Associate our buffers with our kernels
         // Reset Vertex Forces
@@ -514,27 +516,27 @@ public class MeshObsGPU : MonoBehaviour
         // Reset Has Changed
         _SHADER.SetBuffer(resetHasChangedKernel,"obstacles_dynamic",obstacles_dynamic_buffer);
         // Reset Temp Projections
-        _SHADER.SetBuffer(resetTempProjectionsKernel,"projections", projections_buffer);
-        _SHADER.SetBuffer(resetTempProjectionsKernel,"particles",particles_buffer);
-        _SHADER.SetBuffer(resetTempProjectionsKernel,"translational_forces",translational_forces_buffer);
-        _SHADER.SetBuffer(resetTempProjectionsKernel,"torque_forces",torque_forces_buffer);
+        _SHADER.SetBuffer(resetTempProjectionsKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
+        _SHADER.SetBuffer(resetTempProjectionsKernel,"particles",_BM.PARTICLES_BUFFER);
+        _SHADER.SetBuffer(resetTempProjectionsKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        _SHADER.SetBuffer(resetTempProjectionsKernel,"torque_forces",_BM.MESHOBS_TORQUE_FORCES_BUFFER);
         // Check For Projections
-        _SHADER.SetBuffer(checkForProjectionKernel,"particles",particles_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"projections",projections_buffer);
+        _SHADER.SetBuffer(checkForProjectionKernel,"particles",_BM.PARTICLES_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"projections",_BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"triangles_dynamic",triangles_dynamic_buffer);
         //_SHADER.SetBuffer(checkForProjectionKernel,"triangles_static",triangles_static_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_static",obstacles_static_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_dynamic",obstacles_dynamic_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"vertices_dynamic",vertices_dynamic_buffer);
         _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic",edges_dynamic_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"translational_forces",translational_forces_buffer);
+        _SHADER.SetBuffer(checkForProjectionKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
         // Combine Forces Kernel
-        _SHADER.SetBuffer(combineForcesKernel,"projections",projections_buffer);
+        _SHADER.SetBuffer(combineForcesKernel,"projections",_BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
         _SHADER.SetBuffer(combineForcesKernel,"triangles_static",triangles_static_buffer);
         _SHADER.SetBuffer(combineForcesKernel,"obstacles_static",obstacles_static_buffer);
         _SHADER.SetBuffer(combineForcesKernel,"obstacles_dynamic",obstacles_dynamic_buffer);
-        _SHADER.SetBuffer(combineForcesKernel,"translational_forces",translational_forces_buffer);
-        _SHADER.SetBuffer(combineForcesKernel,"torque_forces",torque_forces_buffer);
+        _SHADER.SetBuffer(combineForcesKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        _SHADER.SetBuffer(combineForcesKernel,"torque_forces",_BM.MESHOBS_TORQUE_FORCES_BUFFER);
 
         // Finally, prepare our global arrays
         obstacles_dynamic_array = new OP.ObstacleDynamic[numObstacles];
@@ -543,7 +545,7 @@ public class MeshObsGPU : MonoBehaviour
         projections_array = new OP.Projection[numParticles];
         edges_dynamic_array = new float3[numEdges];
 
-        if (_BOIDS_CONTROLLER != null) _BOIDS_CONTROLLER.SetExternalForcesBuffer(translational_forces_buffer);
+        if (_BOIDS_CONTROLLER != null) _BOIDS_CONTROLLER.SetExternalForcesBuffer(_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
     }
 
     void PreprocessObstacle(
@@ -922,7 +924,7 @@ public class MeshObsGPU : MonoBehaviour
         for(int i = 0; i < numParticles; i++) {
             particles[i].position = particles[i].position;
         }
-        if (particles_buffer != null) particles_buffer.SetData(particles);
+        _BM.PARTICLES_BUFFER.SetData(particles);
     }
 
     void OnDestroy() {
@@ -934,10 +936,6 @@ public class MeshObsGPU : MonoBehaviour
         if (triangles_dynamic_buffer != null) triangles_dynamic_buffer.Release();
         if (edges_static_buffer != null) edges_static_buffer.Release();
         if (edges_dynamic_buffer != null) edges_dynamic_buffer.Release();
-        if (translational_forces_buffer != null) translational_forces_buffer.Release();
-        if (torque_forces_buffer != null) torque_forces_buffer.Release();
-        if (_PARTICLE_CONTROLLER == null && particles_buffer != null) particles_buffer.Release();
-        if (_PARTICLE_CONTROLLER == null && projections_buffer != null) projections_buffer.Release();
     }
     
     // https://forum.unity.com/threads/whats-the-math-behind-transform-transformpoint.107401/

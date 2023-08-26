@@ -70,10 +70,10 @@ public class fluid : MonoBehaviour
     int size_property = Shader.PropertyToID("size"),
     particle_buffer_property = Shader.PropertyToID("particle_buffer");
 
-    int n = 8,
-    n_bound = 6,
-    thread_group_size,
-    n_debug = 64;
+    int n = 8;
+    int n_bound = 6;
+    int thread_group_size;
+    //int n_debug = 64;
     particle[] particles;
     int[] neighbor_list,
     neighbor_tracker,

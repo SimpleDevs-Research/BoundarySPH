@@ -7,6 +7,7 @@ using OP = ObstaclePrimitives.Structs;
 
 public class GPU_Obstacle : SPH_Obstacle
 {
+    public BufferManager _BM;
 
     // This is for GPU Threading!
     private Vector3Int _NUM_THREADS = new Vector3Int(256,4,1);
@@ -42,7 +43,7 @@ public class GPU_Obstacle : SPH_Obstacle
         if (!_showProjections) return;
         
         OP.Particle[] ps = new OP.Particle[_numParticles];
-        _PARTICLES_BUFFER.GetData(ps);
+        _BM.PARTICLES_BUFFER.GetData(ps);
         float3[] vs = new float3[_numVertices];
         _VERTICES_BUFFER.GetData(vs);
         ParticleTriangle[] ts = new ParticleTriangle[_numTriangles];
@@ -118,8 +119,6 @@ public class GPU_Obstacle : SPH_Obstacle
     }
     
     // THIS IS PURELY FOR DEBUGGING PURPOSES
-    private ComputeBuffer _PARTICLES_BUFFER = null;
-    private ComputeBuffer _PARTICLE_VELOCITIES_BUFFER = null;
     private void UpdateParticles() {
         // We need to check if we have any debug particles or not.
         // If we do, that means we'll be using that array as the basis for our particles.
@@ -129,18 +128,18 @@ public class GPU_Obstacle : SPH_Obstacle
                 // Uh oh, we have a new count for then umber of particles! We need to adjust course!
                 // Set the number of particles as a value
                 _numParticles = _debugParticles.Count;
-                // Initialize the _PARTICLES_BUFFER buffer if it doesn't exist yet
-                if (_PARTICLES_BUFFER != null) _PARTICLES_BUFFER.Release();
-                if (_PARTICLE_VELOCITIES_BUFFER != null) _PARTICLE_VELOCITIES_BUFFER.Release();
-                _PARTICLES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
-                _PARTICLE_VELOCITIES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
-                _obstacleShader.SetBuffer(_CLEAR_COUNTERS_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_CHECK_IN_BOUNDS_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_FIND_CLOSEST_POINT_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                //_obstacleShader.SetBuffer(_CHECK_INTERSECTIONS_1_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_CHECK_INTERSECTIONS_2_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_PUSH_PARTICLES_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_PUSH_PARTICLES_KERNEL, "_PARTICLE_VELOCITIES", _PARTICLE_VELOCITIES_BUFFER);
+                // Initialize the _BM.PARTICLES_BUFFER buffer if it doesn't exist yet
+                if (_BM.PARTICLES_BUFFER != null) _BM.PARTICLES_BUFFER.Release();
+                if (_BM.PARTICLES_VELOCITIES_BUFFER != null) _BM.PARTICLES_VELOCITIES_BUFFER.Release();
+                _BM.PARTICLES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
+                _BM.PARTICLES_VELOCITIES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
+                _obstacleShader.SetBuffer(_CLEAR_COUNTERS_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_CHECK_IN_BOUNDS_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_FIND_CLOSEST_POINT_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                //_obstacleShader.SetBuffer(_CHECK_INTERSECTIONS_1_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_CHECK_INTERSECTIONS_2_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_PUSH_PARTICLES_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_PUSH_PARTICLES_KERNEL, "_PARTICLE_VELOCITIES", _BM.PARTICLES_VELOCITIES_BUFFER);
                 _obstacleShader.SetInt("numParticles",_numParticles);
                 _obstacleShader.SetFloat("particleRadius",_particle_radius);
                 // Update the thread groups count
@@ -157,20 +156,18 @@ public class GPU_Obstacle : SPH_Obstacle
                 p.position = new(pos.x, pos.y, pos.z);
                 ps[i] = p;
             }
-            _PARTICLES_BUFFER.SetData(ps);
+            _BM.PARTICLES_BUFFER.SetData(ps);
         } else if (_particleController != null) {
-            _PARTICLES_BUFFER = _particleController.PARTICLES_BUFFER;
-            _PARTICLE_VELOCITIES_BUFFER = _particleController.VELOCITIES_BUFFER;
             if (_numParticles != _particleController.numParticles) {
                 _numParticles = _particleController.numParticles;
                 _particle_radius = _particleController.particleRenderRadius;
-                _obstacleShader.SetBuffer(_CLEAR_COUNTERS_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_CHECK_IN_BOUNDS_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_FIND_CLOSEST_POINT_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                //_obstacleShader.SetBuffer(_CHECK_INTERSECTIONS_1_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_CHECK_INTERSECTIONS_2_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_PUSH_PARTICLES_KERNEL, "_PARTICLES", _PARTICLES_BUFFER);
-                _obstacleShader.SetBuffer(_PUSH_PARTICLES_KERNEL, "_PARTICLE_VELOCITIES", _PARTICLE_VELOCITIES_BUFFER);
+                _obstacleShader.SetBuffer(_CLEAR_COUNTERS_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_CHECK_IN_BOUNDS_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_FIND_CLOSEST_POINT_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                //_obstacleShader.SetBuffer(_CHECK_INTERSECTIONS_1_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_CHECK_INTERSECTIONS_2_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_PUSH_PARTICLES_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+                _obstacleShader.SetBuffer(_PUSH_PARTICLES_KERNEL, "_PARTICLE_VELOCITIES", _BM.PARTICLES_VELOCITIES_BUFFER);
                 _obstacleShader.SetInt("numParticles",_numParticles);
                 _obstacleShader.SetFloat("particleRadius", _particle_radius);
                 _NUM_BLOCKS_PARTICLES = Mathf.CeilToInt((float)_numParticles / (float)_NUM_THREADS.x);
@@ -291,7 +288,7 @@ public class GPU_Obstacle : SPH_Obstacle
 
     void Update() {
         // At this poitn, we must have a compute buffer aside for particles. If this doesn't work, then... welp.
-        if (_PARTICLES_BUFFER == null) {
+        if (_BM.PARTICLES_BUFFER == null) {
             Debug.Log("PARTICLE BUFFER NULL!");
             return;
         }
@@ -355,17 +352,6 @@ public class GPU_Obstacle : SPH_Obstacle
         if (_VERTICES_BUFFER != null) {
             _VERTICES_BUFFER.Release();
             _VERTICES_BUFFER = null;
-        }
-
-        if (_debugParticles.Count > 0) {
-            if (_PARTICLES_BUFFER != null) {
-                _PARTICLES_BUFFER.Release();
-                _PARTICLES_BUFFER = null;
-            }
-            if (_PARTICLE_VELOCITIES_BUFFER != null) {
-                _PARTICLE_VELOCITIES_BUFFER.Release();
-                _PARTICLE_VELOCITIES_BUFFER = null;
-            }
         }
         
     }

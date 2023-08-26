@@ -8,6 +8,8 @@ using OP = ObstaclePrimitives.Structs;
 
 public class GPU_ObstacleManager : MonoBehaviour
 {
+    public BufferManager _BM;
+
     public enum ShowHideEnum { Show, Hide }
     public ShowHideEnum showEditorControls = ShowHideEnum.Hide;
 
@@ -173,9 +175,9 @@ public class GPU_ObstacleManager : MonoBehaviour
 
         if (_PARTICLE_CONTROLLER != null && show_projections) {
             OP.Particle[] particles = new OP.Particle[_PARTICLE_CONTROLLER.numParticles];
-            _PARTICLE_CONTROLLER.PARTICLES_BUFFER.GetData(particles);
+            _BM.PARTICLES_BUFFER.GetData(particles);
             debug_projections = new OP.Projection[_PARTICLE_CONTROLLER.numParticles];
-            _PARTICLE_CONTROLLER.PROJECTIONS_BUFFER.GetData(debug_projections);
+            _BM.PARTICLES_EXTERNAL_FORCES_BUFFER.GetData(debug_projections);
             debug_projections = debug_projections.Where(p=>p.counter > 0).ToArray();
 
             OP.Projection proj;
@@ -608,10 +610,10 @@ public class GPU_ObstacleManager : MonoBehaviour
         if (_PARTICLE_CONTROLLER != null) {
             _SHADER.SetInt("_numParticles", _PARTICLE_CONTROLLER.numParticles);
             _SHADER.SetFloat("_particleRenderRadius",_PARTICLE_CONTROLLER.particleRenderRadius);
-            _SHADER.SetBuffer(_CLEAR_PROJECTIONS_KERNEL, "_PARTICLES", _PARTICLE_CONTROLLER.PARTICLES_BUFFER);
-            _SHADER.SetBuffer(_CLEAR_PROJECTIONS_KERNEL, "_PROJECTIONS", _PARTICLE_CONTROLLER.PROJECTIONS_BUFFER);
-            _SHADER.SetBuffer(_CALCULATE_PROJECTIONS_KERNEL, "_PARTICLES", _PARTICLE_CONTROLLER.PARTICLES_BUFFER);
-            _SHADER.SetBuffer(_CALCULATE_PROJECTIONS_KERNEL, "_PROJECTIONS", _PARTICLE_CONTROLLER.PROJECTIONS_BUFFER);
+            _SHADER.SetBuffer(_CLEAR_PROJECTIONS_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+            _SHADER.SetBuffer(_CLEAR_PROJECTIONS_KERNEL, "_PROJECTIONS", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
+            _SHADER.SetBuffer(_CALCULATE_PROJECTIONS_KERNEL, "_PARTICLES", _BM.PARTICLES_BUFFER);
+            _SHADER.SetBuffer(_CALCULATE_PROJECTIONS_KERNEL, "_PROJECTIONS", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
         }
 
         if (updateMethod == UpdateOrCoroutine.Coroutine) StartCoroutine(UpdateCoroutine());

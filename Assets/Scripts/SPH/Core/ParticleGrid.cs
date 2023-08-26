@@ -71,8 +71,9 @@ public class ParticleGrid : MonoBehaviour
         // The new bounds are defined, from the origin, how many cells on the X, Y, and Z axes we can fit
         // We define two different versions: a `bounds` that doesn't include the buffer cells, and and `outerBounds` that does consider buffer cells.
         // Note that the space encased by `_UPPER/_LOWER_BOUND_TRANSFORM` contains `outerBounds
-        if (_bufferCellsPerAxis < 2) _bufferCellsPerAxis = 2;
-        else if (_bufferCellsPerAxis % 2 == 1) _bufferCellsPerAxis = Mathf.Max(2,Mathf.RoundToInt(_bufferCellsPerAxis/2));
+        //if (_bufferCellsPerAxis < 2) _bufferCellsPerAxis = 2;
+        //else if (_bufferCellsPerAxis % 2 == 1) _bufferCellsPerAxis = Mathf.Max(2,Mathf.RoundToInt(_bufferCellsPerAxis/2));
+        if (_bufferCellsPerAxis % 2 == 1) _bufferCellsPerAxis = Mathf.Max(2,Mathf.RoundToInt(_bufferCellsPerAxis/2));
         Vector3 innerBoundsHalf = new Vector3(
             (_numCellsPerAxis[0] - _bufferCellsPerAxis) * _gridCellSize,
             (_numCellsPerAxis[1] - _bufferCellsPerAxis) * _gridCellSize,
@@ -117,6 +118,10 @@ public class ParticleGrid : MonoBehaviour
         [Tooltip("The mesh used to render each particle in the simulation. Usually just the default `Sphere` mesh from Unity.")]
         public Mesh particle_mesh;
         public Material particle_material;
+
+        [Tooltip("The mesh and shader used to render each grid cell in the simulation. Usually the `Cube` mesh from Unity.")]
+        public Mesh grid_cell_mesh;
+        public Material grid_cell_material;
 
 
     [SerializeField]

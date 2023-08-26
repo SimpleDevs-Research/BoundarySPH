@@ -36,7 +36,7 @@ public class BoidsController : MonoBehaviour
     [SerializeField] private float _alignmentFactor = 5f;
     [SerializeField] private float _externalForceFactor = 1f;
     [SerializeField] private float _turnSpeed = 2f;
-    [SerializeField] private float _meshTranslateSpeed = 1f;
+    //[SerializeField] private float _meshTranslateSpeed = 1f;
     [SerializeField] private float _meshTurnSpeed = 1f;
     [SerializeField] private float _dt = -1f;
     [SerializeField] private bool _useGravity = true;
@@ -53,7 +53,7 @@ public class BoidsController : MonoBehaviour
     [SerializeField, ReadOnly] private float3[] _gpuBoidCurrentDirections;
     [SerializeField, ReadOnly] private float[] _gpuBoidDirectionDiffs;
 
-    private int _CPU_LIMIT = 2048;
+    //private int _CPU_LIMIT = 2048;
 
     [Tooltip("Stores the number of boids in each grid cell")]
     private int[] grid;
@@ -218,7 +218,7 @@ public class BoidsController : MonoBehaviour
     private ComputeBuffer boidTargetPositionBuffer;
 
     private ComputeBuffer externalForcesBuffer;
-    private bool externalForcesSet = false;
+    //private bool externalForcesSet = false;
 
     private void InitializeShaderBuffers() {
         // === CREATING COMPUTE BUFFERS === //
@@ -297,7 +297,7 @@ public class BoidsController : MonoBehaviour
         boidsBuffer.GetData(_gpuBoids);
         for(int i = 0; i < numBoids; i++) _gpuBoids[i].obstacleID = _boids[i].obstacleID;
         boidsBuffer.SetData(_gpuBoids);
-        externalForcesSet = true;
+        //externalForcesSet = true;
     }
 
     // Update is called once per frame
@@ -395,7 +395,7 @@ public class BoidsController : MonoBehaviour
         float rotStep = _meshTurnSpeed;
         Vector3 targetPos, targetRotEuler;
         Quaternion targetRot;
-        Vector3 localEuler;
+        //Vector3 localEuler;
         for(int i = 0; i < numBoids; i++) {
             float3 v = _gpuBoidVelocities[i];
             float3 p = _gpuBoids[i].position;
