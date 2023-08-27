@@ -79,6 +79,7 @@ public class PressureRenderer : MonoBehaviour
 
         // == PARTICLE CONFIGURATIONS ==
         _SHADER.SetInt("numParticles", _PC.numParticles);
+        _SHADER.SetFloat("radius",_PC.h);
 
         // Update variables that may change over time due to modifying inspector values
         UpdateShaderVariables();

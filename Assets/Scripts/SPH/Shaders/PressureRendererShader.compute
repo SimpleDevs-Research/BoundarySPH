@@ -7,6 +7,7 @@ float gridScalingY;
 float gridScalingZ;
 
 int numParticles;
+float radius;
 float bulkModulus;
 
 // == STRUCTS ==
@@ -52,6 +53,18 @@ int GetProjectedGridIndexFromGivenPosition(float3 position) {
     return GetProjectedGridIndexFromXYZ(xyz);
 }
 
+int IsInBounds(float3 position) {
+    if (
+        bounds[0] <= position[0] 
+        && position[0] <= bounds[3] 
+        && bounds[1] <= position[1] 
+        && position[1] <= bounds[4] 
+        && bounds[2] <= position[2] 
+        && position[2] <= bounds[5]
+    ) return 1;
+    return 0;
+}
+
 #pragma kernel ClearGrid
 [numthreads(8,8,8)]
 void ClearGrid(uint3 id : SV_DispatchThreadID) {
@@ -79,11 +92,46 @@ void UpdatePressures(uint id : SV_DispatchThreadID) {
     if (id >= (uint)numParticles) return;
     // Get the grid cell index from the position of the particle
     float3 p = particles[id].position;
-    int projectedID = GetProjectedGridIndexFromGivenPosition(p);
+    float pressure = bulkModulus * density[id];
+
+    if (IsInBounds(p) == 0) return;
+
+    float3 lower = float3(
+        max(bounds[0], p[0] - radius),
+        max(bounds[1], p[1] - radius),
+        max(bounds[2], p[2] - radius)
+    );
+    float3 upper = float3(
+        min(bounds[3], p[0] + radius),
+        min(bounds[4], p[1] + radius),
+        min(bounds[5], p[2] + radius)
+    );
+
+    int3 lowerXYZ = GetGridXYZIndices(lower);
+    int3 upperXYZ = GetGridXYZIndices(upper);
+
+    int projectedID;
+    float w;
+    for(int x = lowerXYZ[0]; x <= upperXYZ[0]; x++) {
+        for (int y = lowerXYZ[1]; y <= upperXYZ[1]; y++) {
+            for(int z = lowerXYZ[2]; z <= upperXYZ[2]; z++) {
+                projectedID = GetProjectedGridIndexFromXYZ(int3(x,y,z));
+                w = min(1.0,(radius - distance(p,grid[projectedID].worldPosition))/radius);
+                if (w > 0) {
+                    InterlockedAdd(grid[projectedID].n, 1);
+                    InterlockedAdd(grid[projectedID].cellPressure, int(pressure * w * 1024.0)); 
+                }
+            }
+        }
+    }
+
+    //int3 xyz = GetGridXYZIndices(p);
+
+    //int projectedID = GetProjectedGridIndexFromGivenPosition(p);
     // We contribute density to our grid cell's pressure
     //InterlockedAdd(grid[projectedID].cellPressure, int(bulkModulus * density[id] * 1024.0)); 
-    InterlockedAdd(grid[projectedID].n, 1);
-    InterlockedAdd(grid[projectedID].cellPressure, int(bulkModulus * density[id] * 1024.0)); 
+    //InterlockedAdd(grid[projectedID].n, 1);
+    //InterlockedAdd(grid[projectedID].cellPressure, int(bulkModulus * density[id] * 1024.0)); 
 
     //tempParticles[id] = projectedID;
 }
@@ -101,6 +149,6 @@ void CondensePressures(uint3 id : SV_DispatchThreadID) {
     if (grid[projectedID].n == 0) {
         pressures[projectedID] = 0.0;
     } else {
-        pressures[projectedID] = (float(grid[projectedID].cellPressure) / 1024.0)/float(grid[projectedID].n);
+        pressures[projectedID] = (float(grid[projectedID].cellPressure) / 1024.0);
     }
 }
