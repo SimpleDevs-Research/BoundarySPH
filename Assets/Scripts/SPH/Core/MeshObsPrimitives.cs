@@ -251,6 +251,7 @@ namespace ObstaclePrimitives {
         public class Particle {
             public float3 position;
             public float3 force;
+            public int render;
         };
 
         /// <summary>
@@ -480,6 +481,7 @@ namespace ObstaclePrimitives {
         public struct Particle {
             public float3 position;
             public float3 force;
+            public int render;
         };
 
         /// <summary>

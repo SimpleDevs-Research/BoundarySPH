@@ -12,7 +12,7 @@ public class BoidsController : MonoBehaviour
 
     [Header("== REFERENCES ==")]
     [SerializeField, Tooltip("Reference to a ParticleGrid component that acts as this controller's grid system")]
-    public ParticleGrid _GRID = null;
+    public Grid _GRID = null;
     [SerializeField, Tooltip("Index of the section within the ParticleGrid component that we want to spawn particles inside. If set to -1, then we will use the number defined in this component and not particleGrid's.")]
     private int _SECTION_INDEX = -1;
     [SerializeField, Tooltip("The compute shader that handles all of our GPU calculations.")]
@@ -88,14 +88,26 @@ public class BoidsController : MonoBehaviour
             if (showExternalForces) {
                 if (_boids[i].obstacleID == -1) continue;
                 int3 extInt3 = external_forces[_boids[i].obstacleID];
+                /*
                 Vector3 external_force = new Vector3(
                     (float)extInt3[0] / 1024f,
                     (float)extInt3[1] / 1024f,
                     (float)extInt3[2] / 1024f
                 );
-                Vector3 external_force_along_direction = (Vector3.Dot(external_force,_boids[i].obstacle.position_transform.forward)/Vector3.Dot(_boids[i].obstacle.position_transform.forward,_boids[i].obstacle.position_transform.forward)) * _boids[i].obstacle.position_transform.forward;
+                */
+                float3 external_force = new(
+                    (float)extInt3[0] / 1024f,
+                    (float)extInt3[1] / 1024f,
+                    (float)extInt3[2] / 1024f
+                );
+                //Vector3 external_force_along_direction = (Vector3.Dot(external_force,_boids[i].obstacle.position_transform.forward)/Vector3.Dot(_boids[i].obstacle.position_transform.forward,_boids[i].obstacle.position_transform.forward)) * _boids[i].obstacle.position_transform.forward;
                 Handles.color = Color.blue;
-                Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + (float3)new(external_force_along_direction.x,external_force_along_direction.y,external_force_along_direction.z), 3);
+                Handles.DrawLine(
+                    _gpuBoids[i].position,
+                    _gpuBoids[i].position + external_force,
+                    //_gpuBoids[i].position + (float3)new(external_force_along_direction.x,external_force_along_direction.y,external_force_along_direction.z), 
+                    3
+                );
                 //Handles.color = Color.black;
                 //Handles.DrawLine(_gpuBoids[i].position,_gpuBoids[i].position + (float3)new(0f,-9.81f,0f) * 5f, 3);
             }

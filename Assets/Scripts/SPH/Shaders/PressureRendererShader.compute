@@ -19,6 +19,7 @@ struct GridCell {
 struct Particle {
     float3 position;            // The world position of the particle
     float3 force;               // The force current experienced by the particle that is caused by pressure and viscosity
+    int render;
 };
 
 // == BUFFERS ==
@@ -95,6 +96,8 @@ void UpdatePressures(uint id : SV_DispatchThreadID) {
     float pressure = bulkModulus * density[id];
 
     if (IsInBounds(p) == 0) return;
+
+    pressures[id] = pressure;
 
     float3 lower = float3(
         max(bounds[0], p[0] - radius),

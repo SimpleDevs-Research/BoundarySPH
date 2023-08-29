@@ -19,6 +19,8 @@ Shader "SPH/ParticleOpacity"
 
 		sampler2D _MainTex;
 		float size;
+		float numParticlesPerCell;
+		int renderTouching;
 
 		struct Input
 		{
@@ -28,12 +30,12 @@ Shader "SPH/ParticleOpacity"
 		struct particle {
 			float3 position;
 			float3 force;
+			int render;
 		};
 
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
 			StructuredBuffer<particle> particle_buffer;
-			StructuredBuffer<float3> pressure_buffer;
-			StructuredBuffer<float3> velocity_buffer;
+			StructuredBuffer<float> pressure_buffer;
 		#endif
 
 	void setup()
@@ -62,8 +64,9 @@ Shader "SPH/ParticleOpacity"
 		float4 finalColor = defaultColor;
 
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
-			float a = clamp(length(pressure_buffer[unity_InstanceID])/25.0, 0.0, 1.0);
+			float a = clamp((pressure_buffer[unity_InstanceID]-0.080214)/(0.080214 * 0.25), 0.0, 1.0);
 			finalColor = defaultColor * (1.0-a) + secondaryColor * a; 
+			//if (particle_buffer[unity_InstanceID].render == 0) finalColor[3] = 0.1;
 		#endif
 
 		float4 c = finalColor;

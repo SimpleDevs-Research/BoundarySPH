@@ -87,7 +87,7 @@ public class GPU_ObstacleManager : MonoBehaviour
 
     [Header("== REFERENCES ==")]
     [Tooltip("Reference to a ParticleGrid component that acts as this controller's grid system")]
-    public ParticleGrid _GRID = null;
+    public Grid _GRID = null;
     public ComputeShader _SHADER = null;
     public ParticleController _PARTICLE_CONTROLLER = null;
 

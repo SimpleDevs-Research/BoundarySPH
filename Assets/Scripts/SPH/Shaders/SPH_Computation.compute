@@ -50,6 +50,7 @@ struct GridCell {
 struct Particle {
     float3 position;            // The world position of the particle
     float3 force;               // The force current experienced by the particle that is caused by pressure and viscosity
+    int render;
 };
 struct CellLimits {
     uint3 id;
@@ -204,6 +205,7 @@ void GenerateParticles(uint3 id : SV_DispatchThreadID) {
     );
 
     particles[id.x].position = position;
+    particles[id.x].render = 0;
     density[id.x] = (315.0 * particleMass) / (64.0 * pi * radius3);;
     force[id.x] = float3(0,0,0);
     velocity[id.x] = float3(0,0,0);
@@ -417,22 +419,29 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
 
 // == PRESSURE FORCE CALCULATION ==
 // Helper function: calculates pressure force between the current particle and a neighbor particle
+/*
 float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentDensity, float otherDensity) {
     // We limit the pressure calculation to outward to prevent grouping and inward forces
     float currentPressure = min(bulkModulus * (currentDensity - rest_density), 0.0);
     float otherPressure = min(bulkModulus * (otherDensity - rest_density), 0.0);
     return particleMass * ((currentPressure + otherPressure)/(2.0 * otherDensity)) * SpikyKernelGradient3D(currentPos, otherPos, smoothingRadius);
 }
-/*
-float3 CalculatePressureForce(float3 diffPosition, float diffPositionLength, float currentDensity, float neighborDensity) {
+*/
+
+float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentDensity, float otherDensity) {
+    float3 diffPosition = currentPos - otherPos;
+    float diffPositionLength = length(diffPosition);
+
+    if (diffPositionLength > smoothingRadius) return float3(0,0,0);
+    if (diffPositionLength == 0.0) diffPositionLength = 0.000001;
+    
     float c1 = particleMass * bulkModulus;
-    float c2 = min(0.0,(currentDensity + neighborDensity - (2.0 * rest_density)) / neighborDensity);
+    float c2 = min(0.0,(currentDensity + otherDensity - (2.0 * rest_density)) / otherDensity);
     float c3 = -45.0 / (2 * pi * radius6);
     float3 c4 = diffPosition / diffPositionLength;
     float c5 = pow(smoothingRadius - diffPositionLength, 2);
     return c1 * c2 * c3 * c4 * c5;
 }
-*/
 
 // == VISCOSITY FORCE CALCULATION ==
 // Helper function: calculates viscosity force
@@ -541,6 +550,7 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
     Particle p = particles[id.x];
     float3 v = velocity[id.x];
     Projection projection = projections[id.x];
+    int shouldRender = 0;
     
     //float3 a = (pressureForces[id.x] + viscosityForces[id.x] + density[id.x] * g) / density[id.x];
     //v += dt * a;
@@ -550,7 +560,7 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
     v += a * dt;
     
     if (projection.counter > 0) {
-        
+        shouldRender = 1;
         float3 projN = float3(
             float(projection.normal[0]) / 1024.0,
             float(projection.normal[1]) / 1024.0,
@@ -571,6 +581,7 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
        }
     } 
     p.position += dt * v;
+    p.render = shouldRender;
     
     //p.position += dt * v;
     

@@ -10,7 +10,7 @@ public class PressureRenderer : MonoBehaviour
     [SerializeField, Tooltip("Reference to the singular BufferManager component that handles all buffers in the system")]
     public BufferManager _BM = null;
     [SerializeField, Tooltip("Reference to a ParticleGrid component that acts as this controller's grid system")]
-    public ParticleGrid _GRID = null;
+    public Grid _GRID = null;
     [SerializeField, Tooltip("Index of the section within the ParticleGrid component that we want to spawn particles inside. If set to -1, then we will use the number defined in this component and not particleGrid's.")]
     private int _SECTION_INDEX = -1;
     [SerializeField, Tooltip("The compute shader that handles all of our GPU calculations. Must-have, otherwise the script will not run")]
@@ -22,6 +22,7 @@ public class PressureRenderer : MonoBehaviour
     [SerializeField] private float[] _gridCellRenderLimits;
     private int3 _NUM_BLOCKS_GRID;
     private int _NUM_BLOCKS_PARTICLES;
+    [SerializeField] private bool _renderPressures;
 
     [Header("== DEBUG ==")]
     [SerializeField] private bool _getPressures = false;
@@ -117,13 +118,14 @@ public class PressureRenderer : MonoBehaviour
         uint[] arg = {_GRID.grid_cell_mesh.GetIndexCount(0), (uint)(_GRID.numGridCells), _GRID.grid_cell_mesh.GetIndexStart(0), _GRID.grid_cell_mesh.GetBaseVertex(0), 0};
         ARG_BUFFER = new ComputeBuffer(1, arg.Length * sizeof(uint), ComputeBufferType.IndirectArguments);
         ARG_BUFFER.SetData(arg);
-        
+
         PRESSURE_GRID_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(int)*2 + sizeof(float)*3);
         BOUNDS_BUFFER = new ComputeBuffer(6, sizeof(float));
         BOUNDS_BUFFER.SetData(_GRID.outerBounds);
         GRID_RENDER_LIMITS_BUFFER = new ComputeBuffer(6, sizeof(float));
         GRID_RENDER_LIMITS_BUFFER.SetData(_gridCellRenderLimits);
-        _BM.PARTICLES_PRESSURES_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(float));
+        _BM.PARTICLES_PRESSURES_BUFFER = new ComputeBuffer(_PC.numParticles, sizeof(float));
+        _BM.PARTICLES_PRESSURE_GRID_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(float));
 
         //TEMP_PARTICLES_BUFFER = new ComputeBuffer(_PC.numParticles, sizeof(int));
 
@@ -136,14 +138,14 @@ public class PressureRenderer : MonoBehaviour
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "bounds", BOUNDS_BUFFER);
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "particles", _BM.PARTICLES_BUFFER);
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "density", _BM.PARTICLES_DENSITIES_BUFFER);
-        //_SHADER.SetBuffer(_UPDATE_PRESSURES, "tempParticles", TEMP_PARTICLES_BUFFER);
+        _SHADER.SetBuffer(_UPDATE_PRESSURES, "pressures", _BM.PARTICLES_PRESSURES_BUFFER);
 
         _SHADER.SetBuffer(_CONDENSE_PRESSURES, "grid", PRESSURE_GRID_BUFFER);
-        _SHADER.SetBuffer(_CONDENSE_PRESSURES, "pressures", _BM.PARTICLES_PRESSURES_BUFFER);
+        _SHADER.SetBuffer(_CONDENSE_PRESSURES, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
 
         _GRID.grid_cell_material.SetBuffer(grid_cell_buffer_property, PRESSURE_GRID_BUFFER);
         _GRID.grid_cell_material.SetBuffer(grid_cell_render_limits_property, GRID_RENDER_LIMITS_BUFFER);
-        _GRID.grid_cell_material.SetBuffer(grid_cell_pressures_property, _BM.PARTICLES_PRESSURES_BUFFER);
+        _GRID.grid_cell_material.SetBuffer(grid_cell_pressures_property, _BM.PARTICLES_PRESSURE_GRID_BUFFER);
     }
 
     void Update() {
@@ -153,6 +155,8 @@ public class PressureRenderer : MonoBehaviour
         UpdateShaderVariables();
         // Update Particles!
         UpdatePressures();
+
+        if (_renderPressures) RenderPressures();
 
         if (_getPressures) {
             _BM.PARTICLES_PRESSURES_BUFFER.GetData(_tempPressures);
@@ -165,8 +169,10 @@ public class PressureRenderer : MonoBehaviour
         _SHADER.Dispatch(_CLEAR_GRID, _NUM_BLOCKS_GRID[0], _NUM_BLOCKS_GRID[1], _NUM_BLOCKS_GRID[2]);
         _SHADER.Dispatch(_UPDATE_PRESSURES, _NUM_BLOCKS_PARTICLES,1,1);
         _SHADER.Dispatch(_CONDENSE_PRESSURES, _NUM_BLOCKS_GRID[0], _NUM_BLOCKS_GRID[1], _NUM_BLOCKS_GRID[2]);
-
         
+    }
+
+    private void RenderPressures() {
         _GRID.grid_cell_material.SetFloat(size_property, _GRID.gridCellSize);
         GRID_RENDER_LIMITS_BUFFER.SetData(_gridCellRenderLimits);
         Graphics.DrawMeshInstancedIndirect(
@@ -177,7 +183,6 @@ public class PressureRenderer : MonoBehaviour
             ARG_BUFFER, 
             castShadows: UnityEngine.Rendering.ShadowCastingMode.Off
         );
-        
     }
 
     void OnDestroy() {

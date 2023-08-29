@@ -79,6 +79,7 @@ struct EdgeStatic {
 struct Particle {
     float3 position;
     float3 force;
+    int render;
 };
 struct Projection {
     uint triangleID;
