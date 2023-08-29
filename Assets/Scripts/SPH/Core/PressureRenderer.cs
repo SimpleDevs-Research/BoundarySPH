@@ -124,14 +124,13 @@ public class PressureRenderer : MonoBehaviour
         BOUNDS_BUFFER.SetData(_GRID.outerBounds);
         GRID_RENDER_LIMITS_BUFFER = new ComputeBuffer(6, sizeof(float));
         GRID_RENDER_LIMITS_BUFFER.SetData(_gridCellRenderLimits);
-        _BM.PARTICLES_PRESSURES_BUFFER = new ComputeBuffer(_PC.numParticles, sizeof(float));
         _BM.PARTICLES_PRESSURE_GRID_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(float));
 
         //TEMP_PARTICLES_BUFFER = new ComputeBuffer(_PC.numParticles, sizeof(int));
 
         // Setting the buffers
         _SHADER.SetBuffer(_CLEAR_GRID, "grid", PRESSURE_GRID_BUFFER);
-        _SHADER.SetBuffer(_CLEAR_GRID, "pressures", _BM.PARTICLES_PRESSURES_BUFFER);
+        _SHADER.SetBuffer(_CLEAR_GRID, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
         _SHADER.SetBuffer(_CLEAR_GRID, "bounds", BOUNDS_BUFFER);
 
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "grid", PRESSURE_GRID_BUFFER);

@@ -81,10 +81,6 @@ public class ParticleController : MonoBehaviour
     [SerializeField] private RenderType _renderType = RenderType.Particles;
     [SerializeField] private float[] _gridCellRenderLimits;
 
-    public List<Transform> debugParticles = new List<Transform>();
-    [SerializeField, ReadOnly]
-    private bool _DEBUG_MODE = false;
-
     private float t;
 
     [SerializeField] private bool gizmos_grid_cell = false;
@@ -152,7 +148,6 @@ public class ParticleController : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _pressures_request_textbox = null;
     //[SerializeField] private TextMeshProUGUI _fps_request_textbox = null;
 
-    [SerializeField, ReadOnly] private OP.Particle[] debug_particles_array;
     /*
     [SerializeField] private bool _record_online = true;
     [SerializeField, Tooltip("If recording online, this will be the HTTP url. If not, it will be the directory that you want to save the files in")] 
@@ -357,21 +352,6 @@ public class ParticleController : MonoBehaviour
             Debug.LogError("SPH - ERROR: Cannot operate if either `GRID` or `SPH_SHADER` is set to `null`. Please define these references and restart the simulation.");
             return;
         }
-        
-        // Get # of particles from the corresponding section inside `grid`, if specified.
-        _DEBUG_MODE =  debugParticles.Count > 0;
-        if (_DEBUG_MODE) _numParticles = debugParticles.Count;
-        /*
-        else if (_SECTION_INDEX != -1) {
-            // We manually calculate number of points
-            numParticles = _GRID.sections[_SECTION_INDEX].numParticles;
-            numParticlesPerAxis = _GRID.sections[_SECTION_INDEX].numParticlesPerAxis;
-            spawnBounds = _GRID.sections[_SECTION_INDEX].bounds;
-        } else {
-            numParticlesPerAxis = _GRID.numParticlesPerAxis;
-            spawnBounds = _GRID.innerBounds;
-        }
-        */
 
         // Initialize Key Variables, many of which are from `grid`
         InitializeVariables();
@@ -385,8 +365,7 @@ public class ParticleController : MonoBehaviour
 
         // We dispatch the initial functions for setup
         _SPH_Shader.Dispatch(_CLEAR_GRID, _NUM_BLOCKS_GRID,1,1);
-        if (_DEBUG_MODE) _SPH_Shader.Dispatch(_CLEAR_FORCES, _NUM_BLOCKS_PARTICLES,1,1);
-        else _SPH_Shader.Dispatch(_GENERATE_PARTICLES, _NUM_BLOCKS_PARTICLES,1,1);
+        _SPH_Shader.Dispatch(_GENERATE_PARTICLES, _NUM_BLOCKS_PARTICLES,1,1);
 
         // If we are recording, we initialize a recording session
         if (_record_statistics != RecordSettings.Off) PrepareRecording();
@@ -632,15 +611,12 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetFloat("smoothingRadius", _h);
         _SPH_Shader.SetFloat("radius2", _h * _h);
         _SPH_Shader.SetFloat("radius3", Mathf.Pow(_h,3));
-        //_SPH_Shader.SetFloat("radius4", Mathf.Pow(_h,4));
         _SPH_Shader.SetFloat("radius5", Mathf.Pow(_h,5));
         _SPH_Shader.SetFloat("radius6", Mathf.Pow(_h,6));
         _SPH_Shader.SetFloat("radius8",  Mathf.Pow(_h,8));
         _SPH_Shader.SetFloat("radius9", Mathf.Pow(_h,9));
-        //_SPH_Shader.SetFloat("radius16", Mathf.Pow(_h,16));
 
         _SPH_Shader.SetFloat("particleMass", _particleMass);
-        //_SPH_Shader.SetFloat("gas_constant", gas_constant);
         _SPH_Shader.SetFloat("rest_density", _rest_density);
         _SPH_Shader.SetFloat("viscosity_coefficient", _mu);
         _SPH_Shader.SetFloat("damping", _damping_effect);
@@ -654,9 +630,7 @@ public class ParticleController : MonoBehaviour
     }
 
     private int _CLEAR_GRID;
-    private int _CLEAR_FORCES;
     private int _GENERATE_PARTICLES;
-    //private int _GENERATE_GRID_NEIGHBORS; 
     private int _UPDATE_GRID;
     private int _COMPUTE_DENSITY;
     private int _COMPUTE_INTERNAL_FORCES;
@@ -665,9 +639,7 @@ public class ParticleController : MonoBehaviour
     private void InitializeKernels() {
         // Used on initialization. _CLEAR_GRID also is performed at the beginning of each update loop
         _CLEAR_GRID = _SPH_Shader.FindKernel("ClearGrid");
-        _CLEAR_FORCES = _SPH_Shader.FindKernel("ClearForces");
         _GENERATE_PARTICLES = _SPH_Shader.FindKernel("GenerateParticles");
-        //_GENERATE_GRID_NEIGHBORS = _SPH_Shader.FindKernel("GenerateGridNeighbors");
         // These are run during each update loop
         _UPDATE_GRID = _SPH_Shader.FindKernel("UpdateGridCellCounts");
         _COMPUTE_DENSITY = _SPH_Shader.FindKernel("CV_ComputeDensity");
@@ -690,10 +662,22 @@ public class ParticleController : MonoBehaviour
         uint[] arg = {_GRID.particle_mesh.GetIndexCount(0), (uint)(_numParticles), _GRID.particle_mesh.GetIndexStart(0), _GRID.particle_mesh.GetBaseVertex(0), 0};
         ARG_BUFFER = new ComputeBuffer(1, arg.Length * sizeof(uint), ComputeBufferType.IndirectArguments);
         ARG_BUFFER.SetData(arg);
-        
-        _BM.PARTICLES_GRID_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(int)*2 + sizeof(float)*3);
+
+        // We call upon our BufferManager to initialize all buffers related to particles. Seems appropriate, given that the BufferManager is holding onto all the buffers for us.
+        _BM.InitializeParticleBuffers(_numParticles + _NUM_BOUNDARY_PARTICLES, _GRID.numGridCells);
+        //_BM.PARTICLES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float)*6+sizeof(int));
+        //_BM.PARTICLES_GRID_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(int)*2 + sizeof(float)*3);
+        //_BM.PARTICLES_DENSITIES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float));
+        //_BM.PARTICLES_PRESSURES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float));
+        //_BM.PARTICLES_VELOCITIES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, 3 * sizeof(float));
+        //_BM.PARTICLES_PRESSURE_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
+        //_BM.PARTICLES_VISCOSITY_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
+        //_BM.PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
+
+        // We also have to initialize some custom compute buffers purely for our own purposes
         BOUNDS_BUFFER = new ComputeBuffer(6, sizeof(float));
         BOUNDS_BUFFER.SetData(_GRID.outerBounds);
+
         GRID_CELL_RENDER_LIMITS_BUFFER = new ComputeBuffer(6, sizeof(float));
         _gridCellRenderLimits[0] = Mathf.Max(_gridCellRenderLimits[0],_GRID.outerBounds[0]);
         _gridCellRenderLimits[1] = Mathf.Max(_gridCellRenderLimits[1],_GRID.outerBounds[1]);
@@ -734,12 +718,6 @@ public class ParticleController : MonoBehaviour
         SPAWN_BOUNDS_BUFFER = new ComputeBuffer(6, sizeof(float));
         SPAWN_BOUNDS_BUFFER.SetData(_spawnBounds);
 
-        _BM.PARTICLES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float)*6+sizeof(int));
-        debug_particles_array = new OP.Particle[_numParticles];
-        if (_DEBUG_MODE) {
-            // If we are in debug mode, we pre-emptively fill the particles buffer with the positions of our debug particles
-            UpdateDebugParticles();
-        }
         if (_POINT_CLOUD_OBSTACLE_MANAGER != null && _NUM_BOUNDARY_PARTICLES > 0) {
             Debug.Log($"{_POINT_CLOUD_OBSTACLE_MANAGER.boundaryParticles.Count}");
             _BM.PARTICLES_BUFFER.SetData(_POINT_CLOUD_OBSTACLE_MANAGER.boundaryParticles.ToArray(), 0, _numParticles, _NUM_BOUNDARY_PARTICLES);
@@ -748,8 +726,6 @@ public class ParticleController : MonoBehaviour
         PARTICLE_OFFSETS_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(int));
         PARTICLE_NEIGHBORS_BUFFER = new ComputeBuffer(_GRID.numGridCells * _numParticlesPerGridCell, sizeof(int));
 
-        _BM.PARTICLES_DENSITIES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float));
-        _BM.PARTICLES_VELOCITIES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, 3 * sizeof(float));
         // We attempt to... "adjust" the density of the boundary particle ssuch tath they are able to really have an effect on fluid particles that hit them
         /*
         if (_POINT_CLOUD_OBSTACLE_MANAGER != null && _NUM_BOUNDARY_PARTICLES > 0) {
@@ -761,45 +737,20 @@ public class ParticleController : MonoBehaviour
         }
         */
 
-        // We don't need to update the boundary aprticles for these
-        _BM.PARTICLES_PRESSURE_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
-        _BM.PARTICLES_VISCOSITY_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
         FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
-
-        _BM.PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
-        OP.Projection[] projections = new OP.Projection[_numParticles];
-        for(int i = 0; i < _numParticles; i++) {
-            projections[i] = new OP.Projection();
-            projections[i].projection = new(0f,0f,0f);
-            projections[i].position = new(0f,0f,0f);
-            projections[i].normal = new(0,0,0);
-            projections[i].particle_force = new(0f,0f,0f);
-            projections[i].external_force = new(0,0,0);
-            projections[i].counter = 0;
-            projections[i].frictionCoefficient = 0;
-            /*
-            projections[i].intersections = 0;
-            projections[i].position = new(0f,0f,0f);
-            projections[i].normal = new(0f,0f,0f);
-            projections[i].frictionCoefficient = 0f;
-            */
-        }
-        _BM.PARTICLES_EXTERNAL_FORCES_BUFFER.SetData(projections);
 
         // Setting the buffers
 
         _SPH_Shader.SetBuffer(_CLEAR_GRID, "grid", _BM.PARTICLES_GRID_BUFFER);
         _SPH_Shader.SetBuffer(_CLEAR_GRID, "bounds", BOUNDS_BUFFER);
 
-        _SPH_Shader.SetBuffer(_CLEAR_FORCES, "density", _BM.PARTICLES_DENSITIES_BUFFER);
-        _SPH_Shader.SetBuffer(_CLEAR_FORCES, "force", FORCES_BUFFER);
-        _SPH_Shader.SetBuffer(_CLEAR_FORCES, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
-
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "bounds", SPAWN_BOUNDS_BUFFER);
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "particles", _BM.PARTICLES_BUFFER);
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "density", _BM.PARTICLES_DENSITIES_BUFFER);
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "force", FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "pressure", _BM.PARTICLES_PRESSURES_BUFFER);
+        _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "externalForces", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
 
         _SPH_Shader.SetBuffer(_UPDATE_GRID, "particles", _BM.PARTICLES_BUFFER);
         _SPH_Shader.SetBuffer(_UPDATE_GRID, "grid", _BM.PARTICLES_GRID_BUFFER);
@@ -812,6 +763,7 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "particleNeighbors", PARTICLE_NEIGHBORS_BUFFER);
         _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "density", _BM.PARTICLES_DENSITIES_BUFFER);
         _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "pressure", _BM.PARTICLES_PRESSURES_BUFFER);
 
         _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "particles", _BM.PARTICLES_BUFFER);
         _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "grid", _BM.PARTICLES_GRID_BUFFER);
@@ -828,8 +780,7 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetBuffer(_INTEGRATE, "pressureForces", _BM.PARTICLES_PRESSURE_FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "viscosityForces", _BM.PARTICLES_VISCOSITY_FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "density", _BM.PARTICLES_DENSITIES_BUFFER);
-        //_SPH_Shader.SetBuffer(_INTEGRATE, "bounds", BOUNDS_BUFFER);
-        _SPH_Shader.SetBuffer(_INTEGRATE, "projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
+        _SPH_Shader.SetBuffer(_INTEGRATE, "externalForces", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
 
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "particles", _BM.PARTICLES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
@@ -842,24 +793,7 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetBuffer(_DAMPEN_BY_BOUNDS, "particles", _BM.PARTICLES_BUFFER);
         _SPH_Shader.SetBuffer(_DAMPEN_BY_BOUNDS, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
     }
-
-    private void UpdateDebugParticles() {
-        OP.Particle[] dp = new OP.Particle[debugParticles.Count];
-        for(int i = 0; i < debugParticles.Count; i++) {
-            dp[i] = new OP.Particle();
-            dp[i].position = debugParticles[i].position;            
-        }
-        _BM.PARTICLES_BUFFER.SetData(dp);
-    }
-
-    /*
-    // Start is called before the first frame update
-    void Start() {
-        // We can't do anything if `grid` is null or if our compute shader is null
-        if (_GRID == null || _SPH_Shader == null) return;
-    }
-    */
-
+    
     // Update is called once per frame
     void Update() {
         // We can't do anything if `grid` is null or if our compute shader is null
@@ -920,20 +854,12 @@ public class ParticleController : MonoBehaviour
         //_SPH_Shader.Dispatch(compute_external_acceleration_kernel, Mathf.CeilToInt((float)numParticles / (float)_BLOCK_SIZE), 1, 1);
         //if (verbose_force) DebugBufferFloat3("Forces",debugNumParticles,force_buffer);
 
-        if(!_DEBUG_MODE) {
-            // Integrate over particles, update their positions after taking all force calcualtions into account
-            // Note: We ONLY update the positions and velocities of the active fluid particles, not any boundary particles we might encounter.
-            _SPH_Shader.Dispatch(_INTEGRATE, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
-            // Make sure that particles are within bounds, limit them if so
-            //_SPH_Shader.Dispatch(_DAMPEN_BY_BOUNDS, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
-            //DebugBufferFloat3("Forces",1000,FORCES_BUFFER);
-        }
-        else {
-            _SPH_Shader.Dispatch(_INTEGRATE_DEBUG, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
-            UpdateDebugParticles();
-        }
-
-        _BM.PARTICLES_BUFFER.GetData(debug_particles_array);
+        // Integrate over particles, update their positions after taking all force calcualtions into account
+        // Note: We ONLY update the positions and velocities of the active fluid particles, not any boundary particles we might encounter.
+        _SPH_Shader.Dispatch(_INTEGRATE, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
+        // Make sure that particles are within bounds, limit them if so
+        //_SPH_Shader.Dispatch(_DAMPEN_BY_BOUNDS, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
+        //DebugBufferFloat3("Forces",1000,FORCES_BUFFER);
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.

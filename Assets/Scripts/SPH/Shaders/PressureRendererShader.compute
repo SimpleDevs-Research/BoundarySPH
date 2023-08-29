@@ -93,11 +93,9 @@ void UpdatePressures(uint id : SV_DispatchThreadID) {
     if (id >= (uint)numParticles) return;
     // Get the grid cell index from the position of the particle
     float3 p = particles[id].position;
-    float pressure = bulkModulus * density[id];
+    float pressure = pressures[id];
 
     if (IsInBounds(p) == 0) return;
-
-    pressures[id] = pressure;
 
     float3 lower = float3(
         max(bounds[0], p[0] - radius),
