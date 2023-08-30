@@ -505,11 +505,11 @@ namespace ObstaclePrimitives {
             public uint triangleID;
             public float3 projection;
             public float3 position;
-            public int3 normal;
+            public float3 normal;
             public float3 particle_force;
-            public int3 external_force;
+            public float3 external_force;
             public int counter;
-            public int frictionCoefficient;
+            public float frictionCoefficient;
 
             public float3 e1;
             public float3 e2;

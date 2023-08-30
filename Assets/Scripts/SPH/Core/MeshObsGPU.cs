@@ -8,9 +8,6 @@ using OP = ObstaclePrimitives.Structs;
 
 public class MeshObsGPU : MonoBehaviour
 {
-
-
-
     // This one stays in the CPU and simply stores basic info about the obstacle. 
     // This one is NOT sent over to the GPU in any way
     [System.Serializable]
@@ -50,6 +47,7 @@ public class MeshObsGPU : MonoBehaviour
 
     public List<OP.ObstacleStatic> obstacles_static;
     public List<OP.TriangleStatic> triangles_static;
+    public List<OP.VertexStatic> vertices_static;
     public List<OP.EdgeStatic> edges_static;
 
     public float particleRenderRadius = 1f;
@@ -64,17 +62,15 @@ public class MeshObsGPU : MonoBehaviour
     private int numObstacles, numVertices, numTriangles, numEdges;
     [HideInInspector] public int numParticles;
     
-    public ComputeBuffer obstacles_static_buffer, obstacles_dynamic_buffer;
-    public ComputeBuffer vertices_static_buffer, vertices_dynamic_buffer;
-    public ComputeBuffer triangles_static_buffer, triangles_dynamic_buffer;
-    public ComputeBuffer edges_static_buffer, edges_dynamic_buffer;
+    public ComputeBuffer obstacles_static_buffer;
+    public ComputeBuffer vertices_static_buffer;
+    public ComputeBuffer triangles_static_buffer;
+    public ComputeBuffer edges_static_buffer;
 
     private int resetVertexForcesKernel, updateVerticesKernel, updateTrianglesKernel, updateEdgesKernel, resetHasChangedKernel;
     private int resetTempProjectionsKernel, checkForProjectionKernel, combineForcesKernel;
 
     public OP.ObstacleDynamic[] obstacles_dynamic_array;
-    public OP.VertexDynamic[] vertices_dynamic_array;
-    public OP.TriangleDynamic[] triangles_dynamic_array; 
     public float3[] edges_dynamic_array; 
     public int3[] translational_forces_array, torque_forces_array;
     public OP.Projection[] projections_array;
@@ -89,25 +85,24 @@ public class MeshObsGPU : MonoBehaviour
         if (!Application.isPlaying || !_initialized) return;
         if (!drawGizmos) return;
 
-        obstacles_dynamic_buffer.GetData(obstacles_dynamic_array);
-        triangles_dynamic_buffer.GetData(triangles_dynamic_array);
-        vertices_dynamic_buffer.GetData(vertices_dynamic_array);
-          
+        int minLength;
         if (drawObstacleGizmos) {
-            OP.VertexDynamic v_dynamic;
-            for(int i = 0; i < obstacles_static.Count; i++) {
+            for(int i = 0; i < numObstacles; i++) {
                 if (!obstacles[i].show_gizmos) continue;
+
                 OP.ObstacleStatic o_static = obstacles_static[i];
                 OP.ObstacleDynamic o_dynamic = obstacles_dynamic_array[i];
-                // Render vertices
+                OP.VertexDynamic v_dynamic;
+                
                 if (obstacles[i].show_vertices) {
                     for(uint vi = o_static.vs[0]; vi < o_static.vs[0] + o_static.vs[1]; vi++) {
-                        v_dynamic = vertices_dynamic_array[(int)vi];
+                        if ((int)vi >= _BM.vertices_dynamic_array.Length) break;
+                        v_dynamic = _BM.vertices_dynamic_array[(int)vi];
                         Vector3 vp = new Vector3(v_dynamic.position[0], v_dynamic.position[1], v_dynamic.position[2]);
                         Vector3 vn = new Vector3(v_dynamic.normal[0],v_dynamic.normal[1],v_dynamic.normal[2]).normalized;
                         if (obstacles[i].show_vertex_positions) {
                             Gizmos.color = Color.red;
-                            Gizmos.DrawSphere(vp,0.1f);
+                            Gizmos.DrawSphere(vp,0.5f);
                         }
                         if (obstacles[i].show_vertex_normals) {
                             Handles.color = Color.blue;
@@ -125,17 +120,18 @@ public class MeshObsGPU : MonoBehaviour
                 // Render triangles
                 if (obstacles[i].show_triangles) {
                     for(uint ti = o_static.ts[0]; ti < o_static.ts[0] + o_static.ts[1]; ti++) {
+                        if ((int)ti >= _BM.triangles_dynamic_array.Length) break;
                         // Draw the center
                         if (obstacles[i].show_centroids) {
                             Gizmos.color = Color.red;
-                            Gizmos.DrawSphere(triangles_dynamic_array[ti].center,0.75f);
+                            Gizmos.DrawSphere(_BM.triangles_dynamic_array[ti].center,0.75f);
                         }
                         // Draw the 3D face normal
                         if (obstacles[i].show_face_normals) {
                             Handles.color = Color.blue;
                             Handles.DrawLine(
-                                triangles_dynamic_array[ti].center,
-                                triangles_dynamic_array[ti].center + triangles_dynamic_array[ti].normal*10f, 
+                                _BM.triangles_dynamic_array[ti].center,
+                                _BM.triangles_dynamic_array[ti].center + _BM.triangles_dynamic_array[ti].normal*10f, 
                                 3
                             );
                         }
@@ -143,18 +139,18 @@ public class MeshObsGPU : MonoBehaviour
                         if (obstacles[i].show_2D_edge_normals) {
                             Handles.color = Color.yellow;
                             Handles.DrawLine(
-                                triangles_dynamic_array[ti].center,
-                                triangles_dynamic_array[ti].center + triangles_dynamic_array[ti].v1v2n*3f,
+                                _BM.triangles_dynamic_array[ti].center,
+                                _BM.triangles_dynamic_array[ti].center + _BM.triangles_dynamic_array[ti].v1v2n*3f,
                                 3
                             );
                             Handles.DrawLine(
-                                triangles_dynamic_array[ti].center,
-                                triangles_dynamic_array[ti].center + triangles_dynamic_array[ti].v2v3n*3f,
+                                _BM.triangles_dynamic_array[ti].center,
+                                _BM.triangles_dynamic_array[ti].center + _BM.triangles_dynamic_array[ti].v2v3n*3f,
                                 3
                             );
                             Handles.DrawLine(
-                                triangles_dynamic_array[ti].center,
-                                triangles_dynamic_array[ti].center + triangles_dynamic_array[ti].v1v3n*3f,
+                                _BM.triangles_dynamic_array[ti].center,
+                                _BM.triangles_dynamic_array[ti].center + _BM.triangles_dynamic_array[ti].v1v3n*3f,
                                 3
                             );
                         }
@@ -162,33 +158,27 @@ public class MeshObsGPU : MonoBehaviour
                         if (obstacles[i].show_triangle_bounds) {
                             Gizmos.color = Color.grey;
                             Gizmos.DrawWireCube(
-                                (triangles_dynamic_array[ti].upperBound + triangles_dynamic_array[ti].lowerBound)/2f,
-                                triangles_dynamic_array[ti].upperBound - triangles_dynamic_array[ti].lowerBound
+                                (_BM.triangles_dynamic_array[ti].upperBound + _BM.triangles_dynamic_array[ti].lowerBound)/2f,
+                                _BM.triangles_dynamic_array[ti].upperBound - _BM.triangles_dynamic_array[ti].lowerBound
                             );
                         }
-                        
                     }
                 }
-                
                 // Render the edge normals
                 if (obstacles[i].show_3D_edge_normals) {
-                    Handles.color = Color.blue;
+                    Handles.color = Color.green;
                     for(uint ei = o_static.es[0]; ei < o_static.es[0] + o_static.es[1]; ei++) {
+                        if ((int)ei >= _BM.edges_dynamic_array.Length) break;
                         o_static = obstacles_static[(int)(edges_static[(int)ei].obstacleIndex)];
-                        float3 v1 = vertices_dynamic_array[(int)(o_static.vs[0] + edges_static[(int)ei].vertices[0])].position;
-                        float3 v2 = vertices_dynamic_array[(int)(
-                            (int)(
-                                o_static.vs[0] + edges_static[(int)ei].vertices[1]
-                            )
-                        )].position;
+                        float3 v1 = _BM.vertices_dynamic_array[(int)(o_static.vs[0] + edges_static[(int)ei].vertices[0])].position;
+                        float3 v2 = _BM.vertices_dynamic_array[(int)((int)(o_static.vs[0] + edges_static[(int)ei].vertices[1]))].position;
                         float3 m = (v1+v2)/2f;
                         Vector3 midpoint = new Vector3(m[0],m[1],m[2]);
-                        float3 n = edges_dynamic_array[ei];
+                        float3 n = _BM.edges_dynamic_array[ei];
                         Vector3 normal = new Vector3(n[0],n[1],n[2]);
                         Handles.DrawLine(midpoint, midpoint + normal, 3);
                     }
                 }
-                
                 // Render bounds
                 if (obstacles[i].show_bounds) {
                     Gizmos.color = Color.black;
@@ -197,30 +187,43 @@ public class MeshObsGPU : MonoBehaviour
                         o_dynamic.upperBound - o_dynamic.lowerBound
                     );
                 }
-                
             }
             
+            for(int i = 0; i < obstacles_static.Count; i++) {
+                if (!obstacles[i].show_gizmos) continue;
+                OP.ObstacleStatic o_static = obstacles_static[i];
+                OP.ObstacleDynamic o_dynamic = obstacles_dynamic_array[i];
+                // Render vertices
+                
+                
+            }
         }
         
         if (drawProjectionGizmos) {
-            _BM.PARTICLES_EXTERNAL_FORCES_BUFFER.GetData(projections_array);
-            OP.Particle[] debug_particles = new OP.Particle[_BM.PARTICLES_BUFFER.count];
-            _BM.PARTICLES_BUFFER.GetData(debug_particles);
-            for(int i = 0; i < numParticles; i++) {
+            minLength = Mathf.Min(_BM.particles_array.Length, _BM.particles_external_forces_array.Length);
+            for(int i = 0; i < minLength; i++) {
+                Gizmos.color = Color.red;
+                Gizmos.DrawSphere(_BM.particles_external_forces_array[i].position, 0.25f);
+                Gizmos.color = Color.grey;
+                Gizmos.DrawSphere(_BM.particles_external_forces_array[i].projection, 0.2f);
+                /*
                 float3 n = new(
                     (float)projections_array[i].normal[0] / 1024f,
                     (float)projections_array[i].normal[1] / 1024f,
                     (float)projections_array[i].normal[2] / 1024f
                 );
+                */
                 Handles.color = Color.red;
                 Handles.DrawLine(
-                    debug_particles[i].position, 
-                    debug_particles[i].position + n, 3);
+                    _BM.particles_external_forces_array[i].position, 
+                    _BM.particles_external_forces_array[i].position + _BM.particles_external_forces_array[i].normal, 
+                    3
+                );
                 /*
                 int tri_index = (int)projections_array[i].triangleID;
                 if (tri_index == numTriangles) continue;
                 OP.TriangleStatic t_static = triangles_static[tri_index];
-                OP.TriangleDynamic t_dynamic = triangles_dynamic_array[tri_index];
+                OP.TriangleDynamic t_dynamic = _BM.triangles_dynamic_array[tri_index];
                 OP.ObstacleStatic o_static = obstacles_static[(int)t_static.obstacleIndex];
 
                 // Rendering the projection
@@ -273,33 +276,33 @@ public class MeshObsGPU : MonoBehaviour
                 */
                 //Handles.color = Color.red;
                 //Handles.DrawLine(
-                //    vertices_dynamic_array[v1i].position,
-                //    vertices_dynamic_array[v2i].position,
+                //    _BM.vertices_dynamic_array[v1i].position,
+                //    _BM.vertices_dynamic_array[v2i].position,
                 //    3
                 //);
                 //Handles.DrawLine(
-                //    vertices_dynamic_array[v1i].position,
-                //    vertices_dynamic_array[v3i].position,
+                //    _BM.vertices_dynamic_array[v1i].position,
+                //    _BM.vertices_dynamic_array[v3i].position,
                 //    3
                 //);
                 //Handles.DrawLine(
-                //    vertices_dynamic_array[v2i].position,
-                //    vertices_dynamic_array[v3i].position,
+                //    _BM.vertices_dynamic_array[v2i].position,
+                //    _BM.vertices_dynamic_array[v3i].position,
                 //    3
                 //);
                 
                 /*
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawCube(
-                    vertices_dynamic_array[v1i].position,
+                    _BM.vertices_dynamic_array[v1i].position,
                     new Vector3(0.25f,0.25f,0.25f)
                 );
                 Gizmos.DrawCube(
-                    vertices_dynamic_array[v2i].position,
+                    _BM.vertices_dynamic_array[v2i].position,
                     new Vector3(0.25f,0.25f,0.25f)
                 );
                 Gizmos.DrawCube(
-                    vertices_dynamic_array[v3i].position,
+                    _BM.vertices_dynamic_array[v3i].position,
                     new Vector3(0.25f,0.25f,0.25f)
                 );
 
@@ -351,10 +354,18 @@ public class MeshObsGPU : MonoBehaviour
         // Get those projections
         _SHADER.Dispatch(
             checkForProjectionKernel, 
+            Mathf.CeilToInt((float)numParticles / 256f), 
+            1, 
+            1
+        );
+        /*
+        _SHADER.Dispatch(
+            checkForProjectionKernel, 
             Mathf.CeilToInt((float)numParticles / 32f), 
             Mathf.CeilToInt((float)numTriangles / 16f), 
             1
         );
+        */
         // Combine projection forces
         //_SHADER.Dispatch(combineForcesKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
 
@@ -407,10 +418,8 @@ public class MeshObsGPU : MonoBehaviour
         // Initialize our lists 
         obstacles_static = new List<OP.ObstacleStatic>();
         List<OP.ObstacleDynamic> obstacles_dynamic = new List<OP.ObstacleDynamic>();
-        List<OP.VertexStatic> vertices_static = new List<OP.VertexStatic>();
-        //List<OP.VertexDynamic> vertices_dynamic = new List<OP.VertexDynamic>();
+        vertices_static = new List<OP.VertexStatic>();
         List<OP.VertexDynamic> vertices_dynamic = new List<OP.VertexDynamic>();
-        //List<OP.TriangleStatic> triangles_static = new List<OP.TriangleStatic>();
         triangles_static = new List<OP.TriangleStatic>();
         List<OP.TriangleDynamic> triangles_dynamic = new List<OP.TriangleDynamic>();
         edges_static = new List<OP.EdgeStatic>();
@@ -453,34 +462,36 @@ public class MeshObsGPU : MonoBehaviour
         updateEdgesKernel = _SHADER.FindKernel("UpdateEdges");
         updateTrianglesKernel = _SHADER.FindKernel("UpdateTriangles");
         resetHasChangedKernel = _SHADER.FindKernel("ResetHasChanged");
-        checkForProjectionKernel = _SHADER.FindKernel("CheckForProjection2");
+        checkForProjectionKernel = _SHADER.FindKernel("CheckForProjection");
         resetTempProjectionsKernel = _SHADER.FindKernel("ResetTempProjections");
         combineForcesKernel = _SHADER.FindKernel("CombineForces");
 
         // Initialize our buffers
+        _BM.InitializeMeshObsBuffers(numObstacles, numTriangles, numVertices, numEdges);
+        //obstacles_dynamic_buffer = new ComputeBuffer(obstacles_dynamic.Count, sizeof(uint)*4 + sizeof(float)*20);
+        //triangles_dynamic_buffer = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*22);
+        //vertices_dynamic_buffer = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*9);
+        //edges_dynamic_buffer = new ComputeBuffer(numEdges, sizeof(float)*3);
+        //_BM.MESHOBS_TRANSLATION_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
+        //_BM.MESHOBS_TORQUE_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
         obstacles_static_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(uint)*9 + sizeof(float));
-        obstacles_dynamic_buffer = new ComputeBuffer(obstacles_dynamic.Count, sizeof(uint)*4 + sizeof(float)*20);
         vertices_static_buffer = new ComputeBuffer(vertices_static.Count, sizeof(uint) + sizeof(float)*6);
-        vertices_dynamic_buffer = new ComputeBuffer(vertices_dynamic.Count, sizeof(uint) + sizeof(float)*9);
         triangles_static_buffer = new ComputeBuffer(triangles_static.Count, sizeof(uint)*7 + sizeof(float)*9);
-        triangles_dynamic_buffer = new ComputeBuffer(triangles_dynamic.Count, sizeof(uint)*7 + sizeof(float)*22);
         edges_static_buffer = new ComputeBuffer(edges_static.Count, sizeof(uint)*5 + sizeof(float)*6);
-        edges_dynamic_buffer = new ComputeBuffer(edges_dynamic.Count, sizeof(float)*3);
         
-        _BM.MESHOBS_TRANSLATION_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
-        _BM.MESHOBS_TORQUE_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
+        
         if (_BM.PARTICLES_BUFFER == null) _BM.PARTICLES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*6);
         if (_BM.PARTICLES_EXTERNAL_FORCES_BUFFER == null) _BM.PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
 
         // Update the buffers
         obstacles_static_buffer.SetData(obstacles_static.ToArray());
-        obstacles_dynamic_buffer.SetData(obstacles_dynamic.ToArray());
+        _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER.SetData(obstacles_dynamic.ToArray());
         vertices_static_buffer.SetData(vertices_static.ToArray());
-        vertices_dynamic_buffer.SetData(vertices_dynamic.ToArray());
+        _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER.SetData(vertices_dynamic.ToArray());
         triangles_static_buffer.SetData(triangles_static.ToArray());
-        triangles_dynamic_buffer.SetData(triangles_dynamic.ToArray());
+        _BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER.SetData(triangles_dynamic.ToArray());
         edges_static_buffer.SetData(edges_static.ToArray());
-        edges_dynamic_buffer.SetData(edges_dynamic.ToArray());
+        _BM.MESHOBS_EDGES_DYNAMIC_BUFFER.SetData(edges_dynamic.ToArray());
         UpdateParticlePositions();
         if (_PARTICLE_CONTROLLER != null) {
             projections_array = new OP.Projection[numParticles];
@@ -497,24 +508,24 @@ public class MeshObsGPU : MonoBehaviour
 
         // Associate our buffers with our kernels
         // Reset Vertex Forces
-        _SHADER.SetBuffer(resetVertexForcesKernel, "vertices_dynamic", vertices_dynamic_buffer);
+        _SHADER.SetBuffer(resetVertexForcesKernel, "vertices_dynamic", _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
         // Update Vertices
         _SHADER.SetBuffer(updateVerticesKernel,"vertices_static", vertices_static_buffer);
-        _SHADER.SetBuffer(updateVerticesKernel,"vertices_dynamic", vertices_dynamic_buffer);
+        _SHADER.SetBuffer(updateVerticesKernel,"vertices_dynamic", _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(updateVerticesKernel,"obstacles_static", obstacles_static_buffer);
-        _SHADER.SetBuffer(updateVerticesKernel,"obstacles_dynamic", obstacles_dynamic_buffer);
+        _SHADER.SetBuffer(updateVerticesKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         // Update Edges
         _SHADER.SetBuffer(updateEdgesKernel,"edges_static", edges_static_buffer);
-        _SHADER.SetBuffer(updateEdgesKernel,"edges_dynamic", edges_dynamic_buffer);
-        _SHADER.SetBuffer(updateEdgesKernel,"obstacles_dynamic", obstacles_dynamic_buffer);
+        _SHADER.SetBuffer(updateEdgesKernel,"edges_dynamic", _BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(updateEdgesKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         // Update Triangles
         _SHADER.SetBuffer(updateTrianglesKernel,"triangles_static",triangles_static_buffer);
-        _SHADER.SetBuffer(updateTrianglesKernel,"triangles_dynamic",triangles_dynamic_buffer);
-        _SHADER.SetBuffer(updateTrianglesKernel,"obstacles_dynamic",obstacles_dynamic_buffer);
+        _SHADER.SetBuffer(updateTrianglesKernel,"triangles_dynamic",_BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(updateTrianglesKernel,"obstacles_dynamic",_BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(updateTrianglesKernel,"obstacles_static",obstacles_static_buffer);
-        _SHADER.SetBuffer(updateTrianglesKernel,"vertices_dynamic",vertices_dynamic_buffer);
+        _SHADER.SetBuffer(updateTrianglesKernel,"vertices_dynamic",_BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
         // Reset Has Changed
-        _SHADER.SetBuffer(resetHasChangedKernel,"obstacles_dynamic",obstacles_dynamic_buffer);
+        _SHADER.SetBuffer(resetHasChangedKernel,"obstacles_dynamic",_BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         // Reset Temp Projections
         _SHADER.SetBuffer(resetTempProjectionsKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
         _SHADER.SetBuffer(resetTempProjectionsKernel,"particles",_BM.PARTICLES_BUFFER);
@@ -523,27 +534,24 @@ public class MeshObsGPU : MonoBehaviour
         // Check For Projections
         _SHADER.SetBuffer(checkForProjectionKernel,"particles",_BM.PARTICLES_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"projections",_BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
-        _SHADER.SetBuffer(checkForProjectionKernel,"triangles_dynamic",triangles_dynamic_buffer);
-        //_SHADER.SetBuffer(checkForProjectionKernel,"triangles_static",triangles_static_buffer);
+        _SHADER.SetBuffer(checkForProjectionKernel,"triangles_static",triangles_static_buffer);
+        _SHADER.SetBuffer(checkForProjectionKernel,"triangles_dynamic",_BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"vertices_dynamic",_BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_static",obstacles_static_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_dynamic",obstacles_dynamic_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"vertices_dynamic",vertices_dynamic_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic",edges_dynamic_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_dynamic",_BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic",_BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
+        //_SHADER.SetBuffer(checkForProjectionKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
         // Combine Forces Kernel
         _SHADER.SetBuffer(combineForcesKernel,"projections",_BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
         _SHADER.SetBuffer(combineForcesKernel,"triangles_static",triangles_static_buffer);
         _SHADER.SetBuffer(combineForcesKernel,"obstacles_static",obstacles_static_buffer);
-        _SHADER.SetBuffer(combineForcesKernel,"obstacles_dynamic",obstacles_dynamic_buffer);
+        _SHADER.SetBuffer(combineForcesKernel,"obstacles_dynamic",_BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(combineForcesKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
         _SHADER.SetBuffer(combineForcesKernel,"torque_forces",_BM.MESHOBS_TORQUE_FORCES_BUFFER);
 
         // Finally, prepare our global arrays
         obstacles_dynamic_array = new OP.ObstacleDynamic[numObstacles];
-        vertices_dynamic_array = new OP.VertexDynamic[numVertices];
-        triangles_dynamic_array = new OP.TriangleDynamic[numTriangles];
         projections_array = new OP.Projection[numParticles];
-        edges_dynamic_array = new float3[numEdges];
 
         if (_BOIDS_CONTROLLER != null) _BOIDS_CONTROLLER.SetExternalForcesBuffer(_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
     }
@@ -882,13 +890,13 @@ public class MeshObsGPU : MonoBehaviour
                     if (vs != null) {
                         // We can update the vertices in the VS buffer
                         OP.VertexDynamic[] vd = new OP.VertexDynamic[numVertices];
-                        vertices_dynamic_buffer.GetData(vd);
+                        _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER.GetData(vd);
                         for(int vi = 0; vi < vs.Length; vi++) {
                             int vi2 = vi + (int)obstacles_static[i].vs[0];
                             vd[vi2].force = obstacles_static[i].mass * (vs[vi] - vd[vi2].position)/_dt;
                             vd[vi2].position = vs[vi];
                         }
-                        vertices_dynamic_buffer.SetData(vd);
+                        _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER.SetData(vd);
                     }
                 }
                 needsUpdating = true;
@@ -901,7 +909,7 @@ public class MeshObsGPU : MonoBehaviour
                 else Debug.Log("UPDATING!");
             }
             // Before anything, we have to update our Obstacles Dynamic buffer
-            obstacles_dynamic_buffer.SetData(obstacles_dynamic_array);
+            _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER.SetData(obstacles_dynamic_array);
 
             // First, let's update the vertices
             _SHADER.Dispatch(updateVerticesKernel, Mathf.CeilToInt((float)numObstacles / 16f), 1, 1);
@@ -929,13 +937,9 @@ public class MeshObsGPU : MonoBehaviour
 
     void OnDestroy() {
         if (obstacles_static_buffer != null) obstacles_static_buffer.Release();
-        if (obstacles_dynamic_buffer != null) obstacles_dynamic_buffer.Release();
         if (vertices_static_buffer != null) vertices_static_buffer.Release();
-        if (vertices_dynamic_buffer != null) vertices_dynamic_buffer.Release();
         if (triangles_static_buffer != null) triangles_static_buffer.Release();
-        if (triangles_dynamic_buffer != null) triangles_dynamic_buffer.Release();
         if (edges_static_buffer != null) edges_static_buffer.Release();
-        if (edges_dynamic_buffer != null) edges_dynamic_buffer.Release();
     }
     
     // https://forum.unity.com/threads/whats-the-math-behind-transform-transformpoint.107401/

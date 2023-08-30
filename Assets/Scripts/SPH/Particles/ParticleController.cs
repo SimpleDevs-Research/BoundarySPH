@@ -8,6 +8,7 @@ using Helpers;
 using WebTools;
 using TMPro;
 using OP = ObstaclePrimitives.Structs;
+using UnityEditor;
 
 public class ParticleController : MonoBehaviour
 {
@@ -83,8 +84,6 @@ public class ParticleController : MonoBehaviour
 
     private float t;
 
-    [SerializeField] private bool gizmos_grid_cell = false;
-    [SerializeField] private Color gizmos_grid_cell_color = Color.red;
     [SerializeField] private bool gizmos_particles = false;
     [SerializeField] private Color gizmos_particle_color = Color.blue;
     [SerializeField] private bool gizmos_velocities = false;
@@ -95,7 +94,7 @@ public class ParticleController : MonoBehaviour
     [SerializeField] private Color gizmos_pressure_force_color = Color.red;
     [SerializeField] private bool gizmos_viscosity_force = false;
     [SerializeField] private Color gizmos_viscosity_force_color = Color.green;
-    //[SerializeField] private bool gizmos_external_force = false;
+    [SerializeField] private bool gizmos_external_force = false;
     [SerializeField] private Color gizmos_external_force_color = Color.yellow;
     
     public enum RecordSettings { Off, Online }
@@ -256,27 +255,37 @@ public class ParticleController : MonoBehaviour
 
     void OnDrawGizmos() {
         if (!Application.isPlaying) return;
-
-        
-        if (gizmos_grid_cell) {
-            int tempNumGridCells = Mathf.Min(1500,_GRID.numGridCells);
-            OP.GridCell[] temp_grid_cells = new OP.GridCell[tempNumGridCells];
-            _BM.PARTICLES_GRID_BUFFER.GetData(temp_grid_cells);
-            for(int i = 0; i < tempNumGridCells; i++) {
-                float p = (temp_grid_cells[i].n == 0) 
-                    ? 0f 
-                    : Mathf.Clamp(
-                        (((float)temp_grid_cells[i].cellPressure / 1024f) / (float)temp_grid_cells[i].n), 
-                        0f, 
-                        1f
-                    );
-                Gizmos.color = Color.red * p + Color.blue * (1f-p);
-                //Gizmos.color = new Vector4(255f,0f,0f,1f);
-                Gizmos.DrawCube(temp_grid_cells[i].worldPosition, new Vector3(_GRID.gridCellSize, _GRID.gridCellSize, _GRID.gridCellSize));
+        int minLength = Mathf.Min(_BM.particles_array.Length, _BM.particles_velocities_array.Length);
+        minLength = Mathf.Min(minLength, _BM.particles_external_forces_array.Length);
+        if (minLength == 0) return;
+        for(int i = 0; i < minLength; i++) {
+            Vector3 pos = new Vector3(_BM.particles_array[i].position[0], _BM.particles_array[i].position[1], _BM.particles_array[i].position[2]);
+            if (gizmos_particles) {
+                Gizmos.color = gizmos_particle_color;
+                Gizmos.DrawSphere(
+                    _BM.particles_array[i].position,
+                    _h
+                );
+            }
+            if (gizmos_velocities) {
+                Handles.color = gizmos_velocity_color;
+                Handles.DrawLine(
+                    _BM.particles_array[i].position, 
+                    _BM.particles_array[i].position + _BM.particles_velocities_array[i] * 10,
+                    3
+                );
+            }
+            if (gizmos_external_force) {
+                Handles.color = gizmos_external_force_color;
+                Handles.DrawLine(
+                    _BM.particles_array[i].position, 
+                    _BM.particles_array[i].position + _BM.particles_external_forces_array[i].external_force * 10,
+                    3
+                );
             }
         }
-        
-
+        /*
+        if (!Application.isPlaying) return;
         // For now, just render particles
         OP.Particle[] temp_particles = new OP.Particle[_numParticles];
         _BM.PARTICLES_BUFFER.GetData(temp_particles);
@@ -313,13 +322,8 @@ public class ParticleController : MonoBehaviour
                 Gizmos.color = gizmos_viscosity_force_color;
                 Gizmos.DrawRay(pos, new Vector3(temp_viscosity_forces[i][0], temp_viscosity_forces[i][1], temp_viscosity_forces[i][2]));
             }
-            /*
-            if (gizmos_external_force && i == 0) {
-                Gizmos.color = gizmos_external_force_color;
-                Gizmos.DrawRay(pos, new Vector3(temp_external_forces[i][0], temp_external_forces[i][1], temp_external_forces[i][2]));
-            } 
-            */
-        }   
+        }
+        */
     }
 
     public void CalculateParticles() {
@@ -793,7 +797,7 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetBuffer(_DAMPEN_BY_BOUNDS, "particles", _BM.PARTICLES_BUFFER);
         _SPH_Shader.SetBuffer(_DAMPEN_BY_BOUNDS, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
     }
-    
+
     // Update is called once per frame
     void Update() {
         // We can't do anything if `grid` is null or if our compute shader is null
@@ -813,7 +817,6 @@ public class ParticleController : MonoBehaviour
         //DebugBufferParticle("POSITIONS",1000,PARTICLES_BUFFER);
 
         // Reset the grid and num neighbors buffer, if we are debugging
-        //_SPH_Shader.Dispatch(_CLEAR_GRID, Mathf.CeilToInt((float)_GRID.numGridCells / 256f),1,1);
         _SPH_Shader.Dispatch(
             _CLEAR_GRID, 
             Mathf.CeilToInt((float)_GRID.numCellsPerAxis[0] / 8f),
@@ -823,43 +826,18 @@ public class ParticleController : MonoBehaviour
         
         // Calculate how many particles are in each grid cell, and get each particle's offset for their particular grid cell
         _SPH_Shader.Dispatch(_UPDATE_GRID, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f),1,1);
-        /*
-        if (verbose_grid) {
-            //DebugBufferInt("Grid", debugNumGridCells, gridBuffer, true);
-            DebugBufferFloat3("Particles", debugNumParticles, particle_buffer);
-        }
-        */
         
-        // if (verbose_offsets) DebugBufferInt("Particle Offsets", debugNumParticles, particleOffsetsBuffer);
-
         // We perform the updates for density, pressure, and force/acceleration. 
         _SPH_Shader.Dispatch(_COMPUTE_DENSITY, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f), 1, 1);
-        
-        //DebugBufferFloat("Densities",1000,_BM.PARTICLES_DENSITIES_BUFFER);
-        /*
-        if (verbose_density_pressure) {
-            DebugBufferFloat("Densities",debugNumParticles,density_buffer);
-            //DebugBufferParticleTouched("Touched by Boid", 15000, particle_buffer);
-        }
-        */
-        _SPH_Shader.Dispatch(_COMPUTE_INTERNAL_FORCES, Mathf.CeilToInt((float)_numParticles / 256f),1,1);
-        //DebugBufferFloat3("Pressure Forces",1000,_BM.PARTICLES_PRESSURE_FORCES_BUFFER);
-        /*
-        if (verbose_force) {
-            DebugBufferFloat3("Pressure Forces",debugNumParticles,_BM.PARTICLES_PRESSURE_FORCES_BUFFER);
-            DebugBufferFloat3("Viscosity Forces",debugNumParticles,_BM.PARTICLES_VISCOSITY_FORCES_BUFFER);
-        }
-        */
+        _SPH_Shader.Dispatch(_COMPUTE_INTERNAL_FORCES, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f),1,1);
 
         //_SPH_Shader.Dispatch(compute_external_acceleration_kernel, Mathf.CeilToInt((float)numParticles / (float)_BLOCK_SIZE), 1, 1);
-        //if (verbose_force) DebugBufferFloat3("Forces",debugNumParticles,force_buffer);
 
         // Integrate over particles, update their positions after taking all force calcualtions into account
         // Note: We ONLY update the positions and velocities of the active fluid particles, not any boundary particles we might encounter.
         _SPH_Shader.Dispatch(_INTEGRATE, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
         // Make sure that particles are within bounds, limit them if so
         //_SPH_Shader.Dispatch(_DAMPEN_BY_BOUNDS, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
-        //DebugBufferFloat3("Forces",1000,FORCES_BUFFER);
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.

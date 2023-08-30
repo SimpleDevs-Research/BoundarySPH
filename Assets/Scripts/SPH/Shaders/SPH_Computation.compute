@@ -57,11 +57,11 @@ struct Projection {
     uint triangleID;
     float3 projection;
     float3 position;
-    int3 normal;
+    float3 normal;
     float3 particle_force;      // force exerted into the boundary by the particle
-    int3 external_force;      // force exerted toward the particle by the boundary due to velocity
+    float3 external_force;      // force exerted toward the particle by the boundary due to velocity
     int counter;
-    int frictionCoefficient;
+    float frictionCoefficient;
 
     float3 e1;
     float3 e2;
@@ -212,7 +212,7 @@ void GenerateParticles(uint id : SV_DispatchThreadID) {
     externalForces[id].particle_force = float3(0,0,0);
     externalForces[id].external_force = float3(0,0,0);
     externalForces[id].counter = 0;
-    externalForces[id].frictionCoefficient = 0;
+    externalForces[id].frictionCoefficient = 0.0;
 }
 
 #pragma kernel GenerateGridNeighbors
@@ -534,21 +534,56 @@ void Integrate_Debug(uint3 id : SV_DispatchThreadID) {
 
 #pragma kernel Integrate
 [numthreads(256, 1, 1)]
-void Integrate(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= numParticles) return;
+void Integrate(uint id : SV_DispatchThreadID) {
+    if (id >= numParticles) return;
 
-    Particle p = particles[id.x];
-    float3 v = velocity[id.x];
-    Projection projection = externalForces[id.x];
+    Particle p = particles[id];
+    float3 v = velocity[id];
+    Projection projection = externalForces[id];
     int shouldRender = 0;
     
-    //float3 a = (pressureForces[id.x] + viscosityForces[id.x] + density[id.x] * g) / density[id.x];
     //v += dt * a;
 
     // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
-    float3 a = pressureForces[id.x] + viscosityForces[id.x] + (density[id.x] * g) / density[id.x];
+    float3 a = (pressureForces[id] + viscosityForces[id] + density[id] * g) / density[id];
     v += a * dt;
+
+    float distfinal = distance(projection.position, p.position);
+    float3 innermostPoint = p.position - projection.normal * smoothingRadius;
+    if (projection.counter > 0 
+        && (
+            distfinal <= smoothingRadius
+            || dot(projection.position - innermostPoint, projection.normal) >= 0.0 
+        )
+    ) {
+        float3 n = normalize(projection.normal);
+        float3 expectedInnermostPoint = p.position + dt * v - n * smoothingRadius;
+        if (dot(projection.position - expectedInnermostPoint, n)>0.0) p.position = projection.position + n * smoothingRadius;
+        //v += dt dt * projection.external_force;
+        //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
+        if (dot(v,n) < 0.0) {
+            v = v - 1.5 * dot(v,n)*n + projection.frictionCoefficient*(-v + dot(v,n)*n);
+            //v = v - 1.5 * dot(v,n) * n;
+            //v += length(innermostPoint - projection.position) * n;
+            //v += projection.external_force * dt;
+            //p.position = (projection.position + n * smoothingRadius) + dt * v;
+        }
+        /*
+        if (sign(dot(innermostPoint-projection.position,n))<0.0) {
+            float3 inward = (projection.position + n * smoothingRadius) - p.position;
+            v += normalize(inward) * clamp(length(inward),0.0,smoothingRadius);
+        }
+        */
+        //p.position = (projection.position + n * smoothingRadius) + dt * v;
+        //p.position = (projection.position + n * smoothingRadius);
+        //p.position += dt * v;
+        
+    }
+    //else {
+        p.position += dt * v;
+    //}
     
+    /*
     if (projection.counter > 0) {
         shouldRender = 1;
         float3 projN = float3(
@@ -572,35 +607,15 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
     } 
     p.position += dt * v;
     p.render = shouldRender;
+    */
     
     //p.position += dt * v;
     
     /*
     float3 a = pressureForces[id.x] + viscosityForces[id.x] + (density[id.x] * g) / density[id.x];
     v += a * dt;
-    float distfinal = distance(projection.position,p.position);
-    float3 innermostPoint = p.position - projection.normal * smoothingRadius;
-    if (projection.counter > 
-        0 && (
-            distfinal <= particleRenderRadius 
-            || dot(projection.position - innermostPoint, projection.normal) >= 0.0 
-        )
-    ) {
-        float3 n = normalize(projection.normal);
-        //v += dt dt * projection.external_force;
-        //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
-        if (dot(v,n) < 0.0) {
-            v = v - 1.5 * dot(v,n) * projection.normal + projection.frictionCoefficient*(-v + dot(v,n)*projection.normal);
-            v += projection.external_force * dt;
-        }
-        
-        
-        //p.position = (projection.position + n * smoothingRadius) + dt * v;
-        p.position += dt * v;
-    }
-    else {
-        p.position += dt * v;
-    }
+    
+    
     */
     //float3 a = totalForce / density[id.x];
     //p.position += dt * v;
@@ -621,9 +636,9 @@ void Integrate(uint3 id : SV_DispatchThreadID) {
     }
     */
 
-    force[id.x] = a;
-    velocity[id.x] = v;
-    particles[id.x] = p;
+    force[id] = a;
+    velocity[id] = v;
+    particles[id] = p;
 }
 
 #pragma kernel DampenByBounds

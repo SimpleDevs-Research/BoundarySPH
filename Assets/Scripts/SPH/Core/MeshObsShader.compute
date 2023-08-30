@@ -85,11 +85,11 @@ struct Projection {
     uint triangleID;
     float3 projection;
     float3 position;
-    int3 normal;
+    float3 normal;
     float3 particle_force;      // The force exerted inward by the particle
-    int3 external_force;      // The force exerted outward by the boundary due to velocity
+    float3 external_force;      // The force exerted outward by the boundary due to velocity
     int counter;
-    int frictionCoefficient;
+    float frictionCoefficient;
 
     float3 e1;
     float3 e2;
@@ -325,9 +325,9 @@ void ResetTempProjections(uint id : SV_DispatchThreadID) {
     projection.triangleID = numTriangles;
     projection.projection = particles[id].position;
     projection.position = particles[id].position;
-    projection.normal = int3(0,0,0);
+    projection.normal = float3(0,0,0);
     projection.particle_force = float3(0,0,0);
-    projection.external_force = int3(0,0,0);
+    projection.external_force = float3(0,0,0);
     projection.counter = 0;
     projection.frictionCoefficient = 0;
 
@@ -340,8 +340,8 @@ void ResetTempProjections(uint id : SV_DispatchThreadID) {
 
     projections[id] = projection;
 
-    translational_forces[id] = int3(0,0,0);
-    torque_forces[id] = int3(0,0,0);
+    //translational_forces[id] = int3(0,0,0);
+    //torque_forces[id] = int3(0,0,0);
 }
 
 int CheckVoroniRegions(
@@ -365,9 +365,9 @@ int CheckVoroniRegions(
         closestPoint = v;
         closestNormal = vN;
         // We need to check if the point is actually the vertex 
-        if (d1 == 0 && d2 == 0) return 1;
-        return 0;
-        //return 1;
+        //if (d1 == 0 && d2 == 0) return 1;
+        //return 0;
+        return 1;
     }
     
     // At this point, we need to check if position is closer to edge1 or edge2. This is via dot product comparison
@@ -376,27 +376,27 @@ int CheckVoroniRegions(
     if (d3 >= threshold) {
         closestPoint = v+ e1 * abs((d1 / dot(e1, e1)));
         closestNormal = e1_3DN;
-        if (d3 == threshold) return 1;
-        return 0;
-        //return 2;
+        //if (d3 == threshold) return 1;
+        //return 0;
+        return 2;
     }
     float d4 = dot(e2_2DN, v_to_p);
     if (d4 >= threshold) {
         closestPoint = v + e2 * abs((d2 / dot(e2, e2)));
         closestNormal = e2_3DN;
-        if (d4 == threshold) return 1;
-        return 0;
-        //return 2;
+        //if (d4 == threshold) return 1;
+        //return 0;
+        return 2;
     }
 
     // At this point, the point is inside the triangle. No need to reproject
     closestPoint = proj;
     closestNormal = tri_N;
-    return 1;
-    //return 3;
+    //return 1;
+    return 3;
 }
 #pragma kernel CheckForProjection
-[numthreads(16,1,1)]
+[numthreads(256,1,1)]
 void CheckForProjection(uint id : SV_DispatchThreadID ) {
     if (id >= numParticles) return;
 
@@ -432,7 +432,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
             // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
             //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
-            float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - particle.position)) * tri_dynamic.normal);    
+            float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - particle.position)) * tri_dynamic.normal);
             // We need to project the point onto the plane formed by this triangle
             float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
             float3 proj1 = particle.position + dist_from_point_to_plane * dir;
@@ -446,7 +446,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
             float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
             float denom, u, v, distfinal;
-            float3 c, innermostPoint;
+            float3 c, innermostPoint, v1force, v2force, v3force;
             
             if (distance(particle.position, v2.position) < distance(particle.position, closestVertexPosition)) {
                 closestVertexPosition = v2.position;
@@ -469,7 +469,8 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
             }
 
-            float3 final_proj_position, final_proj_normal;
+            float3 final_proj_position;
+            float3 final_proj_normal;
             int isInTriangle = CheckVoroniRegions(
                 proj1,                          // The projection of the particle position onto the plane
                 closestVertexPosition, closestVertexNormal,   // The closest vertex position + its 3D normal
@@ -482,7 +483,11 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 final_proj_normal           // reference the projection normal
             );
 
-            if (projection.counter == 0 || distance(final_proj_position,particle.position) < distance(projection.position, particle.position)) {
+            // Check if the particle is either in range of the boundary triangle or if it's underneath
+            distfinal = distance(final_proj_position, particle.position);
+            innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
+
+            if (projection.counter == 0 || distfinal < distance(projection.position, particle.position)) {
                 projection.triangleID = i;
                 projection.projection = proj1;
                 projection.position = final_proj_position;
@@ -494,15 +499,20 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 u = dot(projection.normal, c) / denom;
                 c = cross(v1.position - v3.position, final_proj_position - v3.position);
                 v = dot(projection.normal, c) / denom;
-                projection.external_force = (u * v1.force) + (v * v2.force) + ((1-u-v) * v3.force);
+                if (dot(v1.force,projection.normal)<0) v1force = float3(0,0,0);
+                else v1force = v1.force;
+                if (dot(v2.force,projection.normal)<0) v2force = float3(0,0,0);
+                else v2force = v2.force;
+                if (dot(v3.force,projection.normal)<0) v3force = float3(0,0,0);
+                else v3force = v3.force;
+                projection.external_force = (u * v1force) + (v * v2force) + ((1.0-u-v) * v3force);
+                if (dot(projection.external_force,projection.normal)<0) projection.external_force = -projection.external_force;
                 // We also have to calculate the amount of force exerted by the particle.
                 // For now, we just calculate the orthogonal force based on the particle's current force
                 // To calculate the force component along the normal vector, we:
                 // 1) detect if the particle is within range or is intersecting with the triangle
                 // 2) if so, perform the follwing: dot(normal,particle force) / length(normal)
                 // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
-                distfinal = distance(final_proj_position, particle.position);
-                innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
                 //projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
                 
                 if (
@@ -616,6 +626,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
     projections[id] = projection;
 }
 
+/*
 #pragma kernel CheckForProjection2
 [numthreads(32,16,1)]
 void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
@@ -740,263 +751,265 @@ void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
             InterlockedAdd(translational_forces[tri_dynamic.obstacleIndex][2], int(particle_force[2] * 1024));
         }
     }
-    /*
-
-    if (projection.counter == 0 || distance(final_proj_position,particle.position) < distance(projection.position, particle.position)) {
-    projection.triangleID = i;
-    projection.projection = proj1;
-    projection.position = final_proj_position;
-    projection.normal = final_proj_normal;
-
-                
-        // We have to calculate the force at this point
-                denom = dot(projection.normal, projection.normal);
-                c = cross(v3.position - v2.position, final_proj_position - v2.position);
-                u = dot(projection.normal, c) / denom;
-                c = cross(v1.position - v3.position, final_proj_position - v3.position);
-                v = dot(projection.normal, c) / denom;
-                projection.external_force = (u * v1.force) + (v * v2.force) + ((1-u-v) * v3.force);
-                // We also have to calculate the amount of force exerted by the particle.
-                // For now, we just calculate the orthogonal force based on the particle's current force
-                // To calculate the force component along the normal vector, we:
-                // 1) detect if the particle is within range or is intersecting with the triangle
-                // 2) if so, perform the follwing: dot(normal,particle force) / length(normal)
-                // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
-                distfinal = distance(final_proj_position, particle.position);
-                innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
-                //projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
-                
-                if (
-                    distfinal <= particleRenderRadius 
-                    || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
-                ) {
-                    projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
-                    if (dot(projection.particle_force,final_proj_normal) > 0.0) projection.particle_force = float3(0,0,0);
-                } else {
-                    projection.particle_force = float3(0,0,0);
-                }
-                
-
-                projection.counter = isInTriangle;
-                projection.frictionCoefficient = o_dynamic.frictionCoefficient;
-
-                projection.e1 = edge1;
-                projection.e2 = edge2;
-                projection.e1_2DN = e1_2DN;
-                projection.e2_2DN = e2_2DN;
-                projection.e1_3DN = e1_3DN;
-                projection.e2_3DN = e2_3DN;
-            }
-
-    for(uint oi = 0; oi < numObstacles; oi++) {
-        o_dynamic = obstacles_dynamic[oi];
-        
-        // Skip if the particle isn't in the boundaries of this obstacle
-        if (o_dynamic.checkObstacleBounds == 1 && PointInsideBound(particle.position, o_dynamic.lowerBound, o_dynamic.upperBound) == 0) continue;
-
-        // grab the static obstacle
-        o_static = obstacles_static[oi];
-        
-        // Iterate through the vertices
-        for(uint i = o_static.ts[0]; i < o_static.ts[0] + o_static.ts[1]; i++) {
-            TriangleDynamic tri_dynamic = triangles_dynamic[i];
     
-            // Check if the particle is inside the triangle's boundaries
-            if (o_dynamic.checkTriangleBounds == 1 && PointInsideBound(particle.position, tri_dynamic.lowerBound, tri_dynamic.upperBound) == 0) continue;
-    
-            // More references
-            TriangleStatic tri_static = triangles_static[i];
-            VertexDynamic v1 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[0]];
-            VertexDynamic v2 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[1]];
-            VertexDynamic v3 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[2]];
+                                    /*
 
-            // At this point, we need to project the particle's position onto the plane defined by this triangle.
-            // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
-            // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
-            //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
-            float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - particle.position)) * tri_dynamic.normal);    
-            // We need to project the point onto the plane formed by this triangle
-            float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
-            float3 proj1 = particle.position + dist_from_point_to_plane * dir;
+                                    if (projection.counter == 0 || distance(final_proj_position,particle.position) < distance(projection.position, particle.position)) {
+                                    projection.triangleID = i;
+                                    projection.projection = proj1;
+                                    projection.position = final_proj_position;
+                                    projection.normal = final_proj_normal;
 
-            float3 closestVertexPosition = v1.position;
-            float3 closestVertexNormal = v1.normal;
-            float3 edge1 = v2.position - v1.position;
-            float3 edge2 = v3.position - v1.position;
-            float3 e1_2DN = tri_dynamic.v1v2n;
-            float3 e2_2DN = tri_dynamic.v1v3n;
-            float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
-            float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
-            float denom, u, v, distfinal;
-            float3 c, innermostPoint;
-            
-            if (distance(particle.position, v2.position) < distance(particle.position, closestVertexPosition)) {
-                closestVertexPosition = v2.position;
-                closestVertexNormal = v2.normal;
-                edge1 = v1.position - v2.position;
-                edge2 = v3.position - v2.position;
-                e1_2DN = tri_dynamic.v1v2n;
-                e2_2DN = tri_dynamic.v2v3n;
-                e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
-                e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
-            }
-            if (distance(particle.position, v3.position) < distance(particle.position, closestVertexPosition)) {
-                closestVertexPosition = v3.position;
-                closestVertexNormal = v3.normal;
-                edge1 = v1.position - v3.position;
-                edge2 = v2.position - v3.position;
-                e1_2DN = tri_dynamic.v1v3n;
-                e2_2DN = tri_dynamic.v2v3n;
-                e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
-                e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
-            }
+                                                
+                                        // We have to calculate the force at this point
+                                                denom = dot(projection.normal, projection.normal);
+                                                c = cross(v3.position - v2.position, final_proj_position - v2.position);
+                                                u = dot(projection.normal, c) / denom;
+                                                c = cross(v1.position - v3.position, final_proj_position - v3.position);
+                                                v = dot(projection.normal, c) / denom;
+                                                projection.external_force = (u * v1.force) + (v * v2.force) + ((1-u-v) * v3.force);
+                                                // We also have to calculate the amount of force exerted by the particle.
+                                                // For now, we just calculate the orthogonal force based on the particle's current force
+                                                // To calculate the force component along the normal vector, we:
+                                                // 1) detect if the particle is within range or is intersecting with the triangle
+                                                // 2) if so, perform the follwing: dot(normal,particle force) / length(normal)
+                                                // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
+                                                distfinal = distance(final_proj_position, particle.position);
+                                                innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
+                                                //projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                                                
+                                                if (
+                                                    distfinal <= particleRenderRadius 
+                                                    || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
+                                                ) {
+                                                    projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                                                    if (dot(projection.particle_force,final_proj_normal) > 0.0) projection.particle_force = float3(0,0,0);
+                                                } else {
+                                                    projection.particle_force = float3(0,0,0);
+                                                }
+                                                
 
-            float3 final_proj_position, final_proj_normal;
-            int isInTriangle = CheckVoroniRegions(
-                proj1,                          // The projection of the particle position onto the plane
-                closestVertexPosition, closestVertexNormal,   // The closest vertex position + its 3D normal
-                edge1, edge2,                   // The two edges connected to the closest vertex
-                normalize(e1_2DN), normalize(e2_2DN),                 // The 2D normals of the two connected edges
-                normalize(e1_3DN), normalize(e2_3DN),                 // The 3D normals of the two connected edges
-                normalize(tri_dynamic.normal),             // The triangle normal
-                0.05,                            // The threshold for overlap
-                final_proj_position,        // reference to the projection position
-                final_proj_normal           // reference the projection normal
-            );
+                                                projection.counter = isInTriangle;
+                                                projection.frictionCoefficient = o_dynamic.frictionCoefficient;
 
-            if (projection.counter == 0 || distance(final_proj_position,particle.position) < distance(projection.position, particle.position)) {
-                projection.triangleID = i;
-                projection.projection = proj1;
-                projection.position = final_proj_position;
-                projection.normal = final_proj_normal;
+                                                projection.e1 = edge1;
+                                                projection.e2 = edge2;
+                                                projection.e1_2DN = e1_2DN;
+                                                projection.e2_2DN = e2_2DN;
+                                                projection.e1_3DN = e1_3DN;
+                                                projection.e2_3DN = e2_3DN;
+                                            }
 
-                // We have to calculate the force at this point
-                denom = dot(projection.normal, projection.normal);
-                c = cross(v3.position - v2.position, final_proj_position - v2.position);
-                u = dot(projection.normal, c) / denom;
-                c = cross(v1.position - v3.position, final_proj_position - v3.position);
-                v = dot(projection.normal, c) / denom;
-                projection.external_force = (u * v1.force) + (v * v2.force) + ((1-u-v) * v3.force);
-                // We also have to calculate the amount of force exerted by the particle.
-                // For now, we just calculate the orthogonal force based on the particle's current force
-                // To calculate the force component along the normal vector, we:
-                // 1) detect if the particle is within range or is intersecting with the triangle
-                // 2) if so, perform the follwing: dot(normal,particle force) / length(normal)
-                // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
-                distfinal = distance(final_proj_position, particle.position);
-                innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
-                //projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
-                
-                if (
-                    distfinal <= particleRenderRadius 
-                    || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
-                ) {
-                    projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
-                    if (dot(projection.particle_force,final_proj_normal) > 0.0) projection.particle_force = float3(0,0,0);
-                } else {
-                    projection.particle_force = float3(0,0,0);
-                }
-                
+                                    for(uint oi = 0; oi < numObstacles; oi++) {
+                                        o_dynamic = obstacles_dynamic[oi];
+                                        
+                                        // Skip if the particle isn't in the boundaries of this obstacle
+                                        if (o_dynamic.checkObstacleBounds == 1 && PointInsideBound(particle.position, o_dynamic.lowerBound, o_dynamic.upperBound) == 0) continue;
 
-                projection.counter = isInTriangle;
-                projection.frictionCoefficient = o_dynamic.frictionCoefficient;
+                                        // grab the static obstacle
+                                        o_static = obstacles_static[oi];
+                                        
+                                        // Iterate through the vertices
+                                        for(uint i = o_static.ts[0]; i < o_static.ts[0] + o_static.ts[1]; i++) {
+                                            TriangleDynamic tri_dynamic = triangles_dynamic[i];
+                                    
+                                            // Check if the particle is inside the triangle's boundaries
+                                            if (o_dynamic.checkTriangleBounds == 1 && PointInsideBound(particle.position, tri_dynamic.lowerBound, tri_dynamic.upperBound) == 0) continue;
+                                    
+                                            // More references
+                                            TriangleStatic tri_static = triangles_static[i];
+                                            VertexDynamic v1 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[0]];
+                                            VertexDynamic v2 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[1]];
+                                            VertexDynamic v3 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[2]];
 
-                projection.e1 = edge1;
-                projection.e2 = edge2;
-                projection.e1_2DN = e1_2DN;
-                projection.e2_2DN = e2_2DN;
-                projection.e1_3DN = e1_3DN;
-                projection.e2_3DN = e2_3DN;
-            }
-        }
-    }
-    
-    /*
-    for(uint i = 0; i < numTriangles; i++) {
-        TriangleDynamic tri_dynamic = triangles_dynamic[i];
-    
-        // Check if the particle is inside the triangle's boundaries
-        //if (PointInsideBound(particle.position, tri_dynamic.lowerBound, tri_dynamic.upperBound) == 0) continue;
-    
-        // More references
-        TriangleStatic tri_static = triangles_static[i];
-        ObstacleStatic o_static = obstacles_static[tri_static.obstacleIndex];
-        ObstacleDynamic o_dynamic = obstacles_dynamic[tri_static.obstacleIndex];
-        VertexDynamic v1 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[0]];
-        VertexDynamic v2 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[1]];
-        VertexDynamic v3 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[2]];
+                                            // At this point, we need to project the particle's position onto the plane defined by this triangle.
+                                            // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
+                                            // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
+                                            //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
+                                            float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - particle.position)) * tri_dynamic.normal);    
+                                            // We need to project the point onto the plane formed by this triangle
+                                            float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
+                                            float3 proj1 = particle.position + dist_from_point_to_plane * dir;
 
-        // At this point, we need to project the particle's position onto the plane defined by this triangle.
-        // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
-        // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
-        //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
-        float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - particle.position)) * tri_dynamic.normal);    
-        // We need to project the point onto the plane formed by this triangle
-        float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
-        float3 proj1 = particle.position + dist_from_point_to_plane * dir;
+                                            float3 closestVertexPosition = v1.position;
+                                            float3 closestVertexNormal = v1.normal;
+                                            float3 edge1 = v2.position - v1.position;
+                                            float3 edge2 = v3.position - v1.position;
+                                            float3 e1_2DN = tri_dynamic.v1v2n;
+                                            float3 e2_2DN = tri_dynamic.v1v3n;
+                                            float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
+                                            float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
+                                            float denom, u, v, distfinal;
+                                            float3 c, innermostPoint;
+                                            
+                                            if (distance(particle.position, v2.position) < distance(particle.position, closestVertexPosition)) {
+                                                closestVertexPosition = v2.position;
+                                                closestVertexNormal = v2.normal;
+                                                edge1 = v1.position - v2.position;
+                                                edge2 = v3.position - v2.position;
+                                                e1_2DN = tri_dynamic.v1v2n;
+                                                e2_2DN = tri_dynamic.v2v3n;
+                                                e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
+                                                e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
+                                            }
+                                            if (distance(particle.position, v3.position) < distance(particle.position, closestVertexPosition)) {
+                                                closestVertexPosition = v3.position;
+                                                closestVertexNormal = v3.normal;
+                                                edge1 = v1.position - v3.position;
+                                                edge2 = v2.position - v3.position;
+                                                e1_2DN = tri_dynamic.v1v3n;
+                                                e2_2DN = tri_dynamic.v2v3n;
+                                                e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
+                                                e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
+                                            }
 
-        float3 closestVertexPosition = v1.position;
-        float3 closestVertexNormal = v1.normal;
-        float3 edge1 = v2.position - v1.position;
-        float3 edge2 = v3.position - v1.position;
-        float3 e1_2DN = tri_dynamic.v1v2n;
-        float3 e2_2DN = tri_dynamic.v1v3n;
-        float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
-        float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
-        if (distance(particle.position, v2.position) < distance(particle.position, closestVertexPosition)) {
-            closestVertexPosition = v2.position;
-            closestVertexNormal = v2.normal;
-            edge1 = v1.position - v2.position;
-            edge2 = v3.position - v2.position;
-            e1_2DN = tri_dynamic.v1v2n;
-            e2_2DN = tri_dynamic.v2v3n;
-            e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
-            e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
-        }
-        if (distance(particle.position, v3.position) < distance(particle.position, closestVertexPosition)) {
-            closestVertexPosition = v3.position;
-            closestVertexNormal = v3.normal;
-            edge1 = v1.position - v3.position;
-            edge2 = v2.position - v3.position;
-            e1_2DN = tri_dynamic.v1v3n;
-            e2_2DN = tri_dynamic.v2v3n;
-            e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
-            e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
-        }
+                                            float3 final_proj_position, final_proj_normal;
+                                            int isInTriangle = CheckVoroniRegions(
+                                                proj1,                          // The projection of the particle position onto the plane
+                                                closestVertexPosition, closestVertexNormal,   // The closest vertex position + its 3D normal
+                                                edge1, edge2,                   // The two edges connected to the closest vertex
+                                                normalize(e1_2DN), normalize(e2_2DN),                 // The 2D normals of the two connected edges
+                                                normalize(e1_3DN), normalize(e2_3DN),                 // The 3D normals of the two connected edges
+                                                normalize(tri_dynamic.normal),             // The triangle normal
+                                                0.05,                            // The threshold for overlap
+                                                final_proj_position,        // reference to the projection position
+                                                final_proj_normal           // reference the projection normal
+                                            );
 
-        float3 final_proj_position, final_proj_normal;
-        int isInTriangle = CheckVoroniRegions(
-            proj1,                          // The projection of the particle position onto the plane
-            closestVertexPosition, closestVertexNormal,   // The closest vertex position + its 3D normal
-            edge1, edge2,                   // The two edges connected to the closest vertex
-            normalize(e1_2DN), normalize(e2_2DN),                 // The 2D normals of the two connected edges
-            normalize(e1_3DN), normalize(e2_3DN),                 // The 3D normals of the two connected edges
-            normalize(tri_dynamic.normal),             // The triangle normal
-            0.05,                            // The threshold for overlap
-            final_proj_position,        // reference to the projection position
-            final_proj_normal           // reference the projection normal
-        );
+                                            if (projection.counter == 0 || distance(final_proj_position,particle.position) < distance(projection.position, particle.position)) {
+                                                projection.triangleID = i;
+                                                projection.projection = proj1;
+                                                projection.position = final_proj_position;
+                                                projection.normal = final_proj_normal;
 
-        if (projection.counter == 0 || distance(final_proj_position,particle.position) < distance(projection.position, particle.position)) {
-            projection.triangleID = i;
-            projection.projection = proj1;
-            projection.position = final_proj_position;
-            projection.normal = final_proj_normal;
-            projection.counter = isInTriangle;
-            projection.frictionCoefficient = o_dynamic.frictionCoefficient;
+                                                // We have to calculate the force at this point
+                                                denom = dot(projection.normal, projection.normal);
+                                                c = cross(v3.position - v2.position, final_proj_position - v2.position);
+                                                u = dot(projection.normal, c) / denom;
+                                                c = cross(v1.position - v3.position, final_proj_position - v3.position);
+                                                v = dot(projection.normal, c) / denom;
+                                                projection.external_force = (u * v1.force) + (v * v2.force) + ((1-u-v) * v3.force);
+                                                // We also have to calculate the amount of force exerted by the particle.
+                                                // For now, we just calculate the orthogonal force based on the particle's current force
+                                                // To calculate the force component along the normal vector, we:
+                                                // 1) detect if the particle is within range or is intersecting with the triangle
+                                                // 2) if so, perform the follwing: dot(normal,particle force) / length(normal)
+                                                // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
+                                                distfinal = distance(final_proj_position, particle.position);
+                                                innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
+                                                //projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                                                
+                                                if (
+                                                    distfinal <= particleRenderRadius 
+                                                    || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
+                                                ) {
+                                                    projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                                                    if (dot(projection.particle_force,final_proj_normal) > 0.0) projection.particle_force = float3(0,0,0);
+                                                } else {
+                                                    projection.particle_force = float3(0,0,0);
+                                                }
+                                                
 
-            projection.e1 = edge1;
-            projection.e2 = edge2;
-            projection.e1_2DN = e1_2DN;
-            projection.e2_2DN = e2_2DN;
-            projection.e1_3DN = e1_3DN;
-            projection.e2_3DN = e2_3DN;
-        }
-    }
-    */
+                                                projection.counter = isInTriangle;
+                                                projection.frictionCoefficient = o_dynamic.frictionCoefficient;
+
+                                                projection.e1 = edge1;
+                                                projection.e2 = edge2;
+                                                projection.e1_2DN = e1_2DN;
+                                                projection.e2_2DN = e2_2DN;
+                                                projection.e1_3DN = e1_3DN;
+                                                projection.e2_3DN = e2_3DN;
+                                            }
+                                        }
+                                    }
+
+                                    
+                                    /*
+                                    for(uint i = 0; i < numTriangles; i++) {
+                                        TriangleDynamic tri_dynamic = triangles_dynamic[i];
+                                    
+                                        // Check if the particle is inside the triangle's boundaries
+                                        //if (PointInsideBound(particle.position, tri_dynamic.lowerBound, tri_dynamic.upperBound) == 0) continue;
+                                    
+                                        // More references
+                                        TriangleStatic tri_static = triangles_static[i];
+                                        ObstacleStatic o_static = obstacles_static[tri_static.obstacleIndex];
+                                        ObstacleDynamic o_dynamic = obstacles_dynamic[tri_static.obstacleIndex];
+                                        VertexDynamic v1 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[0]];
+                                        VertexDynamic v2 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[1]];
+                                        VertexDynamic v3 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[2]];
+
+                                        // At this point, we need to project the particle's position onto the plane defined by this triangle.
+                                        // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
+                                        // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
+                                        //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
+                                        float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - particle.position)) * tri_dynamic.normal);    
+                                        // We need to project the point onto the plane formed by this triangle
+                                        float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
+                                        float3 proj1 = particle.position + dist_from_point_to_plane * dir;
+
+                                        float3 closestVertexPosition = v1.position;
+                                        float3 closestVertexNormal = v1.normal;
+                                        float3 edge1 = v2.position - v1.position;
+                                        float3 edge2 = v3.position - v1.position;
+                                        float3 e1_2DN = tri_dynamic.v1v2n;
+                                        float3 e2_2DN = tri_dynamic.v1v3n;
+                                        float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
+                                        float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
+                                        if (distance(particle.position, v2.position) < distance(particle.position, closestVertexPosition)) {
+                                            closestVertexPosition = v2.position;
+                                            closestVertexNormal = v2.normal;
+                                            edge1 = v1.position - v2.position;
+                                            edge2 = v3.position - v2.position;
+                                            e1_2DN = tri_dynamic.v1v2n;
+                                            e2_2DN = tri_dynamic.v2v3n;
+                                            e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
+                                            e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
+                                        }
+                                        if (distance(particle.position, v3.position) < distance(particle.position, closestVertexPosition)) {
+                                            closestVertexPosition = v3.position;
+                                            closestVertexNormal = v3.normal;
+                                            edge1 = v1.position - v3.position;
+                                            edge2 = v2.position - v3.position;
+                                            e1_2DN = tri_dynamic.v1v3n;
+                                            e2_2DN = tri_dynamic.v2v3n;
+                                            e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
+                                            e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
+                                        }
+
+                                        float3 final_proj_position, final_proj_normal;
+                                        int isInTriangle = CheckVoroniRegions(
+                                            proj1,                          // The projection of the particle position onto the plane
+                                            closestVertexPosition, closestVertexNormal,   // The closest vertex position + its 3D normal
+                                            edge1, edge2,                   // The two edges connected to the closest vertex
+                                            normalize(e1_2DN), normalize(e2_2DN),                 // The 2D normals of the two connected edges
+                                            normalize(e1_3DN), normalize(e2_3DN),                 // The 3D normals of the two connected edges
+                                            normalize(tri_dynamic.normal),             // The triangle normal
+                                            0.05,                            // The threshold for overlap
+                                            final_proj_position,        // reference to the projection position
+                                            final_proj_normal           // reference the projection normal
+                                        );
+
+                                        if (projection.counter == 0 || distance(final_proj_position,particle.position) < distance(projection.position, particle.position)) {
+                                            projection.triangleID = i;
+                                            projection.projection = proj1;
+                                            projection.position = final_proj_position;
+                                            projection.normal = final_proj_normal;
+                                            projection.counter = isInTriangle;
+                                            projection.frictionCoefficient = o_dynamic.frictionCoefficient;
+
+                                            projection.e1 = edge1;
+                                            projection.e2 = edge2;
+                                            projection.e1_2DN = e1_2DN;
+                                            projection.e2_2DN = e2_2DN;
+                                            projection.e1_3DN = e1_3DN;
+                                            projection.e2_3DN = e2_3DN;
+                                        }
+                                    }
+                                    */
 
     //projections[id] = projection;
-}
+//}
 
 #pragma kernel CombineForces
 [numthreads(64,1,1)]
