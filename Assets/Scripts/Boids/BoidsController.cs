@@ -114,7 +114,7 @@ public class BoidsController : MonoBehaviour
         }
     }
 
-    void Awake() {
+    public void Initialize() {
         // We can't do anything if `grid` is null or if our compute shader is null
         if (_GRID == null) {
             Debug.LogError("BOIDS - ERROR: Cannot operate if `GRID` is set to `null`. Please define this reference and restart the simulation.");

@@ -350,7 +350,7 @@ public class ParticleController : MonoBehaviour
         _spawnBounds = (_SECTION_INDEX >= 0) ? _GRID.sections[_SECTION_INDEX].bounds : _GRID.innerBounds;
     }
 
-    void Awake() {
+    public void Initialize() {
         // We can't do anything if `grid` is null or if our compute shader is null
         if (_GRID == null || _SPH_Shader == null) {
             Debug.LogError("SPH - ERROR: Cannot operate if either `GRID` or `SPH_SHADER` is set to `null`. Please define these references and restart the simulation.");

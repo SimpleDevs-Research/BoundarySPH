@@ -36,7 +36,7 @@ public class MeshObsGPU : MonoBehaviour
 
         public bool show_vertices => show_vertex_positions || show_vertex_normals || show_vertex_forces;
         public bool show_triangles => show_face_normals || show_2D_edge_normals || show_centroids || show_triangle_bounds;
-        public bool show_gizmos => show_vertices || show_triangles;
+        public bool show_gizmos => show_vertices || show_triangles || show_bounds || show_triangle_bounds || show_centroids;
     }
     
     public BufferManager _BM;
@@ -59,12 +59,10 @@ public class MeshObsGPU : MonoBehaviour
     [SerializeField] private bool drawProjectionGizmos = false;
     private bool drawGizmos => drawObstacleGizmos || drawProjectionGizmos;
 
-    private int numObstacles, numVertices, numTriangles, numEdges;
+    [HideInInspector] public int numObstacles, numVertices, numTriangles, numEdges;
     [HideInInspector] public int numParticles;
     
-    public ComputeBuffer obstacles_static_buffer;
     public ComputeBuffer vertices_static_buffer;
-    public ComputeBuffer triangles_static_buffer;
     public ComputeBuffer edges_static_buffer;
 
     private int resetVertexForcesKernel, updateVerticesKernel, updateTrianglesKernel, updateEdgesKernel, resetHasChangedKernel;
@@ -87,13 +85,14 @@ public class MeshObsGPU : MonoBehaviour
 
         int minLength;
         if (drawObstacleGizmos) {
-            for(int i = 0; i < numObstacles; i++) {
+            minLength = Mathf.Min(_BM.obstacles_dynamic_array.Length, _BM.obstacles_static_array.Length);
+            for(int i = 0; i < minLength; i++) {
                 if (!obstacles[i].show_gizmos) continue;
 
-                OP.ObstacleStatic o_static = obstacles_static[i];
-                OP.ObstacleDynamic o_dynamic = obstacles_dynamic_array[i];
+                OP.ObstacleStatic o_static = _BM.obstacles_static_array[i];
+                OP.ObstacleDynamic o_dynamic = _BM.obstacles_dynamic_array[i];
                 OP.VertexDynamic v_dynamic;
-                
+                /*
                 if (obstacles[i].show_vertices) {
                     for(uint vi = o_static.vs[0]; vi < o_static.vs[0] + o_static.vs[1]; vi++) {
                         if ((int)vi >= _BM.vertices_dynamic_array.Length) break;
@@ -179,6 +178,7 @@ public class MeshObsGPU : MonoBehaviour
                         Handles.DrawLine(midpoint, midpoint + normal, 3);
                     }
                 }
+                */
                 // Render bounds
                 if (obstacles[i].show_bounds) {
                     Gizmos.color = Color.black;
@@ -187,15 +187,6 @@ public class MeshObsGPU : MonoBehaviour
                         o_dynamic.upperBound - o_dynamic.lowerBound
                     );
                 }
-            }
-            
-            for(int i = 0; i < obstacles_static.Count; i++) {
-                if (!obstacles[i].show_gizmos) continue;
-                OP.ObstacleStatic o_static = obstacles_static[i];
-                OP.ObstacleDynamic o_dynamic = obstacles_dynamic_array[i];
-                // Render vertices
-                
-                
             }
         }
         
@@ -314,8 +305,7 @@ public class MeshObsGPU : MonoBehaviour
         }
     }
 
-    // We run the setup on Start, not Awake, becuase ParticleController initializes on Awake
-    void Start() {
+    public void Initialize() {
         // Only run if we actually have a shader
         if (_SHADER == null) {
             if (printDebugs) Debug.LogError("MeshObsGPU - ERROR: Cannot preprocess obstacles due to missing reference to a compute shader");
@@ -468,15 +458,15 @@ public class MeshObsGPU : MonoBehaviour
 
         // Initialize our buffers
         _BM.InitializeMeshObsBuffers(numObstacles, numTriangles, numVertices, numEdges);
+        //obstacles_static_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(uint)*9 + sizeof(float));
         //obstacles_dynamic_buffer = new ComputeBuffer(obstacles_dynamic.Count, sizeof(uint)*4 + sizeof(float)*20);
+        //triangles_static_buffer = new ComputeBuffer(triangles_static.Count, sizeof(uint)*7 + sizeof(float)*9);
         //triangles_dynamic_buffer = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*22);
         //vertices_dynamic_buffer = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*9);
         //edges_dynamic_buffer = new ComputeBuffer(numEdges, sizeof(float)*3);
         //_BM.MESHOBS_TRANSLATION_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
         //_BM.MESHOBS_TORQUE_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
-        obstacles_static_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(uint)*9 + sizeof(float));
         vertices_static_buffer = new ComputeBuffer(vertices_static.Count, sizeof(uint) + sizeof(float)*6);
-        triangles_static_buffer = new ComputeBuffer(triangles_static.Count, sizeof(uint)*7 + sizeof(float)*9);
         edges_static_buffer = new ComputeBuffer(edges_static.Count, sizeof(uint)*5 + sizeof(float)*6);
         
         
@@ -484,11 +474,11 @@ public class MeshObsGPU : MonoBehaviour
         if (_BM.PARTICLES_EXTERNAL_FORCES_BUFFER == null) _BM.PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
 
         // Update the buffers
-        obstacles_static_buffer.SetData(obstacles_static.ToArray());
+        _BM.MESHOBS_OBSTACLES_STATIC_BUFFER.SetData(obstacles_static.ToArray());
         _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER.SetData(obstacles_dynamic.ToArray());
         vertices_static_buffer.SetData(vertices_static.ToArray());
         _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER.SetData(vertices_dynamic.ToArray());
-        triangles_static_buffer.SetData(triangles_static.ToArray());
+        _BM.MESHOBS_TRIANGLES_STATIC_BUFFER.SetData(triangles_static.ToArray());
         _BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER.SetData(triangles_dynamic.ToArray());
         edges_static_buffer.SetData(edges_static.ToArray());
         _BM.MESHOBS_EDGES_DYNAMIC_BUFFER.SetData(edges_dynamic.ToArray());
@@ -512,42 +502,42 @@ public class MeshObsGPU : MonoBehaviour
         // Update Vertices
         _SHADER.SetBuffer(updateVerticesKernel,"vertices_static", vertices_static_buffer);
         _SHADER.SetBuffer(updateVerticesKernel,"vertices_dynamic", _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(updateVerticesKernel,"obstacles_static", obstacles_static_buffer);
+        _SHADER.SetBuffer(updateVerticesKernel,"obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
         _SHADER.SetBuffer(updateVerticesKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         // Update Edges
         _SHADER.SetBuffer(updateEdgesKernel,"edges_static", edges_static_buffer);
         _SHADER.SetBuffer(updateEdgesKernel,"edges_dynamic", _BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(updateEdgesKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         // Update Triangles
-        _SHADER.SetBuffer(updateTrianglesKernel,"triangles_static",triangles_static_buffer);
-        _SHADER.SetBuffer(updateTrianglesKernel,"triangles_dynamic",_BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(updateTrianglesKernel,"obstacles_dynamic",_BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(updateTrianglesKernel,"obstacles_static",obstacles_static_buffer);
-        _SHADER.SetBuffer(updateTrianglesKernel,"vertices_dynamic",_BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(updateTrianglesKernel,"triangles_static", _BM.MESHOBS_TRIANGLES_STATIC_BUFFER);
+        _SHADER.SetBuffer(updateTrianglesKernel,"triangles_dynamic", _BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(updateTrianglesKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(updateTrianglesKernel,"obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
+        _SHADER.SetBuffer(updateTrianglesKernel,"vertices_dynamic", _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
         // Reset Has Changed
-        _SHADER.SetBuffer(resetHasChangedKernel,"obstacles_dynamic",_BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(resetHasChangedKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         // Reset Temp Projections
         _SHADER.SetBuffer(resetTempProjectionsKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
-        _SHADER.SetBuffer(resetTempProjectionsKernel,"particles",_BM.PARTICLES_BUFFER);
-        _SHADER.SetBuffer(resetTempProjectionsKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
-        _SHADER.SetBuffer(resetTempProjectionsKernel,"torque_forces",_BM.MESHOBS_TORQUE_FORCES_BUFFER);
+        _SHADER.SetBuffer(resetTempProjectionsKernel,"particles", _BM.PARTICLES_BUFFER);
+        _SHADER.SetBuffer(resetTempProjectionsKernel,"translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        _SHADER.SetBuffer(resetTempProjectionsKernel,"torque_forces", _BM.MESHOBS_TORQUE_FORCES_BUFFER);
         // Check For Projections
-        _SHADER.SetBuffer(checkForProjectionKernel,"particles",_BM.PARTICLES_BUFFER);
-        _SHADER.SetBuffer(checkForProjectionKernel,"projections",_BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
-        _SHADER.SetBuffer(checkForProjectionKernel,"triangles_static",triangles_static_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"triangles_dynamic",_BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(checkForProjectionKernel,"vertices_dynamic",_BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_static",obstacles_static_buffer);
-        _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_dynamic",_BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic",_BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"particles", _BM.PARTICLES_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"triangles_static", _BM.MESHOBS_TRIANGLES_STATIC_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"triangles_dynamic", _BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"vertices_dynamic", _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic", _BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
         //_SHADER.SetBuffer(checkForProjectionKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
         // Combine Forces Kernel
-        _SHADER.SetBuffer(combineForcesKernel,"projections",_BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
-        _SHADER.SetBuffer(combineForcesKernel,"triangles_static",triangles_static_buffer);
-        _SHADER.SetBuffer(combineForcesKernel,"obstacles_static",obstacles_static_buffer);
-        _SHADER.SetBuffer(combineForcesKernel,"obstacles_dynamic",_BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(combineForcesKernel,"translational_forces",_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
-        _SHADER.SetBuffer(combineForcesKernel,"torque_forces",_BM.MESHOBS_TORQUE_FORCES_BUFFER);
+        _SHADER.SetBuffer(combineForcesKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
+        _SHADER.SetBuffer(combineForcesKernel,"triangles_static", _BM.MESHOBS_TRIANGLES_STATIC_BUFFER);
+        _SHADER.SetBuffer(combineForcesKernel,"obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
+        _SHADER.SetBuffer(combineForcesKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(combineForcesKernel,"translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        _SHADER.SetBuffer(combineForcesKernel,"torque_forces", _BM.MESHOBS_TORQUE_FORCES_BUFFER);
 
         // Finally, prepare our global arrays
         obstacles_dynamic_array = new OP.ObstacleDynamic[numObstacles];
@@ -936,9 +926,7 @@ public class MeshObsGPU : MonoBehaviour
     }
 
     void OnDestroy() {
-        if (obstacles_static_buffer != null) obstacles_static_buffer.Release();
         if (vertices_static_buffer != null) vertices_static_buffer.Release();
-        if (triangles_static_buffer != null) triangles_static_buffer.Release();
         if (edges_static_buffer != null) edges_static_buffer.Release();
     }
     

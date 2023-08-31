@@ -17,6 +17,8 @@ public class PressureRenderer : MonoBehaviour
     private ComputeShader _SHADER = null;
     [SerializeField, Tooltip("The ParticleController that controls the SPH flow")]
     private ParticleController _PC = null;
+    [SerializeField, Tooltip("The MeshObsGPU controller that handles obstacles")]
+    private MeshObsGPU _OC = null;
 
     [Header("== CONFIGURATIONS ==")]
     [SerializeField] private float[] _gridCellRenderLimits;
@@ -31,7 +33,7 @@ public class PressureRenderer : MonoBehaviour
     [ReadOnly, SerializeField] private OP.GridCell[] _tempCells;
     //[ReadOnly, SerializeField] private int[] _tempParticles;
 
-    void Start() {
+    public void Initialize() {
         if (_GRID == null || _SHADER == null || _PC == null) {
             Debug.LogError("Pressure Renderer - ERROR: Cannot operate if either `GRID`, `SHADER`, or `PC` is set to `null`. Please define these references and restart the simulation.");
             return;
@@ -82,6 +84,9 @@ public class PressureRenderer : MonoBehaviour
         _SHADER.SetInt("numParticles", _PC.numParticles);
         _SHADER.SetFloat("radius",_PC.h);
 
+        // === OBSTACLE CONFIGURATIONS
+        _SHADER.SetInt("numObstacles", _OC.numObstacles);
+
         // Update variables that may change over time due to modifying inspector values
         UpdateShaderVariables();
     }
@@ -94,14 +99,16 @@ public class PressureRenderer : MonoBehaviour
         _SHADER.SetFloat("bulkModulus", _PC.k);
     }
 
-    private int _CLEAR_GRID, _UPDATE_PRESSURES, _CONDENSE_PRESSURES;
+    private int _CLEAR_GRID, _CLEAR_APPLIED_PRESSURES, _UPDATE_PRESSURES, _CONDENSE_PRESSURES, _APPLY_PRESSURES;
     private int size_property, grid_cell_buffer_property, grid_cell_pressures_property, grid_cell_render_limits_property;
     private void InitializeKernels() {
         // Used on initialization. _CLEAR_GRID also is performed at the beginning of each update loop
         _CLEAR_GRID = _SHADER.FindKernel("ClearGrid");
         // These are run during each update loop
+        _CLEAR_APPLIED_PRESSURES = _SHADER.FindKernel("ClearAppliedPressures");
         _UPDATE_PRESSURES = _SHADER.FindKernel("UpdatePressures");
         _CONDENSE_PRESSURES = _SHADER.FindKernel("CondensePressures");
+        _APPLY_PRESSURES = _SHADER.FindKernel("ApplyPressures");
 
         size_property = Shader.PropertyToID("size");
         grid_cell_buffer_property = Shader.PropertyToID("grid_cell_buffer");
@@ -133,6 +140,8 @@ public class PressureRenderer : MonoBehaviour
         _SHADER.SetBuffer(_CLEAR_GRID, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
         _SHADER.SetBuffer(_CLEAR_GRID, "bounds", BOUNDS_BUFFER);
 
+        _SHADER.SetBuffer(_CLEAR_APPLIED_PRESSURES, "translational_pressure_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "grid", PRESSURE_GRID_BUFFER);
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "bounds", BOUNDS_BUFFER);
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "particles", _BM.PARTICLES_BUFFER);
@@ -141,6 +150,15 @@ public class PressureRenderer : MonoBehaviour
 
         _SHADER.SetBuffer(_CONDENSE_PRESSURES, "grid", PRESSURE_GRID_BUFFER);
         _SHADER.SetBuffer(_CONDENSE_PRESSURES, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
+
+        _SHADER.SetBuffer(_APPLY_PRESSURES, "grid", PRESSURE_GRID_BUFFER);
+        _SHADER.SetBuffer(_APPLY_PRESSURES, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(_APPLY_PRESSURES, "obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
+        _SHADER.SetBuffer(_APPLY_PRESSURES, "triangles_dynamic",_BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(_APPLY_PRESSURES, "vertices_dynamic",_BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(_APPLY_PRESSURES, "edges_dynamic",_BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(_APPLY_PRESSURES, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
+        _SHADER.SetBuffer(_APPLY_PRESSURES, "translational_pressure_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
 
         _GRID.grid_cell_material.SetBuffer(grid_cell_buffer_property, PRESSURE_GRID_BUFFER);
         _GRID.grid_cell_material.SetBuffer(grid_cell_render_limits_property, GRID_RENDER_LIMITS_BUFFER);
@@ -165,10 +183,11 @@ public class PressureRenderer : MonoBehaviour
     }
 
     private void UpdatePressures() {
+        if (_OC != null) _SHADER.Dispatch( _CLEAR_APPLIED_PRESSURES, Mathf.CeilToInt((float)_OC.numObstacles / 8f),1,1 );
         _SHADER.Dispatch(_CLEAR_GRID, _NUM_BLOCKS_GRID[0], _NUM_BLOCKS_GRID[1], _NUM_BLOCKS_GRID[2]);
         _SHADER.Dispatch(_UPDATE_PRESSURES, _NUM_BLOCKS_PARTICLES,1,1);
         _SHADER.Dispatch(_CONDENSE_PRESSURES, _NUM_BLOCKS_GRID[0], _NUM_BLOCKS_GRID[1], _NUM_BLOCKS_GRID[2]);
-        
+        if (_OC != null) _SHADER.Dispatch( _APPLY_PRESSURES, _NUM_BLOCKS_GRID[0], _NUM_BLOCKS_GRID[1], _NUM_BLOCKS_GRID[2] );
     }
 
     private void RenderPressures() {
