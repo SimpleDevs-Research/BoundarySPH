@@ -405,6 +405,7 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
     // We update both the densities buffer and pressures buffer
     density[id.x] = _density;
     pressure[id.x] = bulkModulus * _density;
+    particles[id.x].force = bulkModulus * _density;
 }
 
 // == PRESSURE FORCE CALCULATION ==
@@ -515,7 +516,7 @@ void ComputeInternalForces(uint3 id : SV_DispatchThreadID) {
     float3 finalViscosityForce = viscosity_coefficient * viscosityForce;
     viscosityForces[id.x] = finalViscosityForce;
     //pressureForce[id.x] = pressureForce + (viscosity_coefficient * viscosityForce);
-    particles[id.x].force = particleMass * (pressureForce + finalViscosityForce + (density[id.x] * g));
+    //particles[id.x].force = particleMass * (pressureForce + finalViscosityForce + (density[id.x] * g));
 }
 
 #pragma kernel Integrate_Debug

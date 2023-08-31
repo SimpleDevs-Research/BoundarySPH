@@ -19,8 +19,10 @@ struct ObstacleDynamic {
     float3 position;            // The world-space position of the transform.
     float4 rotation;            // The world-space rotation of the transform.
     float3 scale;               // The world-space scale of the transform. Typically via `Transform.LossyScale`.
+    float density;
     float3 lowerBound;          // The lower boundary position of this obstacle's bounding box.
     float3 upperBound;          // The upper boundary position of this obstacle's bounding box.
+    uint isStatic;
     float3 centerOfMass;
     float frictionCoefficient;  // The amount of friction the object is meant to exhibit on particles.
     uint checkObstacleBounds;
@@ -152,6 +154,7 @@ uint numEdges;
 uint numParticles;
 float particleRenderRadius;
 
+float3 g;
 float dt;                       // delta time - The time difference between frames.
 
 StructuredBuffer<ObstacleStatic> obstacles_static;
@@ -164,6 +167,8 @@ StructuredBuffer<EdgeStatic> edges_static;
 RWStructuredBuffer<float3> edges_dynamic;
 RWStructuredBuffer<int3> translational_forces;
 RWStructuredBuffer<int3> torque_forces;
+
+RWStructuredBuffer<float3> obstacle_velocities;
 
 RWStructuredBuffer<Particle> particles;
 RWStructuredBuffer<Projection> projections;
@@ -344,6 +349,14 @@ void ResetTempProjections(uint id : SV_DispatchThreadID) {
     //torque_forces[id] = int3(0,0,0);
 }
 
+#pragma kernel ClearAppliedPressures
+[numthreads(8,1,1)]
+void ClearAppliedPressures(uint id : SV_DispatchThreadID) {
+    if (id >= (uint)numObstacles) return;
+    translational_forces[id] = int3(0,0,0);
+}
+
+
 int CheckVoroniRegions(
         float3 proj,                    // the projection of 3D point onto the 2D plane
         float3 v, float3 vN,            // the comparison vertex of the triangle + its normal
@@ -406,7 +419,13 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
 
     ObstacleStatic o_static;
     ObstacleDynamic o_dynamic;
+    
     for(uint oi = 0; oi < numObstacles; oi++) {
+        int meshobs_found = 0;
+        float3 meshobs_closest_point = particle.position;
+        float meshobs_closest_distance = 0.0;
+        float3 meshobs_closest_normal = float3(0,0,0);
+
         o_dynamic = obstacles_dynamic[oi];
         
         // Skip if the particle isn't in the boundaries of this obstacle
@@ -423,10 +442,13 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             if (o_dynamic.checkTriangleBounds == 1 && PointInsideBound(particle.position, tri_dynamic.lowerBound, tri_dynamic.upperBound) == 0) continue;
     
             // More references
-            TriangleStatic tri_static = triangles_static[i];
-            VertexDynamic v1 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[0]];
-            VertexDynamic v2 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[1]];
-            VertexDynamic v3 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[2]];
+            //TriangleStatic tri_static = triangles_static[i];
+            //VertexDynamic v1 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[0]];
+            //VertexDynamic v2 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[1]];
+            //VertexDynamic v3 = vertices_dynamic[o_static.vs[0] + tri_static.vertices[2]];
+            VertexDynamic v1 = vertices_dynamic[o_static.vs[0] + tri_dynamic.vertices[0]];
+            VertexDynamic v2 = vertices_dynamic[o_static.vs[0] + tri_dynamic.vertices[1]];
+            VertexDynamic v3 = vertices_dynamic[o_static.vs[0] + tri_dynamic.vertices[2]];
 
             // At this point, we need to project the particle's position onto the plane defined by this triangle.
             // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
@@ -443,8 +465,10 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             float3 edge2 = v3.position - v1.position;
             float3 e1_2DN = tri_dynamic.v1v2n;
             float3 e2_2DN = tri_dynamic.v1v3n;
-            float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
-            float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
+            //float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
+            //float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
+            float3 e1_3DN = edges_dynamic[o_static.es[0] + tri_dynamic.edges[0]];
+            float3 e2_3DN = edges_dynamic[o_static.es[0] + tri_dynamic.edges[1]];
             float denom, u, v, distfinal;
             float3 c, innermostPoint, v1force, v2force, v3force;
             
@@ -455,8 +479,10 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 edge2 = v3.position - v2.position;
                 e1_2DN = tri_dynamic.v1v2n;
                 e2_2DN = tri_dynamic.v2v3n;
-                e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
-                e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
+                //e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[0]];
+                //e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
+                e1_3DN = edges_dynamic[o_static.es[0] + tri_dynamic.edges[0]];
+                e2_3DN = edges_dynamic[o_static.es[0] + tri_dynamic.edges[2]];
             }
             if (distance(particle.position, v3.position) < distance(particle.position, closestVertexPosition)) {
                 closestVertexPosition = v3.position;
@@ -465,8 +491,10 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 edge2 = v2.position - v3.position;
                 e1_2DN = tri_dynamic.v1v3n;
                 e2_2DN = tri_dynamic.v2v3n;
-                e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
-                e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
+                //e1_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[1]];
+                //e2_3DN = edges_dynamic[o_static.es[0] + tri_static.edges[2]];
+                e1_3DN = edges_dynamic[o_static.es[0] + tri_dynamic.edges[1]];
+                e2_3DN = edges_dynamic[o_static.es[0] + tri_dynamic.edges[2]];
             }
 
             float3 final_proj_position;
@@ -535,6 +563,29 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 projection.e2_2DN = e2_2DN;
                 projection.e1_3DN = e1_3DN;
                 projection.e2_3DN = e2_3DN;
+            }
+
+            if (meshobs_found == 0 || distfinal < meshobs_closest_distance) {
+                meshobs_found = 1;
+                meshobs_closest_distance = distfinal;
+                meshobs_closest_point = final_proj_position;
+                meshobs_closest_normal = final_proj_normal;
+            }
+        }
+
+        if (meshobs_found == 1) {
+            float3 closest_to_proj = particle.position - meshobs_closest_point;
+            float s = sign(dot(closest_to_proj,meshobs_closest_normal));
+            if (length(closest_to_proj) <= 1.5*particleRenderRadius && s >= 0.0) {
+                // At this point, we merely have to apply the pressure value of this grid cell in the direction towards the closest point
+                float w = min( 1.0, max(0.0, (1.5*particleRenderRadius - length(closest_to_proj))/(1.5*particleRenderRadius) ));
+                float3 pressure_vector = normalize(meshobs_closest_point - particle.position) * particles[id].force * w;
+                InterlockedAdd(translational_forces[oi][0], (int)(pressure_vector[0] * 1024.0));
+                InterlockedAdd(translational_forces[oi][1], (int)(pressure_vector[1] * 1024.0));
+                InterlockedAdd(translational_forces[oi][2], (int)(pressure_vector[2] * 1024.0));
+                //InterlockedAdd(translational_forces[oi][0], 1);
+                //InterlockedAdd(translational_forces[oi][1], 1);
+                //InterlockedAdd(translational_forces[oi][2], 1);
             }
         }
     }
@@ -1010,6 +1061,37 @@ void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
 
     //projections[id] = projection;
 //}
+
+#pragma kernel ApplyPressures
+[numthreads(8,1,1)]
+void ApplyPressures(uint id : SV_DispatchThreadID) {
+    if (id >= (uint)numObstacles) return;
+
+    // Get the dynamic properties of the current obstacle
+    ObstacleDynamic o_dynamic = obstacles_dynamic[id];
+    // If the obstacle is a static one, return early
+    if (o_dynamic.isStatic == 1) return;
+
+    // Get the pressure force
+    int3 translational_force = translational_forces[id];
+    float3 tForce = float3(
+        float(translational_force[0])/1024.0,
+        float(translational_force[1])/1024.0,
+        float(translational_force[2])/1024.0
+    );
+
+    // Get the velocity of the obstacle
+    float3 v = obstacle_velocities[id];
+
+    // Apply the force at a delta time
+    float3 acceleration = g + (tForce / o_dynamic.density);
+    v += acceleration * dt;
+    o_dynamic.position += v * dt;
+
+    // return
+    obstacle_velocities[id] = v;
+    obstacles_dynamic[id] = o_dynamic;
+}
 
 #pragma kernel CombineForces
 [numthreads(64,1,1)]

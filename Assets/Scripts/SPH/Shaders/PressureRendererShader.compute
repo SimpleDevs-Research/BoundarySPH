@@ -40,8 +40,10 @@ struct ObstacleDynamic {
     float3 position;            // The world-space position of the transform.
     float4 rotation;            // The world-space rotation of the transform.
     float3 scale;               // The world-space scale of the transform. Typically via `Transform.LossyScale`.
+    float density;
     float3 lowerBound;          // The lower boundary position of this obstacle's bounding box.
     float3 upperBound;          // The upper boundary position of this obstacle's bounding box.
+    uint isStatic;               
     float3 centerOfMass;
     float frictionCoefficient;  // The amount of friction the object is meant to exhibit on particles.
     uint checkObstacleBounds;

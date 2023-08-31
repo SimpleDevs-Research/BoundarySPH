@@ -50,8 +50,10 @@ namespace ObstaclePrimitives {
             public float3 position;
             public float4 rotation;
             public float3 scale;
+            public float density;
             public float3 lowerBound;
             public float3 upperBound;
+            public uint isStatic;
             public float3 centerOfMass;
             public float frictionCoefficient;
             public uint checkObstacleBounds;
@@ -333,8 +335,10 @@ namespace ObstaclePrimitives {
             public float3 position;
             public float4 rotation;
             public float3 scale;
+            public float density;
             public float3 lowerBound;
             public float3 upperBound;
+            public uint isStatic;
             public float3 centerOfMass;
             public float frictionCoefficient;
             public uint checkObstacleBounds;

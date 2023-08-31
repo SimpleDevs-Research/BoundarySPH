@@ -34,6 +34,7 @@ public class BufferManager : MonoBehaviour
     public ComputeBuffer MESHOBS_EDGES_DYNAMIC_BUFFER;          // Stores the dynamic characteristics of mesh edges
     public ComputeBuffer MESHOBS_TRANSLATION_FORCES_BUFFER;     // Stores the translational forces experienced BY an obstacle due to forces such as gravity or pressure fields
     public ComputeBuffer MESHOBS_TORQUE_FORCES_BUFFER;          // Stores the rotational forces experienced BY an obstacle due to forces such as gravity or pressure fields
+    public ComputeBuffer MESHOBS_VELOCITIES_BUFFER;             // Stores the current velocity of the obstacle
 
     [Header("=== DEBUG SETTINGS ===")]
     [SerializeField] private bool _verbose = true;
@@ -88,7 +89,7 @@ public class BufferManager : MonoBehaviour
 
     public void InitializeMeshObsBuffers(int numObstacles = 1, int numTriangles = 1, int numVertices = 1, int numEdges = 1) {
         MESHOBS_OBSTACLES_STATIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*9 + sizeof(float));
-        MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*4 + sizeof(float)*20);
+        MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*5 + sizeof(float)*21);
         MESHOBS_TRIANGLES_STATIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*9);
         MESHOBS_TRIANGLES_DYNAMIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*22);
         MESHOBS_VERTICES_DYNAMIC_BUFFER = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*9);
@@ -96,6 +97,7 @@ public class BufferManager : MonoBehaviour
 
         MESHOBS_TRANSLATION_FORCES_BUFFER = new ComputeBuffer(numObstacles, sizeof(int)*3);
         MESHOBS_TORQUE_FORCES_BUFFER = new ComputeBuffer(numObstacles, sizeof(int)*3);
+        MESHOBS_VELOCITIES_BUFFER = new ComputeBuffer(numObstacles, sizeof(float)*3);
 
         _obstacles_static_array = new OP.ObstacleStatic[Mathf.Min(_obstacles_static_array.Length, numObstacles)];
         _obstacles_dynamic_array = new OP.ObstacleDynamic[Mathf.Min(_obstacles_dynamic_array.Length, numObstacles)];
@@ -115,7 +117,7 @@ public class BufferManager : MonoBehaviour
         if (_PRESSURE_RENDERER != null) _PRESSURE_RENDERER.Initialize();
     }
 
-    void Update() {
+    void LateUpdate() {
         if (_particles_array.Length > 0) PARTICLES_BUFFER.GetData(_particles_array);
         if (_particles_grid_array.Length > 0) PARTICLES_GRID_BUFFER.GetData(_particles_grid_array);
         if (_particles_velocities_array.Length > 0) PARTICLES_VELOCITIES_BUFFER.GetData(_particles_velocities_array);
@@ -151,6 +153,7 @@ public class BufferManager : MonoBehaviour
         if (MESHOBS_EDGES_DYNAMIC_BUFFER != null) MESHOBS_EDGES_DYNAMIC_BUFFER.Release();
         if (MESHOBS_TRANSLATION_FORCES_BUFFER != null) MESHOBS_TRANSLATION_FORCES_BUFFER.Release();
         if (MESHOBS_TORQUE_FORCES_BUFFER != null) MESHOBS_TORQUE_FORCES_BUFFER.Release();
+        if (MESHOBS_VELOCITIES_BUFFER != null) MESHOBS_VELOCITIES_BUFFER.Release();
     }
 }
 
