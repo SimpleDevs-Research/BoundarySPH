@@ -328,7 +328,7 @@ public class MeshObsGPU : MonoBehaviour
         PreprocessObstacles();
         UpdateObstacles(true);
         _initialized = true;
-    }   
+    }
 
     void Update() {
         // Only run if we actually have a shader
@@ -470,14 +470,6 @@ public class MeshObsGPU : MonoBehaviour
 
         // Initialize our buffers
         _BM.InitializeMeshObsBuffers(numObstacles, numTriangles, numVertices, numEdges);
-        //obstacles_static_buffer = new ComputeBuffer(obstacles_static.Count, sizeof(uint)*9 + sizeof(float));
-        //obstacles_dynamic_buffer = new ComputeBuffer(obstacles_dynamic.Count, sizeof(uint)*4 + sizeof(float)*20);
-        //triangles_static_buffer = new ComputeBuffer(triangles_static.Count, sizeof(uint)*7 + sizeof(float)*9);
-        //triangles_dynamic_buffer = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*22);
-        //vertices_dynamic_buffer = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*9);
-        //edges_dynamic_buffer = new ComputeBuffer(numEdges, sizeof(float)*3);
-        //_BM.MESHOBS_TRANSLATION_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
-        //_BM.MESHOBS_TORQUE_FORCES_BUFFER = new ComputeBuffer(obstacles_static.Count, sizeof(int)*3);
         vertices_static_buffer = new ComputeBuffer(vertices_static.Count, sizeof(uint) + sizeof(float)*6);
         edges_static_buffer = new ComputeBuffer(edges_static.Count, sizeof(uint)*5 + sizeof(float)*6);
         
@@ -538,10 +530,9 @@ public class MeshObsGPU : MonoBehaviour
         // Check For Projections
         _SHADER.SetBuffer(checkForProjectionKernel,"particles", _BM.PARTICLES_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
-        //_SHADER.SetBuffer(checkForProjectionKernel,"triangles_static", _BM.MESHOBS_TRIANGLES_STATIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"triangles_dynamic", _BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"vertices_dynamic", _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
+        //_SHADER.SetBuffer(checkForProjectionKernel,"obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic", _BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
@@ -558,7 +549,8 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.SetBuffer(combineForcesKernel,"torque_forces", _BM.MESHOBS_TORQUE_FORCES_BUFFER);
 
         // Finally, prepare our global arrays
-        obstacles_dynamic_array = new OP.ObstacleDynamic[numObstacles];
+        //obstacles_dynamic_array = new OP.ObstacleDynamic[numObstacles];
+        obstacles_dynamic_array = obstacles_dynamic.ToArray();
 
         if (_BOIDS_CONTROLLER != null) _BOIDS_CONTROLLER.SetExternalForcesBuffer(_BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
     }
@@ -613,8 +605,6 @@ public class MeshObsGPU : MonoBehaviour
         obstacle.obstacle.vs_map = new uint[vs.Length];
         List<OP.VertexStatic> vs_static = new List<OP.VertexStatic>();
         List<OP.VertexDynamic> vs_dynamic = new List<OP.VertexDynamic>();
-        //float3 lowerBound = new(0f,0f,0f);
-        //float3 upperBound = new(0f,0f,0f);
         List<float3> vertex_normals = new List<float3>();
 
         // We can now iterate through each verex in `vs` and filter out duplicates
@@ -661,6 +651,7 @@ public class MeshObsGPU : MonoBehaviour
         // We update `o_static` with number of filtered vertices
         // we know [0] because it's merely the current count of `vertices_static`
         o_static.vs = new((uint)vertices_static.Count,(uint)obstacle.obstacle.fixed_vs.Count);
+        o_dynamic.vs = new((uint)vertices_static.Count,(uint)obstacle.obstacle.fixed_vs.Count);
 
         // ===== GENERATING TRIANGLES AND EDGES DATA ==== //
         
@@ -829,6 +820,8 @@ public class MeshObsGPU : MonoBehaviour
         // [0] is the current count of `triangles_static` and `edges_static`, respectively
         o_static.ts = new((uint)triangles_static.Count, (uint)ts_static.Length);
         o_static.es = new((uint)edges_static.Count, (uint)es_static.Count);
+        o_dynamic.ts = new((uint)triangles_static.Count, (uint)ts_static.Length);
+        o_dynamic.es = new((uint)edges_static.Count, (uint)es_static.Count);
         
         // We update the global triangles array
         triangles_static.AddRange(ts_static);
@@ -926,20 +919,24 @@ public class MeshObsGPU : MonoBehaviour
                 if (forceUpdate) Debug.Log("Forced Update!");
                 else Debug.Log("UPDATING!");
             }
-            // Before anything, we have to update our Obstacles Dynamic buffer
-            _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER.SetData(obstacles_dynamic_array);
+            UpdateObstaclesInGPU();
+        }
+    }
 
-            // First, let's update the vertices
-            _SHADER.Dispatch(updateVerticesKernel, Mathf.CeilToInt((float)numObstacles / 16f), 1, 1);
-            // Second, let's reset the edge normals
-            _SHADER.Dispatch(updateEdgesKernel, Mathf.CeilToInt((float)numEdges / 64f), 1, 1);
-            // Thirdly, let's update the triangles
-            _SHADER.Dispatch(updateTrianglesKernel, Mathf.CeilToInt((float)numTriangles / 64f), 1, 1);
-            // Finally reset
-            _SHADER.Dispatch(resetHasChangedKernel, Mathf.CeilToInt((float)numObstacles / 64f), 1, 1);
-            for(int i = 0; i < obstacles.Count; i++) {
-                obstacles[i].obstacle.position_transform.hasChanged = false;
-            }
+    private void UpdateObstaclesInGPU() {
+        // Before anything, we have to update our Obstacles Dynamic buffer
+        _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER.SetData(obstacles_dynamic_array);
+
+        // First, let's update the vertices
+        _SHADER.Dispatch(updateVerticesKernel, Mathf.CeilToInt((float)numObstacles / 16f), 1, 1);
+        // Second, let's reset the edge normals
+        _SHADER.Dispatch(updateEdgesKernel, Mathf.CeilToInt((float)numEdges / 64f), 1, 1);
+        // Thirdly, let's update the triangles
+        _SHADER.Dispatch(updateTrianglesKernel, Mathf.CeilToInt((float)numTriangles / 64f), 1, 1);
+        // Finally reset
+        _SHADER.Dispatch(resetHasChangedKernel, Mathf.CeilToInt((float)numObstacles / 64f), 1, 1);
+        for(int i = 0; i < obstacles.Count; i++) {
+            obstacles[i].obstacle.position_transform.hasChanged = false;
         }
     }
 

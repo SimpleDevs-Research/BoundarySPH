@@ -37,6 +37,9 @@ struct ObstacleStatic {
 /// Represents the DYNAMIC properties of an obstacle that change during the update lop.
 struct ObstacleDynamic {
     uint index;                  // Ref. index inside the obstacles arrays.
+    uint2 vs;                   // [0] = starting index in the vertices arrays, [1] = the number of vertices.
+    uint2 ts;                   // [0] = starting index in the triangles arrays, [1] = the number of triangles.
+    uint2 es;                   // [0] = starting index in the edges arrays, [1] = the number of edges.
     float3 position;            // The world-space position of the transform.
     float4 rotation;            // The world-space rotation of the transform.
     float3 scale;               // The world-space scale of the transform. Typically via `Transform.LossyScale`.

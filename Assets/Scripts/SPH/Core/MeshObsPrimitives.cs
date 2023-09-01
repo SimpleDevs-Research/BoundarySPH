@@ -46,7 +46,10 @@ namespace ObstaclePrimitives {
         /// <param name="hasChanged">A boolean indicator to determine if this obstacle had transformed in some way between the previous and current frame</param>
         [System.Serializable]
         public class ObstacleDynamic {
-            public int index;
+            public uint index;
+            public uint2 vs;
+            public uint2 ts;
+            public uint2 es;
             public float3 position;
             public float4 rotation;
             public float3 scale;
@@ -332,6 +335,9 @@ namespace ObstaclePrimitives {
         [System.Serializable]
         public struct ObstacleDynamic {
             public uint index;
+            public uint2 vs;
+            public uint2 ts;
+            public uint2 es;
             public float3 position;
             public float4 rotation;
             public float3 scale;

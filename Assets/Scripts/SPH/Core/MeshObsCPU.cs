@@ -303,7 +303,7 @@ public class MeshObsCPU : MonoBehaviour
         OP.ObstacleStatic o_static = new OP.ObstacleStatic();
         OP.ObstacleDynamic o_dynamic = new OP.ObstacleDynamic();
         o_static.index = index;
-        o_dynamic.index = index;
+        o_dynamic.index = (uint)index;
         o_dynamic.hasChanged = 1;
 
         // ===== GENERATING VERTICES DATA ===== //
