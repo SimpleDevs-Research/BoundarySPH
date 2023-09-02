@@ -586,6 +586,11 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 InterlockedAdd(translational_forces[oi][0], (int)(pressure_vector[0] * 1024.0));
                 InterlockedAdd(translational_forces[oi][1], (int)(pressure_vector[1] * 1024.0));
                 InterlockedAdd(translational_forces[oi][2], (int)(pressure_vector[2] * 1024.0));
+                float3 com = o_dynamic.position;
+                float3 torque = cross((meshobs_closest_point - com),pressure_vector);
+                InterlockedAdd(torque_forces[oi][0], (int)(torque[0] * 1024.0));
+                InterlockedAdd(torque_forces[oi][1], (int)(torque[1] * 1024.0));
+                InterlockedAdd(torque_forces[oi][2], (int)(torque[2] * 1024.0));
                 //InterlockedAdd(translational_forces[oi][0], 1);
                 //InterlockedAdd(translational_forces[oi][1], 1);
                 //InterlockedAdd(translational_forces[oi][2], 1);

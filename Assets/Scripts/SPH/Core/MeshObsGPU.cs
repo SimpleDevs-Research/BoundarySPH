@@ -532,10 +532,10 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.SetBuffer(checkForProjectionKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"triangles_dynamic", _BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"vertices_dynamic", _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
-        //_SHADER.SetBuffer(checkForProjectionKernel,"obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic", _BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        _SHADER.SetBuffer(checkForProjectionKernel,"torque_forces",_BM.MESHOBS_TORQUE_FORCES_BUFFER);
         // Apply the pressures Kernel
         _SHADER.SetBuffer(applyPressuresKernel, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(applyPressuresKernel, "translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
