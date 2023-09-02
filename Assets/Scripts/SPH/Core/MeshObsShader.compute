@@ -579,9 +579,9 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
         if (meshobs_found == 1) {
             float3 closest_to_proj = particle.position - meshobs_closest_point;
             float s = sign(dot(closest_to_proj,meshobs_closest_normal));
-            if (length(closest_to_proj) <= 1.5*particleRenderRadius && s >= 0.0) {
+            if (length(closest_to_proj) <= 2.0*particleRenderRadius && s >= 0.0) {
                 // At this point, we merely have to apply the pressure value of this grid cell in the direction towards the closest point
-                float w = min( 1.0, max(0.0, (1.5*particleRenderRadius - length(closest_to_proj))/(1.5*particleRenderRadius) ));
+                float w = min( 1.0, max(0.0, (2.0*particleRenderRadius - length(closest_to_proj))/(2.0*particleRenderRadius) ));
                 float3 pressure_vector = normalize(meshobs_closest_point - particle.position) * particles[id].force * w;
                 InterlockedAdd(translational_forces[oi][0], (int)(pressure_vector[0] * 1024.0));
                 InterlockedAdd(translational_forces[oi][1], (int)(pressure_vector[1] * 1024.0));

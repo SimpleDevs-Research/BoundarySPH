@@ -85,7 +85,9 @@ public class PressureRenderer : MonoBehaviour
         _SHADER.SetFloat("radius",_PC.h);
 
         // === OBSTACLE CONFIGURATIONS
-        _SHADER.SetInt("numObstacles", _OC.numObstacles);
+        if (_OC != null) {
+            _SHADER.SetInt("numObstacles", _OC.numObstacles);
+        }
 
         // Update variables that may change over time due to modifying inspector values
         UpdateShaderVariables();
@@ -151,14 +153,17 @@ public class PressureRenderer : MonoBehaviour
         _SHADER.SetBuffer(_CONDENSE_PRESSURES, "grid", PRESSURE_GRID_BUFFER);
         _SHADER.SetBuffer(_CONDENSE_PRESSURES, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
 
-        _SHADER.SetBuffer(_APPLY_PRESSURES, "grid", PRESSURE_GRID_BUFFER);
-        _SHADER.SetBuffer(_APPLY_PRESSURES, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(_APPLY_PRESSURES, "obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
-        _SHADER.SetBuffer(_APPLY_PRESSURES, "triangles_dynamic",_BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(_APPLY_PRESSURES, "vertices_dynamic",_BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(_APPLY_PRESSURES, "edges_dynamic",_BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(_APPLY_PRESSURES, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
-        _SHADER.SetBuffer(_APPLY_PRESSURES, "translational_pressure_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        if (_OC != null) {
+            _SHADER.SetBuffer(_APPLY_PRESSURES, "grid", PRESSURE_GRID_BUFFER);
+            _SHADER.SetBuffer(_APPLY_PRESSURES, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+            _SHADER.SetBuffer(_APPLY_PRESSURES, "obstacles_static", _BM.MESHOBS_OBSTACLES_STATIC_BUFFER);
+            _SHADER.SetBuffer(_APPLY_PRESSURES, "triangles_dynamic",_BM.MESHOBS_TRIANGLES_DYNAMIC_BUFFER);
+            _SHADER.SetBuffer(_APPLY_PRESSURES, "vertices_dynamic",_BM.MESHOBS_VERTICES_DYNAMIC_BUFFER);
+            _SHADER.SetBuffer(_APPLY_PRESSURES, "edges_dynamic",_BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
+            _SHADER.SetBuffer(_APPLY_PRESSURES, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
+            _SHADER.SetBuffer(_APPLY_PRESSURES, "translational_pressure_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        }
+        
 
         _GRID.grid_cell_material.SetBuffer(grid_cell_buffer_property, PRESSURE_GRID_BUFFER);
         _GRID.grid_cell_material.SetBuffer(grid_cell_render_limits_property, GRID_RENDER_LIMITS_BUFFER);
