@@ -35,6 +35,7 @@ float viscosity_coefficient;    // The viscosity coefficient for SPH. The higher
 float rest_density;             // The density of the fluid at the ideal state
 float damping;                  // The amount of influence that boundaries have on particles when particles collide with boundaries.
 float bulkModulus;
+float c;                        // The speed of sound in fluid. Used to relate density to pressure.
 
 // GPU SETTINGS 
 #define _BLOCK_SIZE 512        // How many threads can a thread group have?
@@ -404,21 +405,25 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
 
     // We update both the densities buffer and pressures buffer
     density[id.x] = _density;
-    pressure[id.x] = bulkModulus * _density;
-    particles[id.x].force = bulkModulus * _density;
+    //pressure[id.x] = bulkModulus * _density;
+    //particles[id.x].force = bulkModulus * _density;
+    pressure[id.x] = ((rest_density * (c * c))/7.0) * (pow(_density/rest_density,7)-1.0);
+    particles[id.x].force = float3(((rest_density * (c * c))/7.0) * (pow(_density/rest_density,7)-1.0),0.0,0.0);
 }
 
 // == PRESSURE FORCE CALCULATION ==
 // Helper function: calculates pressure force between the current particle and a neighbor particle
-/*
+
 float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentDensity, float otherDensity) {
     // We limit the pressure calculation to outward to prevent grouping and inward forces
-    float currentPressure = min(bulkModulus * (currentDensity - rest_density), 0.0);
-    float otherPressure = min(bulkModulus * (otherDensity - rest_density), 0.0);
+    //float currentPressure = min(bulkModulus * (currentDensity - rest_density), 0.0);
+    //float otherPressure = min(bulkModulus * (otherDensity - rest_density), 0.0);
+    float currentPressure = ((rest_density * (c * c))/7.0) * (pow(currentDensity/rest_density,7)-1.0);
+    float otherPressure = ((rest_density * (c * c))/7.0) * (pow(otherDensity/rest_density,7)-1.0);
     return particleMass * ((currentPressure + otherPressure)/(2.0 * otherDensity)) * SpikyKernelGradient3D(currentPos, otherPos, smoothingRadius);
 }
-*/
 
+/*
 float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentDensity, float otherDensity) {
     float3 diffPosition = currentPos - otherPos;
     float diffPositionLength = length(diffPosition);
@@ -433,6 +438,7 @@ float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentD
     float c5 = pow(smoothingRadius - diffPositionLength, 2);
     return c1 * c2 * c3 * c4 * c5;
 }
+*/
 
 // == VISCOSITY FORCE CALCULATION ==
 // Helper function: calculates viscosity force

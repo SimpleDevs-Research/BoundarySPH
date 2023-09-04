@@ -63,6 +63,9 @@ public class ParticleController : MonoBehaviour
     [SerializeField, Tooltip("`k` - technically the ideal gas constant, but some people (Bindel) refer this as the bulk modulus value.")]
     private float _k = 1f;
     public float k => _k;
+    [SerializeField, Tooltip("`c` - the speed of sound (10^-4 m/s, to model low Reynolds number flows). Used as a part of the `equation of state` to relate density to pressure. This is derived from the method mentioned in [https://www.sciencedirect.com/science/article/pii/S0045793021003145#b19], but the speed of sound value is derived from Morris et al. [https://www.sciencedirect.com/science/article/pii/S0021999197957764]")]
+    private float _c = 5.77f;
+    public float c => _c;
     private float _time_elapsed = 0f;
     private int _frames_elapsed = 0;
 
@@ -626,6 +629,7 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetFloat("damping", _damping_effect);
         _SPH_Shader.SetFloat("bulkModulus", _k);
         _SPH_Shader.SetFloats("g", _g);
+        _SPH_Shader.SetFloat("c", _c);
 
         if (updateDT) {
             float t = (_dt >= 0) ? _dt : Time.deltaTime;

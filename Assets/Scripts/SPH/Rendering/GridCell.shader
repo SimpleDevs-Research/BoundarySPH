@@ -55,7 +55,7 @@ Shader "SPH/GridCell"
 		    float4 finalColor = lowPressureColor;
 
     		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
-                float p = max(0.0, min(1.0, pressures_buffer[unity_InstanceID]/(0.080214*150)));
+                float p = max(0.0, min(1.0, pressures_buffer[unity_InstanceID]/(0.01)));
                 //Gizmos.color = Color.red * p + Color.blue * (1f-p);
 			    //float a = clamp(length(grid_cell_buffer[unity_InstanceID].cellPressure)/25.0, 0.0, 1.0);
 			    finalColor = lowPressureColor * (1.0-p) + highPressureColor * p; 
