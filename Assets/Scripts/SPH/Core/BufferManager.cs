@@ -24,6 +24,7 @@ public class BufferManager : MonoBehaviour
     [Header("=== GRID-related BUFFERS")]
     public ComputeBuffer PARTICLES_GRID_BUFFER;                 // The grid representation for particle position partitioning and hashing
     public ComputeBuffer PARTICLES_PRESSURE_GRID_BUFFER;        // The grid representation for particle pressure partitioning and hashing
+    public ComputeBuffer MESHOBS_GRID_BUFFER;                   // The grid representation for all obstacles (that are boids)
 
     [Header("=== MESH OBSTACLE-related BUFFERS")]
     public ComputeBuffer MESHOBS_OBSTACLES_STATIC_BUFFER;       // Stores the static characteristics of mesh obstacles
@@ -88,8 +89,10 @@ public class BufferManager : MonoBehaviour
     }
 
     public void InitializeMeshObsBuffers(int numObstacles = 1, int numTriangles = 1, int numVertices = 1, int numEdges = 1) {
+        
+
         MESHOBS_OBSTACLES_STATIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*9 + sizeof(float));
-        MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*11 + sizeof(float)*21);
+        MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*12 + sizeof(float)*21);
         MESHOBS_TRIANGLES_STATIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*9);
         MESHOBS_TRIANGLES_DYNAMIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*22);
         MESHOBS_VERTICES_DYNAMIC_BUFFER = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*9);

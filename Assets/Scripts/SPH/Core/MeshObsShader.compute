@@ -16,6 +16,7 @@ struct ObstacleStatic {
 /// Represents the DYNAMIC properties of an obstacle that change during the update lop.
 struct ObstacleDynamic {
     uint index;                  // Ref. index inside the obstacles arrays.
+    uint isBoid;
     uint2 vs;                   // [0] = starting index in the vertices arrays, [1] = the number of vertices.
     uint2 ts;                   // [0] = starting index in the triangles arrays, [1] = the number of triangles.
     uint2 es;                   // [0] = starting index in the edges arrays, [1] = the number of edges.
@@ -149,6 +150,8 @@ int PointInsideBound(float3 position, float3 lowerBounds, float3 upperBounds) {
 // ===== VARIABLES ===== //
 // ===================== //
 
+uint numGridCells;
+
 uint numObstacles;
 uint numVertices;
 uint numTriangles;
@@ -159,6 +162,9 @@ float particleRenderRadius;
 
 float3 g;
 float dt;                       // delta time - The time difference between frames.
+
+RWStructuredBuffer<int> grid;
+RWStructuredBuffer<int> obstacle_offsets;
 
 StructuredBuffer<ObstacleStatic> obstacles_static;
 RWStructuredBuffer<ObstacleDynamic> obstacles_dynamic;
@@ -358,7 +364,6 @@ void ClearAppliedPressures(uint id : SV_DispatchThreadID) {
     if (id >= (uint)numObstacles) return;
     translational_forces[id] = int3(0,0,0);
 }
-
 
 int CheckVoroniRegions(
         float3 proj,                    // the projection of 3D point onto the 2D plane
@@ -1126,3 +1131,30 @@ void CombineForces(uint id : SV_DispatchThreadID) {
     */
     //translational_forces[obstacleID] += projections[id].particle_force;
 }
+
+#pragma kernel ClearGrid
+[numthreads(64,1,1)]
+void ClearGrid(uint id : SV_DispatchThreadID) {
+    if (id >= numGridCells) return;
+    grid[id] = 0;
+}
+
+/*
+#pragma kernel UpdateGridCellCounts
+[numthreads(64,1,1)]
+void UpdateGridCellCounts(uint id : SV_DispatchThreadID) {
+    // Exit early if necessary
+    if (id >= numObstacles) return;
+    // Grab the current obstacle data
+    ObstacleDynamic o_dynamic = obstacles_dynamic[id];
+    // Check if the obstacle is a boid, and exit early if not
+    if (o_dynamic.isBoid == 0) return;
+    // Update the grid count, and add to the obstacle offsets
+    int3 gridIndices = GetGridXYZIndices(o_dynamic.position);
+    int projectedGridIndex = GetProjectedGridIndexFromXYZ(gridIndices);
+    //b.gridIndices = gridIndices;
+    //b.projectedGridIndex = projectedGridIndex;
+    InterlockedAdd(grid[projectedGridIndex], 1, obstacle_offsets[id]);
+    //boids[id] = b;
+}
+*/

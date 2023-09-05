@@ -14,6 +14,7 @@ public class MeshObsGPU : MonoBehaviour
     public class TestObstacle {
         [ReadOnly] public int obstacleID;
         public MeshObs obstacle;
+        public bool isBoid = false;
         public float mass = 1f;
         public float density = 1f;
         [Range(0f,1f)] public float frictionCoefficient = 0f;
@@ -43,12 +44,15 @@ public class MeshObsGPU : MonoBehaviour
         public bool show_gizmos => show_vertices || show_triangles || show_bounds || show_triangle_bounds || show_centroids;
     }
     
+    [Header("=== REFERENCES ===")]
     public BufferManager _BM;
+    public Grid _GRID;
     public ComputeShader _SHADER;
     public ParticleController _PARTICLE_CONTROLLER = null;
     public BoidsController _BOIDS_CONTROLLER = null;
     public List<TestObstacle> obstacles;
 
+    [Header("=== STATIC DATA ===")]
     public List<OP.ObstacleStatic> obstacles_static;
     public List<OP.TriangleStatic> triangles_static;
     public List<OP.VertexStatic> vertices_static;
@@ -310,7 +314,11 @@ public class MeshObsGPU : MonoBehaviour
     }
 
     public void Initialize() {
-        // Only run if we actually have a shader
+        // Only run if we actually have a grid or shader
+        if (_GRID == null) {
+            if (printDebugs) Debug.LogError("MeshObsGPU - ERROR: Cannot preprocess obstacles due to missing reference to a grid");
+            return;
+        }
         if (_SHADER == null) {
             if (printDebugs) Debug.LogError("MeshObsGPU - ERROR: Cannot preprocess obstacles due to missing reference to a compute shader");
             return;
@@ -341,6 +349,7 @@ public class MeshObsGPU : MonoBehaviour
             if (printDebugs) Debug.LogError("MeshObsGPU - ERROR: Cannot update obstacles due to missing particles");
             return;
         }
+
         UpdateObstacles(alwaysUpdateTransforms);
         UpdateParticlePositions();
         // Reset projections
@@ -440,6 +449,8 @@ public class MeshObsGPU : MonoBehaviour
         }
 
         // Update our variables in the shader
+        _SHADER.SetInt("numGridCells",_GRID.numGridCells);
+
         numObstacles = obstacles_static.Count;
         numVertices = vertices_static.Count;
         numTriangles = triangles_static.Count;
@@ -583,6 +594,7 @@ public class MeshObsGPU : MonoBehaviour
         o_static.mass = obstacle.mass;
         o_static.has_rb = (obstacle.enable_external_forces) ? (uint)1 : (uint)0;
         o_static.has_smr = (obstacle.obstacle.hasSkinnedMeshFilter) ? (uint)1 : (uint)0;
+        o_dynamic.isBoid = (obstacle.isBoid) ? (uint)1 : (uint)0;
         o_dynamic.density = obstacle.density;
         o_dynamic.frictionCoefficient = obstacle.frictionCoefficient;
         o_dynamic.isStatic = (obstacle.isStatic) ? (uint)1 : (uint)0;

@@ -47,6 +47,7 @@ namespace ObstaclePrimitives {
         [System.Serializable]
         public class ObstacleDynamic {
             public uint index;
+            public uint isBoid;
             public uint2 vs;
             public uint2 ts;
             public uint2 es;
@@ -335,6 +336,7 @@ namespace ObstaclePrimitives {
         [System.Serializable]
         public struct ObstacleDynamic {
             public uint index;
+            public uint isBoid;
             public uint2 vs;
             public uint2 ts;
             public uint2 es;
