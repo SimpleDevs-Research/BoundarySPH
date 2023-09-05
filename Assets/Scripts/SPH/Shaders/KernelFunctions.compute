@@ -1,0 +1,70 @@
+// == Muller et al.'s Poly6 Kernels ==
+// Primary uses: Density, Surface Tension
+// Note: Do not use with either Pressure (which uses Debrun's Spiky Kernel), or Viscosity (which uses a customized kernel)
+float Poly6Kernel3D(float3 currentPos, float3 otherPos, float kernelRadius, float pi) {
+    float dLength = length(currentPos - otherPos);
+    // We have to exit early by returning 0 if the length of the displacement is greater than the kernel smoothing radius
+    if (dLength > kernelRadius) return 0.0;
+    // Otherwise, we continue as normal
+    float k2 = kernelRadius * kernelRadius;
+    float k9 = pow(kernelRadius, 9);
+    float d2 = dLength * dLength;
+    return (315.0 / (64.0 * pi * k9)) * pow(k2 - d2,3);
+}
+float Poly6Kernel2D(float3 currentPos, float3 otherPos, float kernelRadius, float pi) {
+    float dLength = length(currentPos - otherPos);
+    // We have to exit early by returning 0 if the length of the displacement is greater than the kernel smoothing radius
+    if (dLength > kernelRadius) return 0.0;
+    // Otherwise, we continue as normal
+    float k2 = kernelRadius * kernelRadius;
+    float k8 = pow(kernelRadius, 8);
+    float d2 = dLength * dLength;
+    return (4.0 / (pi * k8)) * pow(k2 - d2, 3);
+}
+
+// == Desbrun's Spiky Kernels ==
+// Primary uses: Pressure
+// Note: This is the gradient version of the function
+float3 SpikyKernelGradient3D(float3 currentPos, float3 otherPos, float kernelRadius, float pi) {
+    float3 displacement = currentPos - otherPos;
+    float dLength = length(displacement);
+    // If the length of the displacement is greater than the smoothing radius, we dip out early
+    if (dLength > kernelRadius) return float3(0,0,0);
+    // We have an issue if the length of the displacement == 0, because we're normalizing. So we only normalize if the length is greater than 0
+    float3 dNormalized = displacement;
+    if (dLength > 0.0) dNormalized = normalize(displacement);
+    // Otherwise, we calculate the kernel and get out
+    float k6 = pow(kernelRadius,6);
+    return dNormalized * ((-45.0 / (pi * k6)) * pow(kernelRadius - dLength, 3));
+}
+float3 SpikyKernelGradient2D(float3 currentPos, float3 otherPos, float kernelRadius, float pi) {
+    float3 displacement = currentPos - otherPos;
+    float dLength = length(displacement);
+    // If the length of the displacement is greater than the smoothing radius, we dip out early
+    if (dLength > kernelRadius) return float3(0,0,0);
+    // We have an issue if the length of the displacement == 0, because we're normalizing. So we only normalize if the length is greater than 0
+    float3 dNormalized = displacement;
+    if (dLength > 0.0) dNormalized = normalize(displacement);
+    // Otherwise, we calculate the kernel and get out
+    float k5 = pow(kernelRadius, 5);
+    return dNormalized * ((-30.0 / (pi * k5)) * pow(kernelRadius - dLength, 3));
+}
+
+// == Muller et al.'s Viscosity Kernels ==
+// Primary uses: Viscosity
+float MullerViscosityKernelLaplacian3D(float3 currentPos, float3 otherPos, float kernelRadius, float pi) {
+    float dLength = length(currentPos - otherPos);
+    // If the length of the displacement is greater than the smoothing radius, we dip out early
+    if (dLength > kernelRadius) return 0.0;
+    // Otherwise, we calcualte the kernel and go out for a snack
+    float k6 = pow(kernelRadius, 6);
+    return (45.0 / (pi * k6)) * (kernelRadius - dLength);
+}
+float MullerViscosityKernelLaplacian2D(float3 currentPos, float3 otherPos, float kernelRadius, float pi) {
+    float dLength = length(currentPos - otherPos);
+    // If the length of the displacement is greater than the smoothing radius, we dip out early
+    if (dLength > kernelRadius) return 0.0;
+    // Otherwise, we calcualte the kernel and go out for a snack
+    float k5 = pow(kernelRadius, 5);
+    return (40.0 / (pi * k5)) * (kernelRadius - dLength);
+}
