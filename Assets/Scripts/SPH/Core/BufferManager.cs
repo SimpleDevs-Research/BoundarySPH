@@ -39,6 +39,8 @@ public class BufferManager : MonoBehaviour
 
     [Header("=== DEBUG SETTINGS ===")]
     [SerializeField] private bool _verbose = true;
+
+    [Header("= PARTICLES-related ARRAYS =")]
     [SerializeField] private OP.Particle[] _particles_array;
     public OP.Particle[] particles_array => _particles_array;
     [SerializeField] private int[] _particles_grid_array;
@@ -51,6 +53,10 @@ public class BufferManager : MonoBehaviour
     public float[] particles_pressures_array => _particles_pressures_array;
     [SerializeField] private OP.Projection[] _particles_external_forces_array;
     public OP.Projection[] particles_external_forces_array => _particles_external_forces_array;
+    
+    [Header("= MESHOBS-related ARRAYS =")]
+    [SerializeField] private int[] _obstacles_grid_array;
+    public int[] obstacles_grid_array => _obstacles_grid_array;
     [SerializeField] private OP.ObstacleStatic[] _obstacles_static_array;
     public OP.ObstacleStatic[] obstacles_static_array => _obstacles_static_array;
     [SerializeField] private OP.ObstacleDynamic[] _obstacles_dynamic_array;
@@ -88,8 +94,8 @@ public class BufferManager : MonoBehaviour
         if (_verbose) Debug.Log("[BUFFER MANAGER] Particle buffers initialized!");
     }
 
-    public void InitializeMeshObsBuffers(int numObstacles = 1, int numTriangles = 1, int numVertices = 1, int numEdges = 1) {
-        
+    public void InitializeMeshObsBuffers(int numGridCells = 1, int numObstacles = 1, int numTriangles = 1, int numVertices = 1, int numEdges = 1) {
+        MESHOBS_GRID_BUFFER = new ComputeBuffer(numGridCells, sizeof(int));
 
         MESHOBS_OBSTACLES_STATIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*9 + sizeof(float));
         MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*12 + sizeof(float)*21);
@@ -102,12 +108,15 @@ public class BufferManager : MonoBehaviour
         MESHOBS_TORQUE_FORCES_BUFFER = new ComputeBuffer(numObstacles, sizeof(int)*3);
         MESHOBS_VELOCITIES_BUFFER = new ComputeBuffer(numObstacles, sizeof(float)*3);
 
+        _obstacles_grid_array = new int[Mathf.Min(_obstacles_grid_array.Length, numGridCells)];
+
         _obstacles_static_array = new OP.ObstacleStatic[Mathf.Min(_obstacles_static_array.Length, numObstacles)];
         _obstacles_dynamic_array = new OP.ObstacleDynamic[Mathf.Min(_obstacles_dynamic_array.Length, numObstacles)];
         _triangles_static_array = new OP.TriangleStatic[Mathf.Min(_triangles_static_array.Length, numTriangles)];
         _triangles_dynamic_array = new OP.TriangleDynamic[Mathf.Min(_triangles_dynamic_array.Length, numTriangles)];
         _vertices_dynamic_array = new OP.VertexDynamic[Mathf.Min(_vertices_dynamic_array.Length, numVertices)];
         _edges_dynamic_array = new float3[Mathf.Min(_edges_dynamic_array.Length, numEdges)];
+        
         _translation_forces_array = new int3[Mathf.Min(_translation_forces_array.Length, numObstacles)];
 
         if (_verbose) Debug.Log("[BUFFER MANAGER] Mesh obs buffers initialized!");

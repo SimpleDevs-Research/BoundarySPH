@@ -480,7 +480,7 @@ public class MeshObsGPU : MonoBehaviour
         combineForcesKernel = _SHADER.FindKernel("CombineForces");
 
         // Initialize our buffers
-        _BM.InitializeMeshObsBuffers(numObstacles, numTriangles, numVertices, numEdges);
+        _BM.InitializeMeshObsBuffers(_GRID.numGridCells, numObstacles, numTriangles, numVertices, numEdges);
         vertices_static_buffer = new ComputeBuffer(vertices_static.Count, sizeof(uint) + sizeof(float)*6);
         edges_static_buffer = new ComputeBuffer(edges_static.Count, sizeof(uint)*5 + sizeof(float)*6);
         
