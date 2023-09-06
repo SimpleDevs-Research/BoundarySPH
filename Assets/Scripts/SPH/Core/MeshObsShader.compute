@@ -105,6 +105,30 @@ struct Projection {
     float3 e2_3DN;
 };
 
+// ===================== //
+// ===== VARIABLES ===== //
+// ===================== //
+
+uint numGridCells;
+float gridCellSize;
+float gridScalingX;
+float gridScalingY;
+float gridScalingZ;
+int3 numCellsPerAxis;
+int numGridBlocks;
+uint d;
+
+uint numObstacles;
+uint numVertices;
+uint numTriangles;
+uint numEdges;
+
+uint numParticles;
+float particleRenderRadius;
+
+float3 g;
+float dt;                       // delta time - The time difference between frames.
+
 // ============================ //
 // ===== HELPER FUNCTIONS ===== //
 // ============================ //
@@ -146,25 +170,30 @@ int PointInsideBound(float3 position, float3 lowerBounds, float3 upperBounds) {
     return 0;
 }
 
-// ===================== //
-// ===== VARIABLES ===== //
-// ===================== //
+// Getting the XYZ grid coordinates based on position
+int3 GetGridXYZIndices(float3 position) {
+    return int3(
+        floor((position[0] - gridScalingX)/gridCellSize),
+        floor((position[1] - gridScalingY)/gridCellSize),
+        floor((position[2] - gridScalingZ)/gridCellSize)
+    );
+}
+// Getting the 1D index from a grid's XYZ coordinates
+int GetProjectedGridIndexFromXYZ(int3 xyz) {
+    return xyz.x + (numCellsPerAxis[0] * xyz.y) + (numCellsPerAxis[0] * numCellsPerAxis[1] * xyz.z);
+}
 
-uint numGridCells;
-
-uint numObstacles;
-uint numVertices;
-uint numTriangles;
-uint numEdges;
-
-uint numParticles;
-float particleRenderRadius;
-
-float3 g;
-float dt;                       // delta time - The time difference between frames.
+// =================== //
+// ===== BUFFERS ===== //
+// =================== //
 
 RWStructuredBuffer<int> grid;
 RWStructuredBuffer<int> obstacle_offsets;
+RWStructuredBuffer<int> grid_offsets;
+RWStructuredBuffer<int> grid_offsets_in;
+RWStructuredBuffer<int> grid_sums_buffer;
+RWStructuredBuffer<int> grid_sums_buffer_in;
+RWStructuredBuffer<uint> rearranged_obstacles;
 
 StructuredBuffer<ObstacleStatic> obstacles_static;
 RWStructuredBuffer<ObstacleDynamic> obstacles_dynamic;
@@ -363,6 +392,82 @@ void ResetTempProjections(uint id : SV_DispatchThreadID) {
 void ClearAppliedPressures(uint id : SV_DispatchThreadID) {
     if (id >= (uint)numObstacles) return;
     translational_forces[id] = int3(0,0,0);
+}
+
+#pragma kernel ClearGrid
+[numthreads(64,1,1)]
+void ClearGrid(uint id : SV_DispatchThreadID) {
+    if (id >= numGridCells) return;
+    grid[id] = 0;
+}
+
+#pragma kernel UpdateGridCellCounts
+[numthreads(16,1,1)]
+void UpdateGridCellCounts(uint id : SV_DispatchThreadID) {
+    if (id >= numObstacles) return;
+    ObstacleDynamic o_dynamic = obstacles_dynamic[id];
+    int3 gridIndices = GetGridXYZIndices(o_dynamic.position);
+    int projectedGridIndex = GetProjectedGridIndexFromXYZ(gridIndices);
+    //b.gridIndices = gridIndices;
+    //b.projectedGridIndex = projectedGridIndex;
+    InterlockedAdd(grid[projectedGridIndex], 1, obstacle_offsets[id]);
+    //boids[id] = b;
+}
+
+#pragma kernel PrefixSum
+groupshared int temp[128];
+[numthreads(64, 1, 1)]
+void PrefixSum(uint projectedCellID : SV_DispatchThreadID, uint threadID : SV_GroupThreadID, uint groupID : SV_GroupID) {
+    int pout = 0;
+    int pin = 1;
+    // Our input is `grid`
+    temp[threadID] = grid_offsets_in[projectedCellID];
+    GroupMemoryBarrierWithGroupSync();
+    [unroll]
+    for(uint offset = 1; offset < 64; offset *= 2) {
+        pout = 1 - pout;
+        pin = 1 - pin;
+        if (threadID >= offset) {
+            temp[pout * 64 + threadID] = temp[pin * 64 + threadID] + temp[pin * 64 + threadID - offset];
+        } else {
+            temp[pout * 64 + threadID] = temp[pin * 64 + threadID];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (projectedCellID >= uint(numGridCells)) return;
+
+    // We output to `grid_offsets`
+    grid_offsets[projectedCellID] = temp[pout * 64 + threadID];
+    if (threadID == 0) {
+        // We output to `gridSumsBuffer2`
+        grid_sums_buffer[groupID] = temp[pout * 64 + 64 - 1];
+    }
+}
+#pragma kernel SumBlocks
+[numthreads(64, 1, 1)]
+void SumBlocks(uint id : SV_DISPATCHTHREADID) {
+  if (id >= uint(numGridBlocks)) return;
+  uint k = id;
+  if (k < d) grid_sums_buffer[k] = grid_sums_buffer_in[k];
+  else grid_sums_buffer[k] = grid_sums_buffer_in[k] + grid_sums_buffer_in[k - d];
+}
+#pragma kernel AddSums
+[numthreads(64, 1, 1)]
+void AddSums(uint projectedGridIndex : SV_DispatchThreadID, uint groupID : SV_GroupID) {
+  if (groupID == 0 || projectedGridIndex > uint(numGridCells)) return;
+  // Output to `grid_offsets`
+  grid_offsets[projectedGridIndex] += grid_sums_buffer_in[groupID - 1];
+}
+#pragma kernel RearrangeObstacles
+[numthreads(64, 1, 1)]
+void RearrangeObstacles(uint id : SV_DispatchThreadID) {
+  if (id >= uint(numObstacles)) return;
+  ObstacleDynamic o_dynamic = obstacles_dynamic[id];
+  int3 gridIndices = GetGridXYZIndices(o_dynamic.position);
+  int projectedGridIndex = GetProjectedGridIndexFromXYZ(gridIndices);
+  int index = grid_offsets[projectedGridIndex] - 1 - obstacle_offsets[id];
+  rearranged_obstacles[index] = id;
 }
 
 int CheckVoroniRegions(
@@ -1130,13 +1235,6 @@ void CombineForces(uint id : SV_DispatchThreadID) {
     InterlockedAdd(torque_forces[obstacleID][2], (int)(torque[2] * 1024));
     */
     //translational_forces[obstacleID] += projections[id].particle_force;
-}
-
-#pragma kernel ClearGrid
-[numthreads(64,1,1)]
-void ClearGrid(uint id : SV_DispatchThreadID) {
-    if (id >= numGridCells) return;
-    grid[id] = 0;
 }
 
 /*

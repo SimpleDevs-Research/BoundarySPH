@@ -27,6 +27,7 @@ public class BufferManager : MonoBehaviour
     public ComputeBuffer MESHOBS_GRID_BUFFER;                   // The grid representation for all obstacles (that are boids)
 
     [Header("=== MESH OBSTACLE-related BUFFERS")]
+    public ComputeBuffer MESHOBS_REARRANGED_OBSTACLES_BUFFER;   // Stores the rearranged indices of obstacles
     public ComputeBuffer MESHOBS_OBSTACLES_STATIC_BUFFER;       // Stores the static characteristics of mesh obstacles
     public ComputeBuffer MESHOBS_OBSTACLES_DYNAMIC_BUFFER;      // Stores the dynamic characteristics of mesh obstacles
     public ComputeBuffer MESHOBS_TRIANGLES_STATIC_BUFFER;       // Stores the static characteristics of mesh triangles
@@ -57,6 +58,7 @@ public class BufferManager : MonoBehaviour
     [Header("= MESHOBS-related ARRAYS =")]
     [SerializeField] private int[] _obstacles_grid_array;
     public int[] obstacles_grid_array => _obstacles_grid_array;
+    [SerializeField] private uint[] _rearranged_obstacles_array;
     [SerializeField] private OP.ObstacleStatic[] _obstacles_static_array;
     public OP.ObstacleStatic[] obstacles_static_array => _obstacles_static_array;
     [SerializeField] private OP.ObstacleDynamic[] _obstacles_dynamic_array;
@@ -96,6 +98,7 @@ public class BufferManager : MonoBehaviour
 
     public void InitializeMeshObsBuffers(int numGridCells = 1, int numObstacles = 1, int numTriangles = 1, int numVertices = 1, int numEdges = 1) {
         MESHOBS_GRID_BUFFER = new ComputeBuffer(numGridCells, sizeof(int));
+        MESHOBS_REARRANGED_OBSTACLES_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint));
 
         MESHOBS_OBSTACLES_STATIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*9 + sizeof(float));
         MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*12 + sizeof(float)*21);
@@ -109,6 +112,7 @@ public class BufferManager : MonoBehaviour
         MESHOBS_VELOCITIES_BUFFER = new ComputeBuffer(numObstacles, sizeof(float)*3);
 
         _obstacles_grid_array = new int[Mathf.Min(_obstacles_grid_array.Length, numGridCells)];
+        _rearranged_obstacles_array = new uint[Mathf.Min(_rearranged_obstacles_array.Length, numObstacles)];
 
         _obstacles_static_array = new OP.ObstacleStatic[Mathf.Min(_obstacles_static_array.Length, numObstacles)];
         _obstacles_dynamic_array = new OP.ObstacleDynamic[Mathf.Min(_obstacles_dynamic_array.Length, numObstacles)];
@@ -137,6 +141,8 @@ public class BufferManager : MonoBehaviour
         if (_particles_pressures_array.Length > 0) PARTICLES_PRESSURES_BUFFER.GetData(_particles_pressures_array);
         if (_particles_external_forces_array.Length > 0) PARTICLES_EXTERNAL_FORCES_BUFFER.GetData(_particles_external_forces_array);
 
+        if (_obstacles_grid_array.Length > 0) MESHOBS_GRID_BUFFER.GetData(_obstacles_grid_array);
+        if (_rearranged_obstacles_array.Length > 0) MESHOBS_REARRANGED_OBSTACLES_BUFFER.GetData(_rearranged_obstacles_array);
         if (_obstacles_static_array.Length > 0) MESHOBS_OBSTACLES_STATIC_BUFFER.GetData(_obstacles_static_array);
         if (_obstacles_dynamic_array.Length > 0) MESHOBS_OBSTACLES_DYNAMIC_BUFFER.GetData(_obstacles_dynamic_array);
         if (_triangles_static_array.Length > 0) MESHOBS_TRIANGLES_STATIC_BUFFER.GetData(_triangles_static_array);
@@ -157,6 +163,8 @@ public class BufferManager : MonoBehaviour
         if (PARTICLES_VISCOSITY_FORCES_BUFFER != null) PARTICLES_VISCOSITY_FORCES_BUFFER.Release();
         if (PARTICLES_EXTERNAL_FORCES_BUFFER != null) PARTICLES_EXTERNAL_FORCES_BUFFER.Release();
 
+        if (MESHOBS_GRID_BUFFER != null) MESHOBS_GRID_BUFFER.Release();
+        if (MESHOBS_REARRANGED_OBSTACLES_BUFFER != null) MESHOBS_REARRANGED_OBSTACLES_BUFFER.Release();
         if (MESHOBS_OBSTACLES_STATIC_BUFFER != null) MESHOBS_OBSTACLES_STATIC_BUFFER.Release();
         if (MESHOBS_OBSTACLES_DYNAMIC_BUFFER != null) MESHOBS_OBSTACLES_DYNAMIC_BUFFER.Release();
         if (MESHOBS_TRIANGLES_STATIC_BUFFER != null) MESHOBS_TRIANGLES_STATIC_BUFFER.Release();

@@ -71,11 +71,13 @@ public class MeshObsGPU : MonoBehaviour
     [HideInInspector] public int numObstacles, numVertices, numTriangles, numEdges;
     [HideInInspector] public int numParticles;
     
-    public ComputeBuffer vertices_static_buffer;
-    public ComputeBuffer edges_static_buffer;
+    public ComputeBuffer vertices_static_buffer, edges_static_buffer;
+    private ComputeBuffer obstacle_offsets_buffer, grid_offsets_buffer, grid_sums_buffer1, grid_sums_buffer2;
+    private int _numGridBlocks;
 
     private int resetVertexForcesKernel, updateVerticesKernel, updateTrianglesKernel, updateEdgesKernel, resetHasChangedKernel;
     private int resetTempProjectionsKernel, clearAppliedPressuresKernel, checkForProjectionKernel, applyPressuresKernel, combineForcesKernel;
+    private int clearGridKernel, UpdateGridCellCounts, prefixSumKernel, sumBlocksKernel, addSumsKernel, rearrangeObstaclesKernel;
 
     public OP.ObstacleDynamic[] obstacles_dynamic_array;
     public float3[] edges_dynamic_array, velocities_array; 
@@ -328,11 +330,13 @@ public class MeshObsGPU : MonoBehaviour
             if (printDebugs) Debug.LogError("MeshObsGPU - ERROR: Cannot preprocess obstacles due to missing particles");
             return;
         }
+        /*
         // Check if we have a boids controller. If we do, we add them to our list of obstacles
         if (_BOIDS_CONTROLLER != null && _BOIDS_CONTROLLER.numBoids > 0) {
             Debug.Log("Adding Boids");
             obstacles.AddRange(_BOIDS_CONTROLLER.boids);
-        } 
+        }
+        */
         PreprocessObstacles();
         UpdateObstacles(true);
         _initialized = true;
@@ -356,6 +360,7 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.Dispatch(resetTempProjectionsKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
         // Reset applied pressures
         _SHADER.Dispatch(clearAppliedPressuresKernel, Mathf.CeilToInt((float)numObstacles / 8f), 1, 1);
+        UpdateGridBuffers();
         // Get those projections
         _SHADER.Dispatch(checkForProjectionKernel, Mathf.CeilToInt((float)numParticles / 256f), 1, 1);
         /*
@@ -379,6 +384,30 @@ public class MeshObsGPU : MonoBehaviour
         for(int i = 0; i < numObstacles; i++) {
             obstacles[i].obstacle.position_transform.position = obstacles_dynamic_array[i].position;
         }
+    }
+
+    private void UpdateGridBuffers() {
+        // Clear Grid
+        _SHADER.Dispatch(clearGridKernel, Mathf.CeilToInt((float)_GRID.numGridCells / 64f), 1, 1);
+        // Update Grid Cell Counts
+        _SHADER.Dispatch(UpdateGridCellCounts, Mathf.CeilToInt((float)numObstacles / 16f), 1, 1);
+        // Prefix Sum
+        _SHADER.Dispatch(prefixSumKernel, _numGridBlocks, 1, 1);
+        // Sum Blocks
+        bool swap = false;
+        for (int d = 1; d < _numGridBlocks; d *= 2) {
+            _SHADER.SetBuffer(sumBlocksKernel, "grid_sums_buffer_in", swap ? grid_sums_buffer1 : grid_sums_buffer2);
+            _SHADER.SetBuffer(sumBlocksKernel, "grid_sums_buffer", swap ? grid_sums_buffer2 : grid_sums_buffer1);
+            _SHADER.SetInt("d", d);
+            _SHADER.Dispatch(sumBlocksKernel, Mathf.CeilToInt((float)_numGridBlocks / 64f), 1, 1);
+            swap = !swap;
+        }
+        // Add Sums
+        _SHADER.SetBuffer(addSumsKernel, "grid_sums_buffer_in", swap ? grid_sums_buffer1 : grid_sums_buffer2);
+        _SHADER.Dispatch(addSumsKernel, _numGridBlocks, 1, 1);
+        // Rearrange Boids
+        _SHADER.Dispatch(rearrangeObstaclesKernel, Mathf.CeilToInt((float)numObstacles / 64f), 1, 1);
+
     }
 
     void FixedUpdate() {
@@ -422,7 +451,6 @@ public class MeshObsGPU : MonoBehaviour
     }
 
     public void PreprocessObstacles() {
-
         // Initialize our lists 
         obstacles_static = new List<OP.ObstacleStatic>();
         List<OP.ObstacleDynamic> obstacles_dynamic = new List<OP.ObstacleDynamic>();
@@ -448,8 +476,16 @@ public class MeshObsGPU : MonoBehaviour
             obstacle.obstacleID = i;
         }
 
+        _numGridBlocks = Mathf.CeilToInt((float)_GRID.numGridCells / 64f);
+
         // Update our variables in the shader
         _SHADER.SetInt("numGridCells",_GRID.numGridCells);
+        _SHADER.SetFloat("gridCellSize", _GRID.gridCellSize);
+        _SHADER.SetFloat("gridScalingX", _GRID.gridScaling[0]);
+        _SHADER.SetFloat("gridScalingY", _GRID.gridScaling[1]);
+        _SHADER.SetFloat("gridScalingZ", _GRID.gridScaling[2]);
+        _SHADER.SetInts("numCellsPerAxis", _GRID.numCellsPerAxis);
+        _SHADER.SetInt("numGridBlocks", _numGridBlocks);
 
         numObstacles = obstacles_static.Count;
         numVertices = vertices_static.Count;
@@ -468,12 +504,21 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.SetFloat("dt",_dt);
 
         // Grab our kernel references
+        // Obstacle Update Kernels
         resetVertexForcesKernel = _SHADER.FindKernel("ResetVertexForces");
         updateVerticesKernel = _SHADER.FindKernel("UpdateVertices");
         updateEdgesKernel = _SHADER.FindKernel("UpdateEdges");
         updateTrianglesKernel = _SHADER.FindKernel("UpdateTriangles");
         resetHasChangedKernel = _SHADER.FindKernel("ResetHasChanged");
         clearAppliedPressuresKernel = _SHADER.FindKernel("ClearAppliedPressures");
+        // Update Grid Kernels
+        clearGridKernel = _SHADER.FindKernel("ClearGrid");
+        UpdateGridCellCounts = _SHADER.FindKernel("UpdateGridCellCounts");
+        prefixSumKernel = _SHADER.FindKernel("PrefixSum");
+        sumBlocksKernel = _SHADER.FindKernel("SumBlocks");
+        addSumsKernel = _SHADER.FindKernel("AddSums");
+        rearrangeObstaclesKernel = _SHADER.FindKernel("RearrangeObstacles");
+        // Updating Projections
         checkForProjectionKernel = _SHADER.FindKernel("CheckForProjection");
         resetTempProjectionsKernel = _SHADER.FindKernel("ResetTempProjections");
         applyPressuresKernel = _SHADER.FindKernel("ApplyPressures");
@@ -484,6 +529,10 @@ public class MeshObsGPU : MonoBehaviour
         vertices_static_buffer = new ComputeBuffer(vertices_static.Count, sizeof(uint) + sizeof(float)*6);
         edges_static_buffer = new ComputeBuffer(edges_static.Count, sizeof(uint)*5 + sizeof(float)*6);
         
+        obstacle_offsets_buffer = new ComputeBuffer(numObstacles, sizeof(int));
+        grid_offsets_buffer = new ComputeBuffer(_GRID.numGridCells, sizeof(int));
+        grid_sums_buffer1 = new ComputeBuffer(_numGridBlocks, sizeof(int));
+        grid_sums_buffer2 = new ComputeBuffer(_numGridBlocks, sizeof(int));
         
         if (_BM.PARTICLES_BUFFER == null) _BM.PARTICLES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*6);
         if (_BM.PARTICLES_EXTERNAL_FORCES_BUFFER == null) _BM.PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
@@ -536,8 +585,28 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.SetBuffer(resetTempProjectionsKernel,"particles", _BM.PARTICLES_BUFFER);
         _SHADER.SetBuffer(resetTempProjectionsKernel,"translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
         _SHADER.SetBuffer(resetTempProjectionsKernel,"torque_forces", _BM.MESHOBS_TORQUE_FORCES_BUFFER);
-        // Reset the applied pressures
+        // Clear the applied pressures
         _SHADER.SetBuffer(clearAppliedPressuresKernel, "translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        // Clear Grid
+        _SHADER.SetBuffer(clearGridKernel, "grid", _BM.MESHOBS_GRID_BUFFER);
+        // Update Grid Cell Counts
+        _SHADER.SetBuffer(UpdateGridCellCounts, "grid", _BM.MESHOBS_GRID_BUFFER);
+        _SHADER.SetBuffer(UpdateGridCellCounts, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(UpdateGridCellCounts, "obstacle_offsets", obstacle_offsets_buffer);
+        // Prefix Sum
+        _SHADER.SetBuffer(prefixSumKernel, "grid_offsets_in", _BM.MESHOBS_GRID_BUFFER);
+        _SHADER.SetBuffer(prefixSumKernel, "grid_offsets", grid_offsets_buffer);
+        _SHADER.SetBuffer(prefixSumKernel, "grid_sums_buffer", grid_sums_buffer2);
+        // Sum Blocks
+            // All buffers are declared in the Update loop - no need to declare them here
+        // Add Sums
+        _SHADER.SetBuffer(addSumsKernel, "grid_offsets", grid_offsets_buffer);
+            // `grid_sums_buffer_in` is declared in the upate loop - no need to decalre it here
+        // Rearrange Obstacles
+        _SHADER.SetBuffer(rearrangeObstaclesKernel, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(rearrangeObstaclesKernel, "rearranged_obstacles", _BM.MESHOBS_REARRANGED_OBSTACLES_BUFFER);
+        _SHADER.SetBuffer(rearrangeObstaclesKernel, "grid_offsets", grid_offsets_buffer);
+        _SHADER.SetBuffer(rearrangeObstaclesKernel, "obstacle_offsets", obstacle_offsets_buffer);
         // Check For Projections
         _SHADER.SetBuffer(checkForProjectionKernel,"particles", _BM.PARTICLES_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
@@ -965,6 +1034,10 @@ public class MeshObsGPU : MonoBehaviour
     void OnDestroy() {
         if (vertices_static_buffer != null) vertices_static_buffer.Release();
         if (edges_static_buffer != null) edges_static_buffer.Release();
+        if (obstacle_offsets_buffer != null) obstacle_offsets_buffer.Release();
+        if (grid_offsets_buffer != null) grid_offsets_buffer.Release();
+        if (grid_sums_buffer1 != null) grid_sums_buffer1.Release();
+        if (grid_sums_buffer2 != null) grid_sums_buffer2.Release();
     }
     
     // https://forum.unity.com/threads/whats-the-math-behind-transform-transformpoint.107401/
