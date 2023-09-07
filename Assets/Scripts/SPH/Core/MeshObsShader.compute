@@ -17,6 +17,7 @@ struct ObstacleStatic {
 struct ObstacleDynamic {
     uint index;                  // Ref. index inside the obstacles arrays.
     uint isBoid;
+    uint boidIndex;
     uint2 vs;                   // [0] = starting index in the vertices arrays, [1] = the number of vertices.
     uint2 ts;                   // [0] = starting index in the triangles arrays, [1] = the number of triangles.
     uint2 es;                   // [0] = starting index in the edges arrays, [1] = the number of edges.
@@ -27,6 +28,7 @@ struct ObstacleDynamic {
     float3 lowerBound;          // The lower boundary position of this obstacle's bounding box.
     float3 upperBound;          // The upper boundary position of this obstacle's bounding box.
     uint isStatic;
+    uint applyExternalForces;
     float3 centerOfMass;
     float frictionCoefficient;  // The amount of friction the object is meant to exhibit on particles.
     uint checkObstacleBounds;
@@ -103,6 +105,17 @@ struct Projection {
     float3 e2_2DN;
     float3 e1_3DN;
     float3 e2_3DN;
+};
+struct Boid2 {
+    int obstacleID;
+    float visualRange;
+    float innerRange;
+    float minSpeed;
+    float maxSpeed;
+    float turnSpeed;
+    float cohesionFactor;
+    float separationFactor;
+    float alignmentFactor;
 };
 
 // ===================== //
@@ -194,6 +207,8 @@ RWStructuredBuffer<int> grid_offsets_in;
 RWStructuredBuffer<int> grid_sums_buffer;
 RWStructuredBuffer<int> grid_sums_buffer_in;
 RWStructuredBuffer<uint> rearranged_obstacles;
+StructuredBuffer<Boid2> boid_settings;
+StructuredBuffer<float> boid_bounds;
 
 StructuredBuffer<ObstacleStatic> obstacles_static;
 RWStructuredBuffer<ObstacleDynamic> obstacles_dynamic;
@@ -1180,6 +1195,83 @@ void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
     //projections[id] = projection;
 //}
 
+void CalculateBoidDirection(inout ObstacleDynamic o, inout float3 velocity, uint id) {
+    float3 center = 0;
+    float3 close = 0;
+    float3 avgVel = 0;
+    int neighbors = 0;
+
+    // Get the projected grid index
+    int3 gridIndices = GetGridXYZIndices(o.position);
+    int projectedGridIndex = GetProjectedGridIndexFromXYZ(gridIndices);
+
+    // Initialize the new velocity from the old velocity
+    float3 newVelocity = velocity;
+
+    // Get the boid settings for this boid
+    Boid2 b = boid_settings[o.boidIndex];
+    
+    // Get the zStep
+    int zStep = numCellsPerAxis[0] * numCellsPerAxis[1];
+
+    // Iterate through neighbors
+    ObstacleDynamic other_o;
+    for (int z = projectedGridIndex - zStep; z <= projectedGridIndex + zStep; z += zStep) {
+        for (int y = z - numCellsPerAxis[0]; y <= z + numCellsPerAxis[0]; y += numCellsPerAxis[0]) {
+            int start = grid_offsets[y - 2];
+            int end = grid_offsets[y + 1];
+            for (int i = start; i < end; i++) {
+                uint otherId = rearranged_obstacles[i];
+                other_o = obstacles_dynamic[otherId];
+                // Reject if the other is not a boid
+                if (other_o.isBoid == 0) continue;
+                // Calculate the distance between the two boids
+                float dist = distance(o.position, other_o.position);
+                // If the distance is smaller than this boid's visual range, then we need to 
+                if (dist > 0.0 && dist < b.visualRange) {
+                    if (dist < b.innerRange) {
+                        close += o.position - other_o.position;
+                    }
+                    center += other_o.position;
+                    avgVel += obstacle_velocities[otherId];
+                    neighbors++;
+                }
+            }
+        }
+    }
+
+    //float distToTarget = distance(targetPos[0], boid.position) - targetRange;
+    //if (distToTarget > 0.0) boidVelocities[id] += (targetPos[0] - boid.position) * targetBias * dt;
+
+    if (neighbors > 0) {
+        center /= neighbors;
+        avgVel /= neighbors;
+
+        newVelocity += (center - o.position) * (b.cohesionFactor * dt);
+        newVelocity += (avgVel - velocity) * (b.alignmentFactor * dt);
+    }
+
+    newVelocity += close * (b.separationFactor * dt);
+    
+    
+    // Apply speed limits
+    float speed = length(newVelocity);
+    if (speed > b.maxSpeed) newVelocity = (newVelocity / speed) * b.maxSpeed;
+    else if (speed < b.minSpeed) newVelocity = (newVelocity / speed) * b.minSpeed;
+
+    // Keep in bounds
+    if (o.position[0] < boid_bounds[0]) newVelocity[0] += dt * b.turnSpeed;
+    else if (o.position[0] > boid_bounds[3]) newVelocity[0] -= dt * b.turnSpeed;
+    if (o.position[1] < boid_bounds[1]) newVelocity[1] += dt * b.turnSpeed;
+    else if (o.position[1] > boid_bounds[4]) newVelocity[1] -= dt * b.turnSpeed;
+    if (o.position[2] < boid_bounds[2]) newVelocity[2] += dt * b.turnSpeed;
+    else if (o.position[2] > boid_bounds[5]) newVelocity[2] -= dt * b.turnSpeed;
+    
+
+    // Set the new velocity
+    velocity = newVelocity;
+}
+
 #pragma kernel IntegrateObstacles
 [numthreads(16,1,1)]
 void IntegrateObstacles(uint id : SV_DispatchThreadID) {
@@ -1190,21 +1282,30 @@ void IntegrateObstacles(uint id : SV_DispatchThreadID) {
     // If the obstacle is a static one, return early
     if (o_dynamic.isStatic == 1) return;
 
-    // Get the pressure force
-    int3 translational_force = translational_forces[id];
-    float3 tForce = float3(
-        float(translational_force[0])/1024.0,
-        float(translational_force[1])/1024.0,
-        float(translational_force[2])/1024.0
-    );
-
-    // If the obstacle is a Boid, then it requires additional handling and calculation of the velocity.
+    // Get the pressure force, but only if external forces are allowed
+    float3 tForce = float3(0,0,0);
+    float3 gForce = float3(0,0,0);
+    if (o_dynamic.applyExternalForces == 1) {
+        int3 translational_force = translational_forces[id];
+        float3 tForce = float3(
+            float(translational_force[0])/1024.0,
+            float(translational_force[1])/1024.0,
+            float(translational_force[2])/1024.0
+        );
+        gForce = g;
+    }
 
     // Get the velocity of the obstacle
     float3 v = obstacle_velocities[id];
 
-    // Apply the force at a delta time
-    float3 acceleration = g + (tForce / o_dynamic.density);
+    // If the obstacle is a Boid, then it requires additional handling and calculation of the velocity.
+    // The velocity is passed through as an inout variable and will be subsequently updated as a result after this function is executed
+    if (o_dynamic.isBoid) {
+        CalculateBoidDirection(o_dynamic, v, id);
+    }
+
+    // Apply the resulting forces at a delta time, and then integrate the position
+    float3 acceleration = gForce + (tForce / o_dynamic.density);
     v += acceleration * dt;
     o_dynamic.position += v * dt;
 

@@ -48,6 +48,7 @@ namespace ObstaclePrimitives {
         public class ObstacleDynamic {
             public uint index;
             public uint isBoid;
+            public uint boidIndex;
             public uint2 vs;
             public uint2 ts;
             public uint2 es;
@@ -58,6 +59,7 @@ namespace ObstaclePrimitives {
             public float3 lowerBound;
             public float3 upperBound;
             public uint isStatic;
+            public uint applyExternalForces;
             public float3 centerOfMass;
             public float frictionCoefficient;
             public uint checkObstacleBounds;
@@ -337,6 +339,7 @@ namespace ObstaclePrimitives {
         public struct ObstacleDynamic {
             public uint index;
             public uint isBoid;
+            public uint boidIndex;
             public uint2 vs;
             public uint2 ts;
             public uint2 es;
@@ -347,6 +350,7 @@ namespace ObstaclePrimitives {
             public float3 lowerBound;
             public float3 upperBound;
             public uint isStatic;
+            public uint applyExternalForces;
             public float3 centerOfMass;
             public float frictionCoefficient;
             public uint checkObstacleBounds;
@@ -542,6 +546,19 @@ namespace ObstaclePrimitives {
             public float3 position;
             public int3 gridIndices;
             public int projectedGridIndex;
+        }
+
+        [System.Serializable]
+        public struct Boid2 {
+            public int obstacleID;
+            public float visualRange;
+            public float innerRange;
+            public float minSpeed;
+            public float maxSpeed;
+            public float turnSpeed;
+            public float cohesionFactor;
+            public float separationFactor;
+            public float alignmentFactor;
         }
 
 
