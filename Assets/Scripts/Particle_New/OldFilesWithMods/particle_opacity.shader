@@ -36,6 +36,7 @@ Shader "SPH/ParticleOpacity"
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
 			StructuredBuffer<particle> particle_buffer;
 			StructuredBuffer<float> pressure_buffer;
+			StructuredBuffer<float> render_limits_buffer;
 		#endif
 
 	void setup()
@@ -66,6 +67,11 @@ Shader "SPH/ParticleOpacity"
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
 			float a = clamp((pressure_buffer[unity_InstanceID]-0.080214)/(0.080214 * 0.25), 0.0, 1.0);
 			finalColor = defaultColor * (1.0-a) + secondaryColor * a; 
+			float3 pos = particle_buffer[unity_InstanceID].position;
+            if (
+                pos[0] < render_limits_buffer[0] || pos[1] < render_limits_buffer[1] || pos[2] < render_limits_buffer[2] 
+                || pos[0] > render_limits_buffer[3] || pos[1] > render_limits_buffer[4] || pos[2] > render_limits_buffer[5]
+            ) finalColor.a = 0.0;
 			//if (particle_buffer[unity_InstanceID].render == 0) finalColor[3] = 0.1;
 		#endif
 

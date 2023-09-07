@@ -10,6 +10,11 @@ using OP = ObstaclePrimitives.Structs;
 public class BoidsController : MonoBehaviour
 {
 
+    [System.Serializable]
+    public class Boid {
+        
+    }
+
     [Header("== REFERENCES ==")]
     [SerializeField, Tooltip("Reference to a ParticleGrid component that acts as this controller's grid system")]
     public Grid _GRID = null;

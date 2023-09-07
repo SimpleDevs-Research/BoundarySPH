@@ -4,31 +4,57 @@ using UnityEngine;
 using System.Linq;
 using Unity.Mathematics;
 using UnityEditor;
+using Random = UnityEngine.Random;
 using OP = ObstaclePrimitives.Structs;
 
 public class MeshObsGPU : MonoBehaviour
 {
+    [System.Serializable]
+    public class BoidDefaults {
+        public bool isBoid = true, checkObstacleBounds = true, checkTriangleBounds = true;
+        public float visualRange = 2f, innerRange = 0.2f;
+        public float minSpeed = 0.5f, maxSpeed = 1.5f, turnSpeed = 2f;
+        public float cohesionFactor = 0.0005f, separationFactor = 5f, alignmentFactor = 0.05f;
+    }
     // This one stays in the CPU and simply stores basic info about the obstacle. 
     // This one is NOT sent over to the GPU in any way
     [System.Serializable]
     public class TestObstacle {
-        [ReadOnly] public int obstacleID;
+        [Header("= Global Configurations =")]
+        [ReadOnly, Tooltip("Reference ID in the obstacles array.")] 
+        public int obstacleID;
+        [Tooltip("Reference to the MeshObs component of this scene entity.")] 
         public MeshObs obstacle;
-        public bool isBoid = false;
-        public float mass = 1f;
-        public float density = 1f;
-        [Range(0f,1f)] public float frictionCoefficient = 0f;
-        public bool isStatic = true;
+
+        [Header("= Mesh Obs Settings =")]
+        [Tooltip("Controls the slip/no-slip condition for this surface"), Range(0f,1f)] 
+        public float frictionCoefficient = 0f;
+        [Tooltip("During the BC check, should we limit the check to only the particles in the obstacle's boundaries?")]
         public bool checkObstacleBounds = true;
+        [Tooltip("DUring the BC check, should we limit the check to only the particles in each triangle's boundaries?")]
         public bool checkTriangleBounds = true;
-        public bool enable_external_forces = false;
+        [Tooltip("")]
         public bool alwaysUpdate = false;
+        
+        [Header("= Integration Settings =")]
+        public bool isStatic = true;
+        public bool enable_external_forces = false;
+
+        [Header("= Boid Settings =")]
+        public bool isBoid = false;
+        public float visualRange = 2f, innerRange = 0.2f;
+        public float minSpeed = 0.5f, maxSpeed = 1.5f, turnSpeed = 2f;
+        public float cohesionFactor = 0.0005f, separationFactor = 5f, alignmentFactor = 0.05f;
+        public float mass = 1f;
+        public float density = 1f;        
+        
         [HideInInspector] public float prevDensity = 1f;
         [HideInInspector] public float prevFriction = 0f;
         [HideInInspector] public bool prevIsStatic = true;
         [HideInInspector] public bool prevCheckObstacleBounds = true;
         [HideInInspector] public bool prevCheckTriangleBounds = true;
 
+        [Header("= Debug/Gizmo Configs =")]
         public bool show_vertex_positions = true;
         public bool show_vertex_normals = true;
         public bool show_vertex_forces = true;
@@ -38,7 +64,6 @@ public class MeshObsGPU : MonoBehaviour
         public bool show_centroids = true;
         public bool show_bounds = true;
         public bool show_triangle_bounds = true;
-
         public bool show_vertices => show_vertex_positions || show_vertex_normals || show_vertex_forces;
         public bool show_triangles => show_face_normals || show_2D_edge_normals || show_centroids || show_triangle_bounds;
         public bool show_gizmos => show_vertices || show_triangles || show_bounds || show_triangle_bounds || show_centroids;
@@ -50,7 +75,14 @@ public class MeshObsGPU : MonoBehaviour
     public ComputeShader _SHADER;
     public ParticleController _PARTICLE_CONTROLLER = null;
     public BoidsController _BOIDS_CONTROLLER = null;
+
+    [Header("== OBSTACLES AND BOIDS ===")]
     public List<TestObstacle> obstacles;
+    [SerializeField] private BoidDefaults _boidDefaults;
+    public List<TestObstacle> boids;
+    [SerializeField] private Transform _boidParent;
+    [SerializeField] private int _boidSpawnSectionIndex = -1;
+    [SerializeField] private MeshObs _boidPrefab;
 
     [Header("=== STATIC DATA ===")]
     public List<OP.ObstacleStatic> obstacles_static;
@@ -68,7 +100,7 @@ public class MeshObsGPU : MonoBehaviour
     [SerializeField] private bool drawProjectionGizmos = false;
     private bool drawGizmos => drawObstacleGizmos || drawProjectionGizmos;
 
-    [HideInInspector] public int numObstacles, numVertices, numTriangles, numEdges;
+    [ReadOnly] public int numObstacles, numVertices, numTriangles, numEdges;
     [HideInInspector] public int numParticles;
     
     public ComputeBuffer vertices_static_buffer, edges_static_buffer;
@@ -76,7 +108,7 @@ public class MeshObsGPU : MonoBehaviour
     private int _numGridBlocks;
 
     private int resetVertexForcesKernel, updateVerticesKernel, updateTrianglesKernel, updateEdgesKernel, resetHasChangedKernel;
-    private int resetTempProjectionsKernel, clearAppliedPressuresKernel, checkForProjectionKernel, applyPressuresKernel, combineForcesKernel;
+    private int resetTempProjectionsKernel, clearAppliedPressuresKernel, checkForProjectionKernel, integrateObstaclesKernel, combineForcesKernel;
     private int clearGridKernel, UpdateGridCellCounts, prefixSumKernel, sumBlocksKernel, addSumsKernel, rearrangeObstaclesKernel;
 
     public OP.ObstacleDynamic[] obstacles_dynamic_array;
@@ -87,6 +119,52 @@ public class MeshObsGPU : MonoBehaviour
 
     [SerializeField] private bool printDebugs = true;
     private bool _initialized = false;
+
+    public void ResetBoidsToDefaults() {
+        // This function resets each existing boid record in the `_boids` list to that of the designated presets.
+        foreach(TestObstacle boid in boids) {
+            boid.isBoid = true;
+            boid.checkObstacleBounds = _boidDefaults.checkObstacleBounds;
+            boid.checkTriangleBounds = _boidDefaults.checkTriangleBounds;
+            boid.visualRange = _boidDefaults.visualRange;
+            boid.innerRange = _boidDefaults.innerRange;
+            boid.minSpeed = _boidDefaults.minSpeed;
+            boid.maxSpeed = _boidDefaults.maxSpeed;
+            boid.turnSpeed = _boidDefaults.turnSpeed;
+            boid.cohesionFactor = _boidDefaults.cohesionFactor;
+            boid.separationFactor = _boidDefaults.separationFactor;
+            boid.alignmentFactor = _boidDefaults.alignmentFactor;
+        }
+    }
+
+    public void GenerateBoidTransforms() {
+        // This function looks at the total # of entries in the `boids` list and generates only the transforms.
+        // The transforms' rotation and position are randomized, consequently.
+        // Firstly, we need to determine the spawn area where we can spawn the boids
+        float[] spawnBounds = (_boidSpawnSectionIndex != -1) 
+            ? _GRID.sections[_boidSpawnSectionIndex].bounds
+            : _GRID.innerBounds;
+        if (_boidParent == null) _boidParent = this.transform;
+        for(int i = 0; i < boids.Count; i++) {
+            if (boids[i].obstacle != null) return;
+            Vector3 pos = new Vector3(
+                Random.Range(spawnBounds[0],spawnBounds[3]),
+                Random.Range(spawnBounds[1],spawnBounds[4]),
+                Random.Range(spawnBounds[2],spawnBounds[5])
+            );
+            Vector3 rot = new Vector3(
+                Random.Range(-1f,1f),
+                Random.Range(-1f,1f),
+                Random.Range(-1f,1f)
+            );
+            MeshObs newBoid = Instantiate(
+                _boidPrefab,
+                pos, Quaternion.LookRotation(rot),
+                _boidParent
+            ) as MeshObs;
+            boids[i].obstacle = newBoid;
+        }
+    }
 
     void OnDrawGizmos() {
         
@@ -363,16 +441,8 @@ public class MeshObsGPU : MonoBehaviour
         UpdateGridBuffers();
         // Get those projections
         _SHADER.Dispatch(checkForProjectionKernel, Mathf.CeilToInt((float)numParticles / 256f), 1, 1);
-        /*
-        _SHADER.Dispatch(
-            checkForProjectionKernel, 
-            Mathf.CeilToInt((float)numParticles / 32f), 
-            Mathf.CeilToInt((float)numTriangles / 16f), 
-            1
-        );
-        */
-        // Apply forces to any obstacles that aren't static
-        _SHADER.Dispatch(applyPressuresKernel, Mathf.CeilToInt((float)numObstacles / 8f), 1, 1);
+        // Integrate positions of obstacles, depending on if they're boids or not and if they're static/non-static
+        _SHADER.Dispatch(integrateObstaclesKernel, Mathf.CeilToInt((float)numObstacles / 16f), 1, 1);
         // Combine projection forces
         //_SHADER.Dispatch(combineForcesKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
 
@@ -381,9 +451,19 @@ public class MeshObsGPU : MonoBehaviour
         _BM.MESHOBS_VELOCITIES_BUFFER.GetData(velocities_array);
         _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER.GetData(obstacles_dynamic_array);
 
-        for(int i = 0; i < numObstacles; i++) {
-            obstacles[i].obstacle.position_transform.position = obstacles_dynamic_array[i].position;
+        /*
+        Debug.Log($"{numObstacles} : {obstacles.Count} : {boids.Count}");
+        foreach(TestObstacle obstacle in obstacles) {
+            obstacle.obstacle.position_transform.position = obstacles_dynamic_array[obstacle.obstacleID].position;
         }
+        foreach(TestObstacle boid in boids) {
+             boid.obstacle.position_transform.position = obstacles_dynamic_array[boid.obstacleID].position;
+        }
+        //for(int i = 0; i < numObstacles; i++) {
+        //    if (i < obstacles.Count) obstacles[i].obstacle.position_transform.position = obstacles_dynamic_array[i].position;
+        //    else boids[(i-obstacles.Count)].obstacle.position_transform.position = obstacles_dynamic_array[i].position;
+        //}
+        */
     }
 
     private void UpdateGridBuffers() {
@@ -475,6 +555,19 @@ public class MeshObsGPU : MonoBehaviour
             obstacle.obstacle.position_transform.hasChanged = true;
             obstacle.obstacleID = i;
         }
+        for(int j = 0; j < boids.Count; j++) {
+            TestObstacle boid = boids[j];
+            PreprocessObstacle(
+                boid,
+                obstacles.Count + j,
+                ref obstacles_static, ref obstacles_dynamic,
+                ref vertices_static, ref vertices_dynamic,
+                ref triangles_static, ref triangles_dynamic,
+                ref edges_static, ref edges_dynamic
+            );
+            boid.obstacle.position_transform.hasChanged = true;
+            boid.obstacleID = obstacles.Count + j;
+        }
 
         _numGridBlocks = Mathf.CeilToInt((float)_GRID.numGridCells / 64f);
 
@@ -521,7 +614,7 @@ public class MeshObsGPU : MonoBehaviour
         // Updating Projections
         checkForProjectionKernel = _SHADER.FindKernel("CheckForProjection");
         resetTempProjectionsKernel = _SHADER.FindKernel("ResetTempProjections");
-        applyPressuresKernel = _SHADER.FindKernel("ApplyPressures");
+        integrateObstaclesKernel = _SHADER.FindKernel("IntegrateObstacles");
         combineForcesKernel = _SHADER.FindKernel("CombineForces");
 
         // Initialize our buffers
@@ -617,9 +710,9 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.SetBuffer(checkForProjectionKernel,"translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"torque_forces",_BM.MESHOBS_TORQUE_FORCES_BUFFER);
         // Apply the pressures Kernel
-        _SHADER.SetBuffer(applyPressuresKernel, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
-        _SHADER.SetBuffer(applyPressuresKernel, "translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
-        _SHADER.SetBuffer(applyPressuresKernel, "obstacle_velocities", _BM.MESHOBS_VELOCITIES_BUFFER);
+        _SHADER.SetBuffer(integrateObstaclesKernel, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
+        _SHADER.SetBuffer(integrateObstaclesKernel, "translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
+        _SHADER.SetBuffer(integrateObstaclesKernel, "obstacle_velocities", _BM.MESHOBS_VELOCITIES_BUFFER);
         // Combine Forces Kernel
         _SHADER.SetBuffer(combineForcesKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
         _SHADER.SetBuffer(combineForcesKernel,"triangles_static", _BM.MESHOBS_TRIANGLES_STATIC_BUFFER);
@@ -938,6 +1031,7 @@ public class MeshObsGPU : MonoBehaviour
 
     public void UpdateObstacles(bool forceUpdate = false) {
         MeshObs mo;
+        int ob_index;
         bool needsUpdating = false;
 
         // We always reset the vertex forces
@@ -986,6 +1080,59 @@ public class MeshObsGPU : MonoBehaviour
                         for(int vi = 0; vi < vs.Length; vi++) {
                             int vi2 = vi + (int)obstacles_static[i].vs[0];
                             vd[vi2].force = obstacles_static[i].mass * (vs[vi] - vd[vi2].position)/_dt;
+                            vd[vi2].position = vs[vi];
+                        }
+                        _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER.SetData(vd);
+                    }
+                }
+                needsUpdating = true;
+            }
+        }
+
+        for(int i = 0; i < boids.Count; i++) {
+            // Check if the transform has been changed in any way
+            mo = boids[i].obstacle; 
+            ob_index = boids[i].obstacleID;
+            if (
+                    boids[i].alwaysUpdate
+                    || mo.position_transform.hasChanged 
+                    || boids[i].prevDensity != boids[i].density
+                    || boids[i].prevFriction != boids[i].frictionCoefficient 
+                    || boids[i].prevIsStatic != boids[i].isStatic
+                    || boids[i].prevCheckObstacleBounds != boids[i].checkObstacleBounds
+                    || boids[i].prevCheckTriangleBounds != boids[i].checkTriangleBounds
+                    || forceUpdate
+            ) {
+                //  We need to update the associated TestObjectDynamic
+                obstacles_dynamic_array[ob_index].index = (uint)(obstacles.Count + i);
+                obstacles_dynamic_array[ob_index].position = new(mo.position_transform.position.x, mo.position_transform.position.y, mo.position_transform.position.z);
+                obstacles_dynamic_array[ob_index].rotation = new(mo.position_transform.rotation.x, mo.position_transform.rotation.y, mo.position_transform.rotation.z, mo.position_transform.rotation.w);
+                obstacles_dynamic_array[ob_index].scale = new(mo.position_transform.lossyScale.x, mo.position_transform.lossyScale.y, mo.position_transform.lossyScale.z);
+                obstacles_dynamic_array[ob_index].lowerBound = obstacles_dynamic_array[ob_index].position;
+                obstacles_dynamic_array[ob_index].upperBound = obstacles_dynamic_array[ob_index].position;
+                //Rigidbody rb = obstacles[i].obstacle.rb;
+                //if (rb != null) obstacles_dynamic_array[i].centerOfMass = new(rb.centerOfMass.x, rb.centerOfMass.y, rb.centerOfMass.z);
+                obstacles_dynamic_array[ob_index].density = obstacles[i].density;
+                obstacles_dynamic_array[ob_index].frictionCoefficient = obstacles[i].frictionCoefficient;
+                obstacles_dynamic_array[ob_index].isStatic = (boids[i].isStatic) ? (uint)1 : (uint)0;
+                obstacles_dynamic_array[ob_index].checkObstacleBounds = (boids[i].checkObstacleBounds) ? (uint)1 : (uint)0;
+                obstacles_dynamic_array[ob_index].checkTriangleBounds = (boids[i].checkTriangleBounds) ? (uint)1 : (uint)0;
+                obstacles_dynamic_array[ob_index].hasChanged = 1;
+                boids[i].prevDensity = boids[i].density;
+                boids[i].prevFriction = boids[i].frictionCoefficient;
+                boids[i].prevIsStatic = boids[i].isStatic;
+                boids[i].prevCheckObstacleBounds = boids[i].checkObstacleBounds;
+                boids[i].prevCheckTriangleBounds = boids[i].checkTriangleBounds;
+                if (boids[i].obstacle.hasSkinnedMeshFilter) {
+                    // We have to grab the vertices manually
+                    float3[] vs = boids[i].obstacle.GetWorldVertices();
+                    if (vs != null) {
+                        // We can update the vertices in the VS buffer
+                        OP.VertexDynamic[] vd = new OP.VertexDynamic[numVertices];
+                        _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER.GetData(vd);
+                        for(int vi = 0; vi < vs.Length; vi++) {
+                            int vi2 = vi + (int)obstacles_static[ob_index].vs[0];
+                            vd[vi2].force = obstacles_static[ob_index].mass * (vs[vi] - vd[vi2].position)/_dt;
                             vd[vi2].position = vs[vi];
                         }
                         _BM.MESHOBS_VERTICES_DYNAMIC_BUFFER.SetData(vd);

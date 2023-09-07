@@ -1180,9 +1180,9 @@ void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
     //projections[id] = projection;
 //}
 
-#pragma kernel ApplyPressures
-[numthreads(8,1,1)]
-void ApplyPressures(uint id : SV_DispatchThreadID) {
+#pragma kernel IntegrateObstacles
+[numthreads(16,1,1)]
+void IntegrateObstacles(uint id : SV_DispatchThreadID) {
     if (id >= (uint)numObstacles) return;
 
     // Get the dynamic properties of the current obstacle
@@ -1197,6 +1197,8 @@ void ApplyPressures(uint id : SV_DispatchThreadID) {
         float(translational_force[1])/1024.0,
         float(translational_force[2])/1024.0
     );
+
+    // If the obstacle is a Boid, then it requires additional handling and calculation of the velocity.
 
     // Get the velocity of the obstacle
     float3 v = obstacle_velocities[id];
@@ -1236,23 +1238,3 @@ void CombineForces(uint id : SV_DispatchThreadID) {
     */
     //translational_forces[obstacleID] += projections[id].particle_force;
 }
-
-/*
-#pragma kernel UpdateGridCellCounts
-[numthreads(64,1,1)]
-void UpdateGridCellCounts(uint id : SV_DispatchThreadID) {
-    // Exit early if necessary
-    if (id >= numObstacles) return;
-    // Grab the current obstacle data
-    ObstacleDynamic o_dynamic = obstacles_dynamic[id];
-    // Check if the obstacle is a boid, and exit early if not
-    if (o_dynamic.isBoid == 0) return;
-    // Update the grid count, and add to the obstacle offsets
-    int3 gridIndices = GetGridXYZIndices(o_dynamic.position);
-    int projectedGridIndex = GetProjectedGridIndexFromXYZ(gridIndices);
-    //b.gridIndices = gridIndices;
-    //b.projectedGridIndex = projectedGridIndex;
-    InterlockedAdd(grid[projectedGridIndex], 1, obstacle_offsets[id]);
-    //boids[id] = b;
-}
-*/
