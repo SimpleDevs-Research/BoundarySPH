@@ -79,11 +79,13 @@ public class ParticleController : MonoBehaviour
     int velocity_buffer_property = Shader.PropertyToID("velocity_buffer");
     int grid_cell_buffer_property = Shader.PropertyToID("grid_cell_buffer");
     int render_limits_property = Shader.PropertyToID("render_limits_buffer");
+    int render_denom_property = Shader.PropertyToID("velocity_denom");
 
     public enum RenderType { Off, Particles, ParticlesTouchingObstacles, GridCells, Both }
     [Header("== DEBUG CONTROLS ==")]
     [SerializeField] private RenderType _renderType = RenderType.Particles;
-    [SerializeField] private float[] _gridCellRenderLimits;
+    [SerializeField] private float[] _renderLimits;
+    [SerializeField, Range(0.001f,30f)] private float _renderDenom = 10f;
 
     private float t;
 
@@ -631,6 +633,13 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetFloats("g", _g);
         _SPH_Shader.SetFloat("c", _c);
 
+        _renderLimits[0] = Mathf.Max(_renderLimits[0],_GRID.outerBounds[0]);
+        _renderLimits[1] = Mathf.Max(_renderLimits[1],_GRID.outerBounds[1]);
+        _renderLimits[2] = Mathf.Max(_renderLimits[2],_GRID.outerBounds[2]);
+        _renderLimits[3] = Mathf.Min(_renderLimits[3],_GRID.outerBounds[3]);
+        _renderLimits[4] = Mathf.Min(_renderLimits[4],_GRID.outerBounds[4]);
+        _renderLimits[5] = Mathf.Min(_renderLimits[5],_GRID.outerBounds[5]);
+
         if (updateDT) {
             float t = (_dt >= 0) ? _dt : Time.deltaTime;
             _SPH_Shader.SetFloat("dt", t);
@@ -687,13 +696,7 @@ public class ParticleController : MonoBehaviour
         BOUNDS_BUFFER.SetData(_GRID.outerBounds);
 
         RENDER_LIMITS_BUFFER = new ComputeBuffer(6, sizeof(float));
-        _gridCellRenderLimits[0] = Mathf.Max(_gridCellRenderLimits[0],_GRID.outerBounds[0]);
-        _gridCellRenderLimits[1] = Mathf.Max(_gridCellRenderLimits[1],_GRID.outerBounds[1]);
-        _gridCellRenderLimits[2] = Mathf.Max(_gridCellRenderLimits[2],_GRID.outerBounds[2]);
-        _gridCellRenderLimits[3] = Mathf.Min(_gridCellRenderLimits[3],_GRID.outerBounds[3]);
-        _gridCellRenderLimits[4] = Mathf.Min(_gridCellRenderLimits[4],_GRID.outerBounds[4]);
-        _gridCellRenderLimits[5] = Mathf.Min(_gridCellRenderLimits[5],_GRID.outerBounds[5]);
-        RENDER_LIMITS_BUFFER.SetData(_gridCellRenderLimits);
+        RENDER_LIMITS_BUFFER.SetData(_renderLimits);
 
         CELL_LIMITS_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(int)*9 + sizeof(float)*3);
         OP.CellLimits[] cellLimits = new OP.CellLimits[_GRID.numGridCells];
@@ -855,12 +858,15 @@ public class ParticleController : MonoBehaviour
             if (!_recording_saved && (_time_elapsed >= _record_duration || _time_elapsed + _dt > _record_duration)) StartCoroutine(SaveRecording());
         }
 
+        RENDER_LIMITS_BUFFER.SetData(_renderLimits);
         switch(_renderType) {
             case RenderType.Particles:
                 _GRID.particle_material.SetFloat(size_property, particleRenderSize);
                 _GRID.particle_material.SetFloat(num_particles_per_cell_property, (float)_numParticlesPerGridCell);
+                _GRID.particle_material.SetFloat(render_denom_property, _renderDenom);
                 _GRID.particle_material.SetInt(render_touching_property, 0);
                 _GRID.particle_material.SetBuffer(pressure_buffer_property, _BM.PARTICLES_PRESSURES_BUFFER);
+                _GRID.particle_material.SetBuffer(velocity_buffer_property, _BM.PARTICLES_VELOCITIES_BUFFER);
                 _GRID.particle_material.SetBuffer(particle_buffer_property, _BM.PARTICLES_BUFFER);
                 _GRID.particle_material.SetBuffer(render_limits_property, RENDER_LIMITS_BUFFER);
                 Graphics.DrawMeshInstancedIndirect(
@@ -875,9 +881,11 @@ public class ParticleController : MonoBehaviour
             case RenderType.ParticlesTouchingObstacles:
                 _GRID.particle_material.SetFloat(size_property, particleRenderSize);
                 _GRID.particle_material.SetFloat(num_particles_per_cell_property, (float)_numParticlesPerGridCell);
+                _GRID.particle_material.SetFloat(render_denom_property, _renderDenom);
                 _GRID.particle_material.SetInt(render_touching_property, 1);
                 _GRID.particle_material.SetBuffer(pressure_buffer_property, _BM.PARTICLES_PRESSURES_BUFFER);
                 _GRID.particle_material.SetBuffer(particle_buffer_property, _BM.PARTICLES_BUFFER);
+                _GRID.particle_material.SetBuffer(velocity_buffer_property, _BM.PARTICLES_VELOCITIES_BUFFER);
                 _GRID.particle_material.SetBuffer(render_limits_property, RENDER_LIMITS_BUFFER);
                 Graphics.DrawMeshInstancedIndirect(
                     _GRID.particle_mesh, 

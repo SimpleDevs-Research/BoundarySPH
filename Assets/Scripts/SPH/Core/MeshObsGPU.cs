@@ -12,9 +12,12 @@ public class MeshObsGPU : MonoBehaviour
     [System.Serializable]
     public class BoidDefaults {
         public bool isBoid = true, checkObstacleBounds = true, checkTriangleBounds = true;
+        public bool applyExternalForces = false, applyGravity = false;
         public float visualRange = 2f, innerRange = 0.2f;
         public float minSpeed = 0.5f, maxSpeed = 1.5f, turnSpeed = 2f;
         public float cohesionFactor = 0.0005f, separationFactor = 5f, alignmentFactor = 0.05f;
+        public float meshTurnSpeed = 2f;
+        public float density = 1f;
     }
     // This one stays in the CPU and simply stores basic info about the obstacle. 
     // This one is NOT sent over to the GPU in any way
@@ -39,6 +42,7 @@ public class MeshObsGPU : MonoBehaviour
         [Header("= Integration Settings =")]
         public bool isStatic = true;
         public bool applyExternalForces = false;
+        public bool applyGravity = false;
 
         [Header("= Boid Settings =")]
         public bool isBoid = false;
@@ -53,6 +57,7 @@ public class MeshObsGPU : MonoBehaviour
         [HideInInspector] public float prevFriction = 0f;
         [HideInInspector] public bool prevIsStatic = true;
         [HideInInspector] public bool prevApplyExternalForces = false;
+        [HideInInspector] public bool prevApplyGravity = false;
         [HideInInspector] public bool prevCheckObstacleBounds = true;
         [HideInInspector] public bool prevCheckTriangleBounds = true;
 
@@ -88,9 +93,9 @@ public class MeshObsGPU : MonoBehaviour
 
     [Header("=== STATIC DATA ===")]
     public List<OP.ObstacleStatic> obstacles_static;
-    public List<OP.TriangleStatic> triangles_static;
-    public List<OP.VertexStatic> vertices_static;
-    public List<OP.EdgeStatic> edges_static;
+    //public List<OP.TriangleStatic> triangles_static;
+    //public List<OP.VertexStatic> vertices_static;
+    //public List<OP.EdgeStatic> edges_static;
     public List<OP.Boid2> boid_settings;
     public List<float3> obstacle_velocities;
 
@@ -132,6 +137,8 @@ public class MeshObsGPU : MonoBehaviour
             boid.isBoid = true;
             boid.checkObstacleBounds = _boidDefaults.checkObstacleBounds;
             boid.checkTriangleBounds = _boidDefaults.checkTriangleBounds;
+            boid.applyExternalForces = _boidDefaults.applyExternalForces;
+            boid.applyGravity = _boidDefaults.applyGravity;
             boid.visualRange = _boidDefaults.visualRange;
             boid.innerRange = _boidDefaults.innerRange;
             boid.minSpeed = _boidDefaults.minSpeed;
@@ -140,6 +147,8 @@ public class MeshObsGPU : MonoBehaviour
             boid.cohesionFactor = _boidDefaults.cohesionFactor;
             boid.separationFactor = _boidDefaults.separationFactor;
             boid.alignmentFactor = _boidDefaults.alignmentFactor;
+            boid.meshTurnSpeed = _boidDefaults.meshTurnSpeed;
+            boid.density = _boidDefaults.density;
         }
     }
 
@@ -452,11 +461,11 @@ public class MeshObsGPU : MonoBehaviour
         // Combine projection forces
         //_SHADER.Dispatch(combineForcesKernel, Mathf.CeilToInt((float)numParticles / 64f), 1, 1);
 
-        _BM.MESHOBS_TRANSLATION_FORCES_BUFFER.GetData(translational_forces_array);
-        _BM.MESHOBS_TORQUE_FORCES_BUFFER.GetData(torque_forces_array);
+        //_BM.MESHOBS_TRANSLATION_FORCES_BUFFER.GetData(translational_forces_array);
+        //_BM.MESHOBS_TORQUE_FORCES_BUFFER.GetData(torque_forces_array);
         _BM.MESHOBS_VELOCITIES_BUFFER.GetData(obstacle_velocities_array);
         _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER.GetData(obstacles_dynamic_array);
-        boid_settings_buffer.GetData(boid_settings_array);
+        //boid_settings_buffer.GetData(boid_settings_array);
 
         foreach(TestObstacle obstacle in obstacles) {
             obstacle.obstacle.position_transform.position = obstacles_dynamic_array[obstacle.obstacleID].position;
@@ -545,16 +554,16 @@ public class MeshObsGPU : MonoBehaviour
         // Initialize our lists 
         obstacles_static = new List<OP.ObstacleStatic>();
         List<OP.ObstacleDynamic> obstacles_dynamic = new List<OP.ObstacleDynamic>();
-        vertices_static = new List<OP.VertexStatic>();
+        List<OP.VertexStatic> vertices_static = new List<OP.VertexStatic>();
         List<OP.VertexDynamic> vertices_dynamic = new List<OP.VertexDynamic>();
-        triangles_static = new List<OP.TriangleStatic>();
+        List<OP.TriangleStatic> triangles_static = new List<OP.TriangleStatic>();
         List<OP.TriangleDynamic> triangles_dynamic = new List<OP.TriangleDynamic>();
-        edges_static = new List<OP.EdgeStatic>();
+        List<OP.EdgeStatic> edges_static = new List<OP.EdgeStatic>();
         List<float3> edges_dynamic = new List<float3>();
         boid_settings = new List<OP.Boid2>();
         obstacle_velocities = new List<float3>();
         
-        // Preprocess our obstacles
+        // Preprocess our obstacles 
         for(int i = 0; i < obstacles.Count; i++) {
             TestObstacle obstacle = obstacles[i];
             PreprocessObstacle(
@@ -776,6 +785,7 @@ public class MeshObsGPU : MonoBehaviour
         obstacle.prevFriction = obstacle.frictionCoefficient;
         obstacle.prevIsStatic = obstacle.isStatic;
         obstacle.prevApplyExternalForces = obstacle.applyExternalForces;
+        obstacle.prevApplyGravity = obstacle.applyGravity;
         obstacle.prevCheckObstacleBounds = obstacle.checkObstacleBounds;
         obstacle.prevCheckTriangleBounds = obstacle.checkTriangleBounds;
 
@@ -791,6 +801,7 @@ public class MeshObsGPU : MonoBehaviour
         o_dynamic.frictionCoefficient = obstacle.frictionCoefficient;
         o_dynamic.isStatic = (obstacle.isStatic) ? (uint)1 : (uint)0;
         o_dynamic.applyExternalForces = (obstacle.applyExternalForces) ? (uint)1 : (uint)0;
+        o_dynamic.applyGravity = (obstacle.applyGravity) ? (uint)1 : (uint)0;
         o_dynamic.checkObstacleBounds = (obstacle.checkObstacleBounds) ? (uint)1 : (uint)0;
         o_dynamic.checkTriangleBounds = (obstacle.checkTriangleBounds) ? (uint)1 : (uint)0;
         o_dynamic.hasChanged = 1;
@@ -1104,6 +1115,7 @@ public class MeshObsGPU : MonoBehaviour
                     || obstacles[i].prevFriction != obstacles[i].frictionCoefficient 
                     || obstacles[i].prevIsStatic != obstacles[i].isStatic
                     || obstacles[i].prevApplyExternalForces != obstacles[i].applyExternalForces
+                    || obstacles[i].prevApplyGravity != obstacles[i].applyGravity 
                     || obstacles[i].prevCheckObstacleBounds != obstacles[i].checkObstacleBounds
                     || obstacles[i].prevCheckTriangleBounds != obstacles[i].checkTriangleBounds
                     || forceUpdate
@@ -1121,6 +1133,7 @@ public class MeshObsGPU : MonoBehaviour
                 obstacles_dynamic_array[i].frictionCoefficient = obstacles[i].frictionCoefficient;
                 obstacles_dynamic_array[i].isStatic = (obstacles[i].isStatic) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].applyExternalForces = (obstacles[i].applyExternalForces) ? (uint)1 : (uint)0;
+                obstacles_dynamic_array[i].applyGravity = (obstacles[i].applyGravity) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].checkObstacleBounds = (obstacles[i].checkObstacleBounds) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].checkTriangleBounds = (obstacles[i].checkTriangleBounds) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].hasChanged = 1;
@@ -1128,6 +1141,7 @@ public class MeshObsGPU : MonoBehaviour
                 obstacles[i].prevFriction = obstacles[i].frictionCoefficient;
                 obstacles[i].prevIsStatic = obstacles[i].isStatic;
                 obstacles[i].prevApplyExternalForces = obstacles[i].applyExternalForces;
+                obstacles[i].prevApplyGravity = obstacles[i].applyGravity;
                 obstacles[i].prevCheckObstacleBounds = obstacles[i].checkObstacleBounds;
                 obstacles[i].prevCheckTriangleBounds = obstacles[i].checkTriangleBounds;
                 if (obstacles[i].obstacle.hasSkinnedMeshFilter) {
@@ -1160,6 +1174,7 @@ public class MeshObsGPU : MonoBehaviour
                     || boids[i].prevFriction != boids[i].frictionCoefficient 
                     || boids[i].prevIsStatic != boids[i].isStatic
                     || boids[i].prevApplyExternalForces != boids[i].applyExternalForces
+                    || boids[i].prevApplyGravity != boids[i].applyGravity 
                     || boids[i].prevCheckObstacleBounds != boids[i].checkObstacleBounds
                     || boids[i].prevCheckTriangleBounds != boids[i].checkTriangleBounds
                     || forceUpdate
@@ -1173,10 +1188,11 @@ public class MeshObsGPU : MonoBehaviour
                 obstacles_dynamic_array[ob_index].upperBound = obstacles_dynamic_array[ob_index].position;
                 //Rigidbody rb = obstacles[i].obstacle.rb;
                 //if (rb != null) obstacles_dynamic_array[i].centerOfMass = new(rb.centerOfMass.x, rb.centerOfMass.y, rb.centerOfMass.z);
-                obstacles_dynamic_array[ob_index].density = obstacles[i].density;
-                obstacles_dynamic_array[ob_index].frictionCoefficient = obstacles[i].frictionCoefficient;
+                obstacles_dynamic_array[ob_index].density = boids[i].density;
+                obstacles_dynamic_array[ob_index].frictionCoefficient = boids[i].frictionCoefficient;
                 obstacles_dynamic_array[ob_index].isStatic = (boids[i].isStatic) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[ob_index].applyExternalForces = (boids[i].applyExternalForces) ? (uint)1 : (uint)0;
+                obstacles_dynamic_array[ob_index].applyGravity = (boids[i].applyGravity) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[ob_index].checkObstacleBounds = (boids[i].checkObstacleBounds) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[ob_index].checkTriangleBounds = (boids[i].checkTriangleBounds) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[ob_index].hasChanged = 1;
@@ -1184,6 +1200,7 @@ public class MeshObsGPU : MonoBehaviour
                 boids[i].prevFriction = boids[i].frictionCoefficient;
                 boids[i].prevIsStatic = boids[i].isStatic;
                 boids[i].prevApplyExternalForces = boids[i].applyExternalForces;
+                boids[i].prevApplyGravity = boids[i].applyGravity;
                 boids[i].prevCheckObstacleBounds = boids[i].checkObstacleBounds;
                 boids[i].prevCheckTriangleBounds = boids[i].checkTriangleBounds;
                 if (boids[i].obstacle.hasSkinnedMeshFilter) {
@@ -1248,6 +1265,8 @@ public class MeshObsGPU : MonoBehaviour
         if (grid_offsets_buffer != null) grid_offsets_buffer.Release();
         if (grid_sums_buffer1 != null) grid_sums_buffer1.Release();
         if (grid_sums_buffer2 != null) grid_sums_buffer2.Release();
+        if (boid_settings_buffer != null) boid_settings_buffer.Release();
+        if (boid_bounds_buffer != null) boid_bounds_buffer.Release();
     }
     
     // https://forum.unity.com/threads/whats-the-math-behind-transform-transformpoint.107401/

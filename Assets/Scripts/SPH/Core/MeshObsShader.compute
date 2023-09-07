@@ -29,6 +29,7 @@ struct ObstacleDynamic {
     float3 upperBound;          // The upper boundary position of this obstacle's bounding box.
     uint isStatic;
     uint applyExternalForces;
+    uint applyGravity;
     float3 centerOfMass;
     float frictionCoefficient;  // The amount of friction the object is meant to exhibit on particles.
     uint checkObstacleBounds;
@@ -1292,6 +1293,8 @@ void IntegrateObstacles(uint id : SV_DispatchThreadID) {
             float(translational_force[1])/1024.0,
             float(translational_force[2])/1024.0
         );
+    }
+    if (o_dynamic.applyGravity == 1) {
         gForce = g;
     }
 

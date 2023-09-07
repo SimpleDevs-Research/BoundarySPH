@@ -60,6 +60,7 @@ namespace ObstaclePrimitives {
             public float3 upperBound;
             public uint isStatic;
             public uint applyExternalForces;
+            public uint applyGravity;
             public float3 centerOfMass;
             public float frictionCoefficient;
             public uint checkObstacleBounds;
@@ -351,6 +352,7 @@ namespace ObstaclePrimitives {
             public float3 upperBound;
             public uint isStatic;
             public uint applyExternalForces;
+            public uint applyGravity;
             public float3 centerOfMass;
             public float frictionCoefficient;
             public uint checkObstacleBounds;
