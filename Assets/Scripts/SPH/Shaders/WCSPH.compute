@@ -543,44 +543,38 @@ void Integrate(uint id : SV_DispatchThreadID) {
     // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
     float3 a = (pressureForces[id] + viscosityForces[id] + density[id] * g) / density[id];
     v += a * dt;
-
+    
     float distfinal = distance(projection.position, p.position);
-    float3 innermostPoint = p.position - projection.normal * smoothingRadius;
-    if (projection.counter > 0 
-        && (
-            distfinal <= smoothingRadius
-            || dot(projection.position - innermostPoint, projection.normal) >= 0.0 
-        )
-    ) {
+    if (projection.counter > 0 && length(projection.normal) > 0.0) {
         float3 n = normalize(projection.normal);
-        float3 expectedInnermostPoint = p.position + dt * v - n * smoothingRadius;
-        //if (dot(projection.position - expectedInnermostPoint, n)>0.0) p.position = projection.position + n * smoothingRadius;
-        //v += dt dt * projection.external_force;
-        //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
-        if (dot(v,n) < 0.0) {
-            v = v - 1.5 * dot(v,n)*n + projection.frictionCoefficient*(-v + dot(v,n)*n);
-            //v = normalize(v) * clamp(length(v),0.0f,10.0);
-            //v = v - 1.5 * dot(v,n) * n;
-            //v += length(innermostPoint - projection.position) * n;
-            //v += projection.external_force * dt;
+        float3 innermostPoint = p.position - n * smoothingRadius;
+        if (distfinal <= smoothingRadius || dot(projection.position - innermostPoint, projection.normal) >= 0.0) {
+            float3 expectedInnermostPoint = p.position + dt * v - n * smoothingRadius;
+            //if (dot(projection.position - expectedInnermostPoint, n)>0.0) p.position = projection.position + n * smoothingRadius;
+            //v += dt dt * projection.external_force;
+            //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
+            if (dot(v,n) < 0.0) {
+                v = v - 1.5 * dot(v,n)*n + projection.frictionCoefficient*(-v + dot(v,n)*n);
+                //v = normalize(v) * clamp(length(v),0.0f,10.0);
+                //v = v - 1.5 * dot(v,n) * n;
+                //v += length(innermostPoint - projection.position) * n;
+                //v += projection.external_force * dt;
+                //p.position = (projection.position + n * smoothingRadius) + dt * v;
+            }
+            
+            if (sign(dot(innermostPoint-projection.position,n))<0.0) {
+                float3 inward = (projection.position + n * smoothingRadius) - p.position;
+                if (length(inward) > 0.0) v += normalize(inward) * clamp(length(inward),0.0,smoothingRadius);
+                //p.position = projection.position + n * smoothingRadius + dt * v;
+            }
+            
             //p.position = (projection.position + n * smoothingRadius) + dt * v;
+            //p.position = (projection.position + n * smoothingRadius);
+            //p.position += dt * v;
         }
-        
-        
-        if (sign(dot(innermostPoint-projection.position,n))<0.0) {
-            float3 inward = (projection.position + n * smoothingRadius) - p.position;
-            v += normalize(inward) * clamp(length(inward),0.0,smoothingRadius);
-            //p.position = projection.position + n * smoothingRadius + dt * v;
-        }
-        
-        
-        //p.position = (projection.position + n * smoothingRadius) + dt * v;
-        //p.position = (projection.position + n * smoothingRadius);
-        //p.position += dt * v;
-        
     }
-
-    v = normalize(v) * clamp(length(v),0.0,30.0);
+    
+    if (length(v) > 0.0) v = normalize(v) * clamp(length(v),0.0,30.0);
     p.position += dt * v;
     
     
