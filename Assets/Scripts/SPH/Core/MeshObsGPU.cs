@@ -470,16 +470,16 @@ public class MeshObsGPU : MonoBehaviour
         foreach(TestObstacle obstacle in obstacles) {
             obstacle.obstacle.position_transform.position = obstacles_dynamic_array[obstacle.obstacleID].position;
         }
-        float3 vel;
-        Vector3 targetRotEuler;
-        Quaternion targetRot;
-        foreach(TestObstacle boid in boids) {
-            vel = obstacle_velocities_array[boid.obstacleID];
-            targetRotEuler = new Vector3(vel[0],vel[1],vel[2]);
-            targetRot = Quaternion.LookRotation(targetRotEuler);
-            boid.obstacle.position_transform.position = obstacles_dynamic_array[boid.obstacleID].position;
-            boid.obstacle.position_transform.rotation = Quaternion.RotateTowards(boid.obstacle.position_transform.rotation, targetRot, boid.meshTurnSpeed);
-        }
+            float3 vel;
+            Vector3 targetRotEuler;
+            Quaternion targetRot;
+            foreach(TestObstacle boid in boids) {
+                vel = obstacle_velocities_array[boid.obstacleID];
+                targetRotEuler = new Vector3(vel[0],vel[1],vel[2]);
+                targetRot = Quaternion.LookRotation(targetRotEuler);
+                boid.obstacle.position_transform.position = obstacles_dynamic_array[boid.obstacleID].position;
+                boid.obstacle.position_transform.rotation = Quaternion.RotateTowards(boid.obstacle.position_transform.rotation, targetRot, boid.meshTurnSpeed);
+            }
         //for(int i = 0; i < numObstacles; i++) {
         //    if (i < obstacles.Count) obstacles[i].obstacle.position_transform.position = obstacles_dynamic_array[i].position;
         //    else boids[(i-obstacles.Count)].obstacle.position_transform.position = obstacles_dynamic_array[i].position;
@@ -654,9 +654,9 @@ public class MeshObsGPU : MonoBehaviour
         grid_sums_buffer1 = new ComputeBuffer(_numGridBlocks, sizeof(int));
         grid_sums_buffer2 = new ComputeBuffer(_numGridBlocks, sizeof(int));
 
-        boid_settings_buffer = new ComputeBuffer(numBoids, sizeof(int) + sizeof(float)*8);
-        boid_bounds_buffer = new ComputeBuffer(6, sizeof(float));
-        boid_bounds_buffer.SetData((_boidSpawnSectionIndex != -1) ? _GRID.sections[_boidSpawnSectionIndex].bounds : _GRID.innerBounds);
+            boid_settings_buffer = new ComputeBuffer(numBoids, sizeof(int) + sizeof(float)*8);
+            boid_bounds_buffer = new ComputeBuffer(6, sizeof(float));
+            boid_bounds_buffer.SetData((_boidSpawnSectionIndex != -1) ? _GRID.sections[_boidSpawnSectionIndex].bounds : _GRID.innerBounds);
 
         if (_BM.PARTICLES_BUFFER == null) _BM.PARTICLES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*6);
         if (_BM.PARTICLES_EXTERNAL_FORCES_BUFFER == null) _BM.PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int)*8 + sizeof(float)*27);
@@ -740,14 +740,14 @@ public class MeshObsGPU : MonoBehaviour
         _SHADER.SetBuffer(checkForProjectionKernel,"edges_dynamic", _BM.MESHOBS_EDGES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
         _SHADER.SetBuffer(checkForProjectionKernel,"torque_forces",_BM.MESHOBS_TORQUE_FORCES_BUFFER);
-        // Apply the pressures Kernel
+        // Integrate obstacle velocities and positions
         _SHADER.SetBuffer(integrateObstaclesKernel, "obstacles_dynamic", _BM.MESHOBS_OBSTACLES_DYNAMIC_BUFFER);
         _SHADER.SetBuffer(integrateObstaclesKernel, "translational_forces", _BM.MESHOBS_TRANSLATION_FORCES_BUFFER);
         _SHADER.SetBuffer(integrateObstaclesKernel, "obstacle_velocities", _BM.MESHOBS_VELOCITIES_BUFFER);
-        _SHADER.SetBuffer(integrateObstaclesKernel, "boid_settings", boid_settings_buffer);
-        _SHADER.SetBuffer(integrateObstaclesKernel, "boid_bounds", boid_bounds_buffer);
         _SHADER.SetBuffer(integrateObstaclesKernel, "grid_offsets", grid_offsets_buffer);
         _SHADER.SetBuffer(integrateObstaclesKernel, "rearranged_obstacles", _BM.MESHOBS_REARRANGED_OBSTACLES_BUFFER);
+        _SHADER.SetBuffer(integrateObstaclesKernel, "boid_settings", boid_settings_buffer);
+        _SHADER.SetBuffer(integrateObstaclesKernel, "boid_bounds", boid_bounds_buffer);
         // Combine Forces Kernel
         _SHADER.SetBuffer(combineForcesKernel,"projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
         _SHADER.SetBuffer(combineForcesKernel,"triangles_static", _BM.MESHOBS_TRIANGLES_STATIC_BUFFER);
