@@ -554,7 +554,9 @@ void Integrate(uint id : SV_DispatchThreadID) {
             //v += dt dt * projection.external_force;
             //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
             if (dot(v,n) < 0.0) {
-                v = v - 1.5 * dot(v,n)*n + projection.frictionCoefficient*(-v + dot(v,n)*n);
+                v = v - 1.5 * dot(v,n)*n + (1.0-projection.frictionCoefficient)*(-v + dot(v,n)*n);
+                //v = v - 1.5 * dot(v,n)*n; 
+                //v -= projection.frictionCoefficient * (dot(v, projection.external_force)/dot(projection.external_force, projection.external_force)) * projection.external_force;
                 //v = normalize(v) * clamp(length(v),0.0f,10.0);
                 //v = v - 1.5 * dot(v,n) * n;
                 //v += length(innermostPoint - projection.position) * n;
@@ -567,6 +569,8 @@ void Integrate(uint id : SV_DispatchThreadID) {
                 if (length(inward) > 0.0) v += normalize(inward) * clamp(length(inward),0.0,smoothingRadius);
                 //p.position = projection.position + n * smoothingRadius + dt * v;
             }
+
+            v += dt * projection.external_force;
             
             //p.position = (projection.position + n * smoothingRadius) + dt * v;
             //p.position = (projection.position + n * smoothingRadius);

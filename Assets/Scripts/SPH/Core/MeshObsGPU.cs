@@ -189,28 +189,28 @@ public class MeshObsGPU : MonoBehaviour
         int minLength;
         if (drawObstacleGizmos) {
             minLength = Mathf.Min(_BM.obstacles_dynamic_array.Length, _BM.obstacles_static_array.Length);
+            TestObstacle obs;
             for(int i = 0; i < minLength; i++) {
-                if (!obstacles[i].show_gizmos) continue;
-
                 OP.ObstacleStatic o_static = _BM.obstacles_static_array[i];
                 OP.ObstacleDynamic o_dynamic = _BM.obstacles_dynamic_array[i];
-                OP.VertexDynamic v_dynamic;
-                /*
-                if (obstacles[i].show_vertices) {
+                obs = (o_dynamic.isBoid == 1) ? boids[i - obstacles.Count] : obstacles[i];
+                if (!obs.show_gizmos) continue; 
+                //OP.VertexDynamic v_dynamic;
+                if (obs.show_vertices) {
                     for(uint vi = o_static.vs[0]; vi < o_static.vs[0] + o_static.vs[1]; vi++) {
                         if ((int)vi >= _BM.vertices_dynamic_array.Length) break;
-                        v_dynamic = _BM.vertices_dynamic_array[(int)vi];
+                        OP.VertexDynamic v_dynamic = _BM.vertices_dynamic_array[(int)vi];
                         Vector3 vp = new Vector3(v_dynamic.position[0], v_dynamic.position[1], v_dynamic.position[2]);
                         Vector3 vn = new Vector3(v_dynamic.normal[0],v_dynamic.normal[1],v_dynamic.normal[2]).normalized;
-                        if (obstacles[i].show_vertex_positions) {
+                        if (obs.show_vertex_positions) {
                             Gizmos.color = Color.red;
-                            Gizmos.DrawSphere(vp,0.5f);
+                            Gizmos.DrawSphere(vp,0.25f);
                         }
-                        if (obstacles[i].show_vertex_normals) {
+                        if (obs.show_vertex_normals) {
                             Handles.color = Color.blue;
                             Handles.DrawLine(vp, vp + vn*5f, 3);
                         }
-                        if (obstacles[i].show_vertex_forces) {
+                        if (obs.show_vertex_forces) {
                             // We show vertex forces just because...
                             Vector3 vf = new Vector3(v_dynamic.force[0], v_dynamic.force[1], v_dynamic.force[2]);
                             Handles.color = new Vector4(0f,0f,0f,0.5f);
@@ -219,6 +219,7 @@ public class MeshObsGPU : MonoBehaviour
                         
                     }
                 }
+                /*
                 // Render triangles
                 if (obstacles[i].show_triangles) {
                     for(uint ti = o_static.ts[0]; ti < o_static.ts[0] + o_static.ts[1]; ti++) {
@@ -283,7 +284,7 @@ public class MeshObsGPU : MonoBehaviour
                 }
                 */
                 // Render bounds
-                if (obstacles[i].show_bounds) {
+                if (obs.show_bounds) {
                     Gizmos.color = Color.black;
                     Gizmos.DrawWireCube(
                         (o_dynamic.upperBound + o_dynamic.lowerBound)/2f, 
@@ -611,6 +612,8 @@ public class MeshObsGPU : MonoBehaviour
         numTriangles = triangles_static.Count;
         numEdges = edges_static.Count;
         numBoids = boid_settings.Count;
+        Debug.Log($"Num Obstacles: {numObstacles}\nNum Vertices: {numVertices}\nNum Triangles: {numTriangles}\nNum Edges: {numEdges}");
+
         numParticles = (_PARTICLE_CONTROLLER != null) ? _PARTICLE_CONTROLLER.numParticles : particles.Count;
         if (_PARTICLE_CONTROLLER != null) particleRenderRadius = _PARTICLE_CONTROLLER.h;
         if (_PARTICLE_CONTROLLER != null) _dt = _PARTICLE_CONTROLLER.dt;
@@ -758,6 +761,9 @@ public class MeshObsGPU : MonoBehaviour
 
         // Finally, prepare our global arrays
         //obstacles_dynamic_array = new OP.ObstacleDynamic[numObstacles];
+        for(int i = 0; i < obstacles_dynamic.Count; i++) {
+            Debug.Log($"Obstacle #{i+1}: VS:{obstacles_dynamic[i].vs}\tTS:{obstacles_dynamic[i].ts}\tES:{obstacles_dynamic[i].es}");
+        }
         obstacles_dynamic_array = obstacles_dynamic.ToArray();
         boid_settings_array = boid_settings.ToArray();
         obstacle_velocities_array = obstacle_velocities.ToArray();
@@ -866,7 +872,7 @@ public class MeshObsGPU : MonoBehaviour
         }
         // We update `o_static` with number of filtered vertices
         // we know [0] because it's merely the current count of `vertices_static`
-        o_static.vs = new((uint)vertices_static.Count,(uint)obstacle.obstacle.fixed_vs.Count);
+        o_static.vs = new((uint)vertices_static.Count, (uint)obstacle.obstacle.fixed_vs.Count);
         o_dynamic.vs = new((uint)vertices_static.Count,(uint)obstacle.obstacle.fixed_vs.Count);
 
         // ===== GENERATING TRIANGLES AND EDGES DATA ==== //
