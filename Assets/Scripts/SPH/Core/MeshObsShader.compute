@@ -909,13 +909,20 @@ void CheckForObstaclesForBoids(uint3 id : SV_DispatchThreadID ) {
     );
 
     // At this point, we need to check if the closest point is within the visual range of the boid. Return if not.
-    if (length(closest_position - o_dynamic.position) > boid_settings[o_dynamic.boidIndex].boundaryRange) return;
+    float boundaryDistance = length(closest_position - o_dynamic.position);
+    if (boundaryDistance > boid_settings[o_dynamic.boidIndex].boundaryRange) return;
 
     // At this point, we're only interested in the normal vector. This is because this normal tells the boid where to go
     // Therefore, we simply add the normal vector to a total counter in `boid_settings`
-    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[0], int(closest_normal[0]*1024.0));
-    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[1], int(closest_normal[1]*1024.0));
-    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[2], int(closest_normal[2]*1024.0));
+    // Where it gets complicated is the level of influence the boundary normal has on the boid re-direction
+    // In concept, distances beween the boid and the closest point that are smallest should have the biggest influence
+    // And those whose distances are big should be the smallest.
+    // We'll use the boundaryRange as our cap, and determine the level of influence based on boundaryRange - distance
+    float boundaryInfluence = boid_settings[o_dynamic.boidIndex].boundaryRange -boundaryDistance;
+    float3 influencedNormal = closest_normal * boundaryInfluence; 
+    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[0], int(influencedNormal[0]*1024.0));
+    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[1], int(influencedNormal[1]*1024.0));
+    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[2], int(influencedNormal[2]*1024.0));
     InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryTriCount, 1);
 
     /*
