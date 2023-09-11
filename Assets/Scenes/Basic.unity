@@ -2415,7 +2415,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 716428341}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.25, y: -3.5, z: -0.25}
+  m_LocalPosition: {x: -0.25, y: 0.09, z: -0.25}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2658,10 +2658,10 @@ MonoBehaviour:
   sections:
   - LOWER_BOUND_REF: {fileID: 716428342}
     UPPER_BOUND_REF: {fileID: 978153987}
-    _origin: {x: 0, y: 0, z: 0}
+    _origin: {x: 0, y: 1.795, z: 0}
     _bounds:
     - -0.25
-    - -3.5
+    - 0.09
     - -0.25
     - 0.25
     - 3.5
@@ -2709,13 +2709,13 @@ MonoBehaviour:
   _SPH_Shader: {fileID: 7200000, guid: a770d7439db8e374ebf2cbfe57033849, type: 3}
   _POINT_CLOUD_OBSTACLE_MANAGER: {fileID: 0}
   _particleRenderSize: 0.0625
-  _MAX_NUM_PARTICLES: 112
-  _numParticles: 112
-  _numParticlesPerAxis: 020000001c00000002000000
+  _MAX_NUM_PARTICLES: 52
+  _numParticles: 48
+  _numParticlesPerAxis: 020000000d00000002000000
   _numParticlesPerGridCell: 57
   _spawnBounds:
   - -0.25
-  - -3.5
+  - 0.09
   - -0.25
   - 0.25
   - 3.5
@@ -4523,6 +4523,7 @@ MonoBehaviour:
   - obstacleID: 0
     obstacle: {fileID: 427732669}
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 1
     checkTriangleBounds: 1
     alwaysUpdate: 0
@@ -4543,6 +4544,7 @@ MonoBehaviour:
     density: 1
     prevDensity: 1
     prevFriction: 0
+    prevReflection: 0.5
     prevIsStatic: 1
     prevApplyExternalForces: 0
     prevApplyGravity: 0
@@ -4577,6 +4579,7 @@ MonoBehaviour:
   - obstacleID: 0
     obstacle: {fileID: 485992340}
     frictionCoefficient: 0
+    restitutionCoefficient: 0.5
     checkObstacleBounds: 1
     checkTriangleBounds: 1
     alwaysUpdate: 0
@@ -4597,6 +4600,7 @@ MonoBehaviour:
     density: 0
     prevDensity: 0
     prevFriction: 0
+    prevReflection: 0.5
     prevIsStatic: 0
     prevApplyExternalForces: 0
     prevApplyGravity: 0
@@ -4677,6 +4681,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -4722,6 +4727,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -4953,6 +4959,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -4998,6 +5005,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -5043,6 +5051,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -5088,6 +5097,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -5133,6 +5143,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0

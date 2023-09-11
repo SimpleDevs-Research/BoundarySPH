@@ -61,6 +61,7 @@ struct Projection {
     float3 external_force;      // force exerted toward the particle by the boundary due to velocity
     int counter;
     float frictionCoefficient;
+    float restitutionCoefficient;
 
     float3 e1;
     float3 e2;
@@ -572,6 +573,8 @@ void Integrate(uint id : SV_DispatchThreadID) {
             //v += dt dt * projection.external_force;
             //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
             if (length(v)>0.0 && dot(v,n) <= 0.0) {
+                // This series of equations was derived from that of Carlos Alberto Dutra Fraga Filho.
+                // Report: https://doi.org/10.21203/rs.3.rs-3214518/v1
                 // The collided, reflected velocity comes in a normal form and a tangential form.
                 // Note: to calculate the magnitude of a vector A as a component along another vector B, we use the following formula:
                 // dot(A,B)/dot(B,B)
@@ -583,7 +586,7 @@ void Integrate(uint id : SV_DispatchThreadID) {
                 float vt = length(vtan);
                 // The reflected velocity v_ref = v_{ref,n} + v_{ref,t}
                 // v_{ref,n} = n * vn * CR. For now, we simply say 0.5
-                float3 vrn = n * vn * 0.5;
+                float3 vrn = n * vn * projection.restitutionCoefficient;
                 // v_{ref,t} = vtan * CR
                 float3 vrt = vtan * (1.0-projection.frictionCoefficient); 
                 v = vrn + vrt;

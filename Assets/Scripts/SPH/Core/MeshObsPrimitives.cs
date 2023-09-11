@@ -63,6 +63,7 @@ namespace ObstaclePrimitives {
             public uint applyGravity;
             public float3 centerOfMass;
             public float frictionCoefficient;
+            public float restitutionCoefficient;
             public uint checkObstacleBounds;
             public uint checkTriangleBounds;
             public uint hasChanged;
@@ -355,6 +356,7 @@ namespace ObstaclePrimitives {
             public uint applyGravity;
             public float3 centerOfMass;
             public float frictionCoefficient;
+            public float restitutionCoefficient;
             public uint checkObstacleBounds;
             public uint checkTriangleBounds;
             public uint hasChanged;
@@ -528,6 +530,7 @@ namespace ObstaclePrimitives {
             public float3 external_force;
             public int counter;
             public float frictionCoefficient;
+            public float restitutionCoefficient;
 
             public float3 e1;
             public float3 e2;

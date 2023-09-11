@@ -85,7 +85,7 @@ public class BufferManager : MonoBehaviour
 
         PARTICLES_PRESSURE_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*3);
         PARTICLES_VISCOSITY_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*3);
-        PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int) + sizeof(float)*34);
+        PARTICLES_EXTERNAL_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(uint) + sizeof(int) + sizeof(float)*35);
 
         _particles_array = new OP.Particle[Mathf.Min(_particles_array.Length,numParticles)];
         _particles_grid_array = new int[Mathf.Min(_particles_grid_array.Length, numGridCells)];
@@ -102,7 +102,7 @@ public class BufferManager : MonoBehaviour
         MESHOBS_REARRANGED_OBSTACLES_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint));
 
         MESHOBS_OBSTACLES_STATIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*9 + sizeof(float));
-        MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*15 + sizeof(float)*21);
+        MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*15 + sizeof(float)*22);
         MESHOBS_TRIANGLES_STATIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*9);
         MESHOBS_TRIANGLES_DYNAMIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*22);
         MESHOBS_VERTICES_DYNAMIC_BUFFER = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*9);

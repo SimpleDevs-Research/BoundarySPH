@@ -30,8 +30,10 @@ public class MeshObsGPU : MonoBehaviour
         public MeshObs obstacle;
 
         [Header("= Mesh Obs Settings =")]
-        [Tooltip("Controls the slip/no-slip condition for this surface"), Range(0f,1f)] 
+        [Tooltip("Controls the slip/no-slip condition for this obstacle's surface"), Range(0f,1f)] 
         public float frictionCoefficient = 0f;
+        [Tooltip("Controls the reflection condition for this obstacle's surface"), Range(0f,1f)]
+        public float restitutionCoefficient = 0.5f;
         [Tooltip("During the BC check, should we limit the check to only the particles in the obstacle's boundaries?")]
         public bool checkObstacleBounds = true;
         [Tooltip("DUring the BC check, should we limit the check to only the particles in each triangle's boundaries?")]
@@ -55,6 +57,7 @@ public class MeshObsGPU : MonoBehaviour
         
         [HideInInspector] public float prevDensity = 1f;
         [HideInInspector] public float prevFriction = 0f;
+        [HideInInspector] public float prevReflection = 0.5f;
         [HideInInspector] public bool prevIsStatic = true;
         [HideInInspector] public bool prevApplyExternalForces = false;
         [HideInInspector] public bool prevApplyGravity = false;
@@ -789,6 +792,7 @@ public class MeshObsGPU : MonoBehaviour
         var ts = obstacle.obstacle.triangles;
         obstacle.prevDensity = obstacle.density;
         obstacle.prevFriction = obstacle.frictionCoefficient;
+        obstacle.prevReflection = obstacle.restitutionCoefficient;
         obstacle.prevIsStatic = obstacle.isStatic;
         obstacle.prevApplyExternalForces = obstacle.applyExternalForces;
         obstacle.prevApplyGravity = obstacle.applyGravity;
@@ -805,6 +809,7 @@ public class MeshObsGPU : MonoBehaviour
         o_dynamic.isBoid = (obstacle.isBoid) ? (uint)1 : (uint)0;
         o_dynamic.density = obstacle.density;
         o_dynamic.frictionCoefficient = obstacle.frictionCoefficient;
+        o_dynamic.restitutionCoefficient = obstacle.restitutionCoefficient;
         o_dynamic.isStatic = (obstacle.isStatic) ? (uint)1 : (uint)0;
         o_dynamic.applyExternalForces = (obstacle.applyExternalForces) ? (uint)1 : (uint)0;
         o_dynamic.applyGravity = (obstacle.applyGravity) ? (uint)1 : (uint)0;
@@ -1119,6 +1124,7 @@ public class MeshObsGPU : MonoBehaviour
                     || mo.position_transform.hasChanged 
                     || obstacles[i].prevDensity != obstacles[i].density
                     || obstacles[i].prevFriction != obstacles[i].frictionCoefficient 
+                    || obstacles[i].prevReflection != obstacles[i].restitutionCoefficient
                     || obstacles[i].prevIsStatic != obstacles[i].isStatic
                     || obstacles[i].prevApplyExternalForces != obstacles[i].applyExternalForces
                     || obstacles[i].prevApplyGravity != obstacles[i].applyGravity 
@@ -1137,6 +1143,7 @@ public class MeshObsGPU : MonoBehaviour
                 //if (rb != null) obstacles_dynamic_array[i].centerOfMass = new(rb.centerOfMass.x, rb.centerOfMass.y, rb.centerOfMass.z);
                 obstacles_dynamic_array[i].density = obstacles[i].density;
                 obstacles_dynamic_array[i].frictionCoefficient = obstacles[i].frictionCoefficient;
+                obstacles_dynamic_array[i].restitutionCoefficient = obstacles[i].restitutionCoefficient;
                 obstacles_dynamic_array[i].isStatic = (obstacles[i].isStatic) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].applyExternalForces = (obstacles[i].applyExternalForces) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[i].applyGravity = (obstacles[i].applyGravity) ? (uint)1 : (uint)0;
@@ -1145,6 +1152,7 @@ public class MeshObsGPU : MonoBehaviour
                 obstacles_dynamic_array[i].hasChanged = 1;
                 obstacles[i].prevDensity = obstacles[i].density;
                 obstacles[i].prevFriction = obstacles[i].frictionCoefficient;
+                obstacles[i].prevReflection = obstacles[i].restitutionCoefficient;
                 obstacles[i].prevIsStatic = obstacles[i].isStatic;
                 obstacles[i].prevApplyExternalForces = obstacles[i].applyExternalForces;
                 obstacles[i].prevApplyGravity = obstacles[i].applyGravity;
@@ -1178,6 +1186,7 @@ public class MeshObsGPU : MonoBehaviour
                     || mo.position_transform.hasChanged 
                     || boids[i].prevDensity != boids[i].density
                     || boids[i].prevFriction != boids[i].frictionCoefficient 
+                    || boids[i].prevReflection != boids[i].restitutionCoefficient 
                     || boids[i].prevIsStatic != boids[i].isStatic
                     || boids[i].prevApplyExternalForces != boids[i].applyExternalForces
                     || boids[i].prevApplyGravity != boids[i].applyGravity 
@@ -1196,6 +1205,7 @@ public class MeshObsGPU : MonoBehaviour
                 //if (rb != null) obstacles_dynamic_array[i].centerOfMass = new(rb.centerOfMass.x, rb.centerOfMass.y, rb.centerOfMass.z);
                 obstacles_dynamic_array[ob_index].density = boids[i].density;
                 obstacles_dynamic_array[ob_index].frictionCoefficient = boids[i].frictionCoefficient;
+                obstacles_dynamic_array[ob_index].restitutionCoefficient = boids[i].restitutionCoefficient;
                 obstacles_dynamic_array[ob_index].isStatic = (boids[i].isStatic) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[ob_index].applyExternalForces = (boids[i].applyExternalForces) ? (uint)1 : (uint)0;
                 obstacles_dynamic_array[ob_index].applyGravity = (boids[i].applyGravity) ? (uint)1 : (uint)0;
@@ -1204,6 +1214,7 @@ public class MeshObsGPU : MonoBehaviour
                 obstacles_dynamic_array[ob_index].hasChanged = 1;
                 boids[i].prevDensity = boids[i].density;
                 boids[i].prevFriction = boids[i].frictionCoefficient;
+                boids[i].prevReflection = boids[i].restitutionCoefficient;
                 boids[i].prevIsStatic = boids[i].isStatic;
                 boids[i].prevApplyExternalForces = boids[i].applyExternalForces;
                 boids[i].prevApplyGravity = boids[i].applyGravity;

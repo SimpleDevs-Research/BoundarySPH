@@ -32,6 +32,7 @@ struct ObstacleDynamic {
     uint applyGravity;
     float3 centerOfMass;
     float frictionCoefficient;  // The amount of friction the object is meant to exhibit on particles.
+    float restitutionCoefficient;
     uint checkObstacleBounds;
     uint checkTriangleBounds;
     uint hasChanged;             // A boolean indicator to determine if this obstacle had transformed in some way between the previous and current frame.
@@ -99,6 +100,7 @@ struct Projection {
     float3 external_force;      // The force exerted outward by the boundary due to velocity
     int counter;
     float frictionCoefficient;
+    float restitutionCoefficient;
 
     float3 e1;
     float3 e2;
@@ -685,6 +687,7 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
 
                 projection.counter = isInTriangle;
                 projection.frictionCoefficient = o_dynamic.frictionCoefficient;
+                projection.restitutionCoefficient = o_dynamic.restitutionCoefficient;
 
                 projection.e1 = edge1;
                 projection.e2 = edge2;
