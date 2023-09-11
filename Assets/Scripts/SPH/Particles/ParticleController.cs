@@ -51,6 +51,7 @@ public class ParticleController : MonoBehaviour
     public float dt => _dt;
     [SerializeField, Tooltip("What's the gravitational force exerted on all particles?")]
     private float[] _g = {0f, -9.81f, 0f};
+    public float[] g => _g;
     [SerializeField, Tooltip("`h` - the smoothing kernel radius used all across the SPH simulation")]
     private float _h = 1.5f;
     public float h => _h;
@@ -70,6 +71,7 @@ public class ParticleController : MonoBehaviour
     private int _frames_elapsed = 0;
 
     [SerializeField] private float _spawnDistanceBetweenParticles = 1.45f;
+    public float spawnDistanceBetweenParticles => _spawnDistanceBetweenParticles;
 
     int size_property = Shader.PropertyToID("size");
     int num_particles_per_cell_property = Shader.PropertyToID("numParticlesPerCell");
@@ -85,7 +87,7 @@ public class ParticleController : MonoBehaviour
     [Header("== DEBUG CONTROLS ==")]
     [SerializeField] private RenderType _renderType = RenderType.Particles;
     [SerializeField] private float[] _renderLimits;
-    [SerializeField, Range(0.001f,30f)] private float _renderDenom = 10f;
+    [SerializeField, Range(0f,30f)] private float _renderDenom = 10f;
 
     private float t;
 

@@ -11,6 +11,7 @@ public class BufferManager : MonoBehaviour
     public BoidsController _BOIDS_CONTROLLER;
     public MeshObsGPU _OBSTACLES_CONTROLLER;
     public PressureRenderer _PRESSURE_RENDERER;
+    public ContinuousFlow _CF;
 
     [Header("=== PARTICLE-related BUFFERS === ")]
     public ComputeBuffer PARTICLES_BUFFER;                      // Stores particles' position data
@@ -131,6 +132,7 @@ public class BufferManager : MonoBehaviour
         if (_BOIDS_CONTROLLER != null) _BOIDS_CONTROLLER.Initialize();
         if (_OBSTACLES_CONTROLLER != null) _OBSTACLES_CONTROLLER.Initialize();
         if (_PRESSURE_RENDERER != null) _PRESSURE_RENDERER.Initialize();
+        if (_CF != null) _CF.Initialize();
     }
 
     void LateUpdate() {

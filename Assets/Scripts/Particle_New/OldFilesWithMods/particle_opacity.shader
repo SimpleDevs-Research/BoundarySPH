@@ -68,8 +68,9 @@ Shader "SPH/ParticleOpacity"
 
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
 			//float a = clamp((pressure_buffer[unity_InstanceID]-0.080214)/(0.080214 * 0.25), 0.0, 1.0);
-			//finalColor = defaultColor * (1.0-a) + secondaryColor * a; 
-			float a = clamp(length(velocity_buffer[unity_InstanceID])/velocity_denom,0.0,1.0);
+			//finalColor = defaultColor * (1.0-a) + secondaryColor * a;
+			float a = 1.0;
+			if (velocity_denom > 0.0) a = clamp(length(velocity_buffer[unity_InstanceID])/velocity_denom,0.0,1.0);
 			finalColor = defaultColor;
 			float3 pos = particle_buffer[unity_InstanceID].position;
             if (

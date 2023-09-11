@@ -1,0 +1,167 @@
+int numParticles;
+int numParticleBlocks;
+int3 numParticlesPerAxis;
+int numThreshold;
+float distanceBetweenParticles;
+uint d;
+float3 flowDirection;
+float3 outflowCenter;
+int defaultLength;
+
+// === STRUCTS ===
+struct Particle {
+    float3 position;
+    float3 force;
+    int render;
+};
+
+// === BUFFERS ===
+// positions for inflow
+RWStructuredBuffer<float3> inflow_positions;
+// The input
+RWStructuredBuffer<Particle> particles;
+RWStructuredBuffer<float3> particle_velocities;
+RWStructuredBuffer<uint2> particle_in_outflow;
+StructuredBuffer<uint2> particles_to_transpose; 
+
+StructuredBuffer<float> inflowBounds;
+StructuredBuffer<float> outflowBounds;
+RWStructuredBuffer<int> boundCounts;
+// Intermediary buffers
+RWStructuredBuffer<int> particle_offsets;
+RWStructuredBuffer<int> particle_sums_buffer;
+RWStructuredBuffer<int> particle_sums_buffer_in;
+// The output
+RWStructuredBuffer<uint> rearranged_particles;
+
+// === HELPER FUNCTIONS ===
+int PointInsideBounds(float3 position, inout StructuredBuffer<float> bounds) {
+    if (
+        bounds[0] <= position[0] && position[0] <= bounds[3]
+        && bounds[1] <= position[1] && position[1] <= bounds[4] 
+        && bounds[2] <= position[2] && position[2] <= bounds[5]    
+    ) return 1;
+    return 0;
+}
+
+// === CORE KERNEL FUNCTIONS ===
+
+#pragma kernel CalculateInflowPositions
+[numthreads(16, 1, 1)]
+void CalculateInflowPositions(uint id : SV_DispatchThreadID) {
+    if (id >= (uint)numThreshold) return;
+    uint yIndex = floor(id / (numParticlesPerAxis[0]*numParticlesPerAxis[2]));
+    uint zIndex = floor((id - (yIndex * (numParticlesPerAxis[0]*numParticlesPerAxis[2])))/numParticlesPerAxis[0]);
+    uint xIndex = id - (yIndex * (numParticlesPerAxis[0]*numParticlesPerAxis[2])) - (zIndex * numParticlesPerAxis[0]);
+    inflow_positions[id] = float3(
+        inflowBounds[0] + (distanceBetweenParticles/2.0) + (xIndex * distanceBetweenParticles),
+        inflowBounds[1] + (distanceBetweenParticles/2.0) + (yIndex * distanceBetweenParticles),
+        inflowBounds[2] + (distanceBetweenParticles/2.0) + (zIndex * distanceBetweenParticles)
+    );
+}
+
+#pragma kernel ClearRearrangedParticles
+[numthreads(64,1,1)]
+void ClearRearrangedParticles(uint id : SV_DispatchThreadID) {
+    if (id >= (uint)numParticles) return;
+    rearranged_particles[id] = uint(numParticles);
+    particle_in_outflow[id][0] = id;
+    particle_in_outflow[id][1] = 0;
+}
+
+#pragma kernel UpdateCounts
+[numthreads(64,1,1)]
+void UpdateCounts(uint id : SV_DispatchThreadID) {
+    // exit early if necessary
+    if (id >= uint(numParticles)) return;
+    // Get the current position of the current particle
+    float3 pos = particles[id].position;
+    // Check if the position is inside the inflow area
+    if (PointInsideBounds(pos, inflowBounds) == 1) {
+        InterlockedAdd(boundCounts[0],1);
+    }
+    // Check if the position is inside the outflow area
+    if (PointInsideBounds(pos, outflowBounds) == 1) {
+        if (length(flowDirection) > 0.0) {
+            particle_in_outflow[id][1] = uint(length(dot(outflowCenter-pos,flowDirection)*flowDirection) * 1024.0);
+        } else {
+            particle_in_outflow[id][1] = 0;
+        }
+        InterlockedAdd(boundCounts[1],1);
+    } else {
+        if (length(flowDirection) > 0.0) {
+            particle_in_outflow[id][1] = uint(defaultLength);
+        } else {
+            particle_in_outflow[id][1] = 1;
+        }
+    }
+}
+
+/*
+#pragma kernel PrefixSum
+groupshared int temp[128];
+[numthreads(64, 1, 1)]
+void PrefixSum(uint projectedCellID : SV_DispatchThreadID, uint threadID : SV_GroupThreadID, uint groupID : SV_GroupID) {
+    int pout = 0;
+    int pin = 1;
+    // Our input is the indicator array to tell if our particle is in the outflow or not
+    temp[threadID] = particle_in_outflow[projectedCellID];
+    GroupMemoryBarrierWithGroupSync();
+    [unroll]
+    for(uint offset = 1; offset < 64; offset *= 2) {
+        pout = 1 - pout;
+        pin = 1 - pin;
+        if (threadID >= offset) {
+            temp[pout * 64 + threadID] = temp[pin * 64 + threadID] + temp[pin * 64 + threadID - offset];
+        } else {
+            temp[pout * 64 + threadID] = temp[pin * 64 + threadID];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (projectedCellID >= uint(numParticles)) return;
+
+    // We output to `particle_offsets`
+    particle_offsets[projectedCellID] = temp[pout * 64 + threadID];
+    if (threadID == 0) {
+        // We output to `gridSumsBuffer2`
+        particle_sums_buffer[groupID] = temp[pout * 64 + 64 - 1];
+    }
+}
+#pragma kernel SumBlocks
+[numthreads(64, 1, 1)]
+void SumBlocks(uint id : SV_DISPATCHTHREADID) {
+  if (id >= uint(numParticleBlocks)) return;
+  uint k = id;
+  if (k < d) particle_sums_buffer[k] = particle_sums_buffer_in[k];
+  else particle_sums_buffer[k] = particle_sums_buffer_in[k] + particle_sums_buffer_in[k - d];
+}
+#pragma kernel AddSums
+[numthreads(64, 1, 1)]
+void AddSums(uint projectedGridIndex : SV_DispatchThreadID, uint groupID : SV_GroupID) {
+  if (groupID == 0 || projectedGridIndex > uint(numParticles)) return;
+  // Output to `grid_offsets`
+  particle_offsets[projectedGridIndex] += particle_sums_buffer_in[groupID - 1];
+}
+#pragma kernel RearrangeParticles
+[numthreads(64, 1, 1)]
+void RearrangeParticles(uint id : SV_DispatchThreadID) {
+  if (id >= uint(numParticles)) return;
+  int index = particle_offsets[id] - 1;
+  rearranged_particles[index] = id;
+}
+*/
+
+#pragma kernel TransposeParticles
+[numthreads(16,1,1)]
+void TransposeParticles(uint id : SV_DispatchThreadID) {
+    if (id >= (uint)numThreshold) return;
+    uint2 particle_to_transpose = particles_to_transpose[id];
+    uint particle_id = particle_to_transpose[0];
+    /*
+    uint particle_id = rearranged_particles[id];
+    if (particle_id == uint(numParticles)) return;
+    */
+    particles[particle_id].position = inflow_positions[id];
+    particle_velocities[particle_id] = float3(0,0,0);
+}

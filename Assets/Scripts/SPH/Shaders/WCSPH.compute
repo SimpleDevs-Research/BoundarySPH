@@ -272,6 +272,14 @@ float Poly6Kernel3D(float3 currentPos, float3 otherPos, float kernelSmoothingRad
     float d2 = dLength * dLength;
     return (315.0 / (64.0 * pi * radius9)) * pow(k2 - d2,3);
 }
+float Poly6KernelGradient3D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+    float dLength = length(currentPos - otherPos);
+    if (dLength > kernelSmoothingRadius) return 0.0;
+    float k2 = kernelSmoothingRadius * kernelSmoothingRadius;
+    float d2 = dLength * dLength;
+    return ((-1890.0*dLength)/(64.0 * pi * radius9)) * pow(k2-d2,2);
+
+}
 float Poly6Kernel2D(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
     float dLength = length(currentPos - otherPos);
     // We have to exit early by returning 0 if the length of the displacement is greater than the kernel smoothing radius
@@ -366,6 +374,7 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
 
     // We pre-emptively add the particle itself to density. This makes it easier to handle because of imprecision with float point values
     float _density = (315.0 * particleMass) / (64.0 * pi * radius3);
+    /*float deltaDensity = 0.0;*/
 
     uint lowX = limits.lowerLimits[0];
     uint lowY = limits.lowerLimits[1];
@@ -387,15 +396,23 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
                     // Otherwise, continue calculating density1
                     //_density += CalculateDensity(p, particles[otherId].position, velocity[otherId]);
                     _density += particleMass * Poly6Kernel3D(p, particles[otherId].position, smoothingRadius);
+                    /*deltaDensity += particleMass * (length(velocity[id.x]) - length(velocity[otherId])) * Poly6KernelGradient3D(p, particles[otherId].position, smoothingRadius);*/
                 }
             }
         }
     }
 
     // We update both the densities buffer and pressures buffer
+    /*
+    float newDensity = density[id.x] + deltaDensity;
+    density[id.x] = newDensity;
+    pressure[id.x] = bulkModulus * newDensity;
+    particles[id.x].force = bulkModulus * newDensity;
+    */
     density[id.x] = _density;
     pressure[id.x] = bulkModulus * _density;
     particles[id.x].force = bulkModulus * _density;
+    
     //pressure[id.x] = ((rest_density * (c * c))/7.0) * (pow(_density/rest_density,7)-1.0);
     //particles[id.x].force = float3(((rest_density * (c * c))/7.0) * (pow(_density/rest_density,7)-1.0),0.0,0.0);
 }
@@ -543,18 +560,34 @@ void Integrate(uint id : SV_DispatchThreadID) {
     // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
     float3 a = (pressureForces[id] + viscosityForces[id] + density[id] * g) / density[id];
     v += a * dt;
-    
+
     float distfinal = distance(projection.position, p.position);
     if (projection.counter > 0 && length(projection.normal) > 0.0) {
         float3 n = normalize(projection.normal);
         float3 innermostPoint = p.position - n * smoothingRadius;
-        if (distfinal <= smoothingRadius || dot(projection.position - innermostPoint, projection.normal) >= 0.0) {
-            float3 expectedInnermostPoint = p.position + dt * v - n * smoothingRadius;
+        if (distfinal <= smoothingRadius) {
+            //if (distfinal <= smoothingRadius || dot(projection.position - innermostPoint, projection.normal) >= 0.0) {
+            //float3 expectedInnermostPoint = p.position + dt * v - n * smoothingRadius;
             //if (dot(projection.position - expectedInnermostPoint, n)>0.0) p.position = projection.position + n * smoothingRadius;
             //v += dt dt * projection.external_force;
             //v = (v - 2.0 * dot(v,n) * projection.normal) * (1.0 - projection.frictionCoefficient);
-            if (dot(v,n) < 0.0) {
-                v = v - 1.5 * dot(v,n)*n + (1.0-projection.frictionCoefficient)*(-v + dot(v,n)*n);
+            if (length(v)>0.0 && dot(v,n) <= 0.0) {
+                // The collided, reflected velocity comes in a normal form and a tangential form.
+                // Note: to calculate the magnitude of a vector A as a component along another vector B, we use the following formula:
+                // dot(A,B)/dot(B,B)
+                // However, since B (which is the normal vector) is a normalized normal, the denominator just ends up being 1
+                // Therefore, we only need to calculate dot(A,B). To get the magnitude, we get the absolute value of this value
+                // The magnitude of the normal component of vel_ref is the same as the magnitude of the normal component of the incoming vector
+                float vn = abs(dot(v,-n));
+                float3 vtan = v - (-n*vn);
+                float vt = length(vtan);
+                // The reflected velocity v_ref = v_{ref,n} + v_{ref,t}
+                // v_{ref,n} = n * vn * CR. For now, we simply say 0.5
+                float3 vrn = n * vn * 0.5;
+                // v_{ref,t} = vtan * CR
+                float3 vrt = vtan * (1.0-projection.frictionCoefficient); 
+                v = vrn + vrt;
+                //v = v - 1.5 * dot(v,n)*n + projection.frictionCoefficient*(-v + dot(v,n)*n);
                 //v = v - 1.5 * dot(v,n)*n; 
                 //v -= projection.frictionCoefficient * (dot(v, projection.external_force)/dot(projection.external_force, projection.external_force)) * projection.external_force;
                 //v = normalize(v) * clamp(length(v),0.0f,10.0);
@@ -563,7 +596,6 @@ void Integrate(uint id : SV_DispatchThreadID) {
                 //v += projection.external_force * dt;
                 //p.position = (projection.position + n * smoothingRadius) + dt * v;
             }
-            
             if (sign(dot(innermostPoint-projection.position,n))<0.0) {
                 float3 inward = (projection.position + n * smoothingRadius) - p.position;
                 if (length(inward) > 0.0) v += normalize(inward) * clamp(length(inward),0.0,smoothingRadius);
@@ -571,17 +603,19 @@ void Integrate(uint id : SV_DispatchThreadID) {
             }
 
             v += dt * projection.external_force;
-            
+                
             //p.position = (projection.position + n * smoothingRadius) + dt * v;
             //p.position = (projection.position + n * smoothingRadius);
             //p.position += dt * v;
+
+            //if (length(v) > 0.0) v = normalize(v) * clamp(length(v),0.0,30.0);
+            //if (distance(p.position,p.position+dt*v)>=0.005) p.position += dt * v;
         }
     }
-    
+
     if (length(v) > 0.0) v = normalize(v) * clamp(length(v),0.0,30.0);
     p.position += dt * v;
-    
-    
+
     /*
     if (projection.counter > 0) {
         shouldRender = 1;

@@ -1,0 +1,62 @@
+int numParticles;
+int numParticleBlocks;
+uint d;
+
+RWStructuredBuffer<int> particle_offsets_in;
+RWStructuredBuffer<int> particle_offsets;
+RWStructuredBuffer<int> particle_sums_buffer;
+RWStructuredBuffer<int> particle_sums_buffer_in;
+RWStructuredBuffer<uint> rearranged_particles;
+
+#pragma kernel PrefixSum
+groupshared int temp[128];
+[numthreads(64, 1, 1)]
+void PrefixSum(uint projectedCellID : SV_DispatchThreadID, uint threadID : SV_GroupThreadID, uint groupID : SV_GroupID) {
+    int pout = 0;
+    int pin = 1;
+    // Our input is `grid`
+    temp[threadID] = particle_offsets_in[projectedCellID];
+    GroupMemoryBarrierWithGroupSync();
+    [unroll]
+    for(uint offset = 1; offset < 64; offset *= 2) {
+        pout = 1 - pout;
+        pin = 1 - pin;
+        if (threadID >= offset) {
+            temp[pout * 64 + threadID] = temp[pin * 64 + threadID] + temp[pin * 64 + threadID - offset];
+        } else {
+            temp[pout * 64 + threadID] = temp[pin * 64 + threadID];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (projectedCellID >= uint(numParticles)) return;
+
+    // We output to `grid_offsets`
+    particle_offsets[projectedCellID] = temp[pout * 64 + threadID];
+    if (threadID == 0) {
+        // We output to `gridSumsBuffer2`
+        particle_sums_buffer[groupID] = temp[pout * 64 + 64 - 1];
+    }
+}
+#pragma kernel SumBlocks
+[numthreads(64, 1, 1)]
+void SumBlocks(uint id : SV_DISPATCHTHREADID) {
+  if (id >= uint(numParticleBlocks)) return;
+  uint k = id;
+  if (k < d) particle_sums_buffer[k] = particle_sums_buffer_in[k];
+  else particle_sums_buffer[k] = particle_sums_buffer_in[k] + particle_sums_buffer_in[k - d];
+}
+#pragma kernel AddSums
+[numthreads(64, 1, 1)]
+void AddSums(uint projectedGridIndex : SV_DispatchThreadID, uint groupID : SV_GroupID) {
+  if (groupID == 0 || projectedGridIndex > uint(numParticles)) return;
+  // Output to `grid_offsets`
+  particle_offsets[projectedGridIndex] += particle_sums_buffer_in[groupID - 1];
+}
+#pragma kernel RearrangeParticles
+[numthreads(64, 1, 1)]
+void RearrangeParticles(uint id : SV_DispatchThreadID) {
+  if (id >= uint(numParticles)) return;
+  int index = particle_offsets[id] - 1;
+  rearranged_particles[index] = id;
+}
