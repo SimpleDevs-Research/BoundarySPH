@@ -665,7 +665,12 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
                 if (dot(v3.force,projection.normal)<0) v3force = float3(0,0,0);
                 else v3force = v3.force;
                 projection.external_force = (u * v1force) + (v * v2force) + ((1.0-u-v) * v3force);
-                if (dot(projection.external_force,projection.normal)<0) projection.external_force = -projection.external_force;
+                if (dot(projection.external_force,projection.normal)<0) {
+                    // We re-program the external force to be that it follows the tangential component of the external force only
+                    float3 force_normal_comp = (dot(projection.external_force,-projection.normal)/dot(-projection.normal, -projection.normal)) * -projection.normal;
+                    projection.external_force = projection.external_force - force_normal_comp;
+                    //projection.external_force = -projection.external_force;
+                }
                 // We also have to calculate the amount of force exerted by the particle.
                 // For now, we just calculate the orthogonal force based on the particle's current force
                 // To calculate the force component along the normal vector, we:
