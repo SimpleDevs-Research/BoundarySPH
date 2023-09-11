@@ -558,12 +558,16 @@ namespace ObstaclePrimitives {
             public int obstacleID;
             public float visualRange;
             public float innerRange;
+            public float boundaryRange;
             public float minSpeed;
             public float maxSpeed;
             public float turnSpeed;
             public float cohesionFactor;
             public float separationFactor;
             public float alignmentFactor;
+
+            public int3 boundaryNormal;
+            public int boundaryTriCount;
         }
 
 

@@ -113,12 +113,16 @@ struct Boid2 {
     int obstacleID;
     float visualRange;
     float innerRange;
+    float boundaryRange;
     float minSpeed;
     float maxSpeed;
     float turnSpeed;
     float cohesionFactor;
     float separationFactor;
     float alignmentFactor;
+
+    int3 boundaryNormal;
+    int boundaryTriCount;
 };
 
 // ===================== //
@@ -210,7 +214,7 @@ RWStructuredBuffer<int> grid_offsets_in;
 RWStructuredBuffer<int> grid_sums_buffer;
 RWStructuredBuffer<int> grid_sums_buffer_in;
 RWStructuredBuffer<uint> rearranged_obstacles;
-StructuredBuffer<Boid2> boid_settings;
+RWStructuredBuffer<Boid2> boid_settings;
 StructuredBuffer<float> boid_bounds;
 
 StructuredBuffer<ObstacleStatic> obstacles_static;
@@ -410,6 +414,11 @@ void ResetTempProjections(uint id : SV_DispatchThreadID) {
 void ClearAppliedPressures(uint id : SV_DispatchThreadID) {
     if (id >= (uint)numObstacles) return;
     translational_forces[id] = int3(0,0,0);
+    ObstacleDynamic o_dynamic = obstacles_dynamic[id];
+    if (o_dynamic.isBoid == 1) {
+        boid_settings[o_dynamic.boidIndex].boundaryNormal = int3(0,0,0);
+        boid_settings[o_dynamic.boidIndex].boundaryTriCount = 0;
+    }
 }
 
 #pragma kernel ClearGrid
@@ -819,13 +828,97 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
     projections[id] = projection;
 }
 
-/*
-#pragma kernel CheckForProjection2
-[numthreads(32,16,1)]
-void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
-    if (id.x >= numParticles || id.y >= numTriangles) return;
 
-    // References
+#pragma kernel CheckForObstaclesForBoids
+[numthreads(8,64,1)]
+void CheckForObstaclesForBoids(uint3 id : SV_DispatchThreadID ) {
+    // As opposed to `CheckForProjection`, this `CheckForObstaclesForBoids` iterates across all triangles in the dispatch thread ID
+    // This allows for iteration across two axes.
+    // In fact, we will iterate across all obstacles, across all triangles.
+    // Therefore, `x` = the obstacle ID (regardless of if the obstacle is a boid or not), and `y` = the triangle ID
+    if (id.x >= numObstacles || id.y >= numTriangles) return;
+
+    // First thing to check is if the obstacle is actually a boid or not. Skip if not.
+    ObstacleDynamic o_dynamic = obstacles_dynamic[id.x];
+    if (o_dynamic.isBoid == 0) return;
+
+    // Second is to grab the triangle from id.y, We also need to check if the obstacle associated with this triangle is a boid or not. Return if it is
+    TriangleDynamic tri_dynamic = triangles_dynamic[id.y];
+    ObstacleDynamic other_dynamic = obstacles_dynamic[tri_dynamic.obstacleIndex];
+    if (other_dynamic.isBoid == 1) return;
+
+    //In `CheckForProjection`, we check if the particle is close enough to the obstacle and/or triangle.
+    // However, here the visual range is very much different because the visual range of the boid is what's important.
+    // Therefore, we skip the checks for bounds and instead first check the closest point projection onto the mesh
+    VertexDynamic v1 = vertices_dynamic[other_dynamic.vs[0] + tri_dynamic.vertices[0]];
+    VertexDynamic v2 = vertices_dynamic[other_dynamic.vs[0] + tri_dynamic.vertices[1]];
+    VertexDynamic v3 = vertices_dynamic[other_dynamic.vs[0] + tri_dynamic.vertices[2]];
+
+    // At this point, we need to project the boid's position onto the plane defined by this triangle.
+    // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
+    // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
+    //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
+    float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - o_dynamic.position)) * tri_dynamic.normal);    
+    // We need to project the point onto the plane formed by this triangle
+    float dist_from_point_to_plane = -(dot(tri_dynamic.normal, o_dynamic.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
+    float3 proj = o_dynamic.position + dist_from_point_to_plane * dir;
+
+    // We now determine qualities such as closest vertex and edges
+    float3 closestVertexPosition = v1.position;
+    float3 closestVertexNormal = v1.normal;
+    float3 edge1 = v2.position - v1.position;
+    float3 edge2 = v3.position - v1.position;
+    float3 e1_2DN = tri_dynamic.v1v2n;
+    float3 e2_2DN = tri_dynamic.v1v3n;
+    float3 e1_3DN = edges_dynamic[other_dynamic.es[0] + tri_dynamic.edges[0]];
+    float3 e2_3DN = edges_dynamic[other_dynamic.es[0] + tri_dynamic.edges[1]];
+            
+    if (distance(o_dynamic.position, v2.position) < distance(o_dynamic.position, closestVertexPosition)) {
+        closestVertexPosition = v2.position;
+        closestVertexNormal = v2.normal;
+        edge1 = v1.position - v2.position;
+        edge2 = v3.position - v2.position;
+        e1_2DN = tri_dynamic.v1v2n;
+        e2_2DN = tri_dynamic.v2v3n;
+        e1_3DN = edges_dynamic[other_dynamic.es[0] + tri_dynamic.edges[0]];
+        e2_3DN = edges_dynamic[other_dynamic.es[0] + tri_dynamic.edges[2]];
+    }
+    if (distance(o_dynamic.position, v3.position) < distance(o_dynamic.position, closestVertexPosition)) {
+        closestVertexPosition = v3.position;
+        closestVertexNormal = v3.normal;
+        edge1 = v1.position - v3.position;
+        edge2 = v2.position - v3.position;
+        e1_2DN = tri_dynamic.v1v3n;
+        e2_2DN = tri_dynamic.v2v3n;
+        e1_3DN = edges_dynamic[other_dynamic.es[0] + tri_dynamic.edges[1]];
+        e2_3DN = edges_dynamic[other_dynamic.es[0] + tri_dynamic.edges[2]];
+    }
+
+    // We can now get the projection data
+    float3 closest_position, closest_normal;
+    int isInTriangle = CheckVoroniRegions(
+        proj,                          // The projection of the particle position onto the plane
+        closestVertexPosition, closestVertexNormal,   // The closest vertex position + its 3D normal
+        edge1, edge2,                   // The two edges connected to the closest vertex
+        normalize(e1_2DN), normalize(e2_2DN),                 // The 2D normals of the two connected edges
+        normalize(e1_3DN), normalize(e2_3DN),                 // The 3D normals of the two connected edges
+        normalize(tri_dynamic.normal),             // The triangle normal
+        0.05,                            // The threshold for overlap
+        closest_position,        // reference to the closest position
+        closest_normal           // reference the normal at the closest position
+    );
+
+    // At this point, we need to check if the closest point is within the visual range of the boid. Return if not.
+    if (length(closest_position - o_dynamic.position) > boid_settings[o_dynamic.boidIndex].boundaryRange) return;
+
+    // At this point, we're only interested in the normal vector. This is because this normal tells the boid where to go
+    // Therefore, we simply add the normal vector to a total counter in `boid_settings`
+    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[0], int(closest_normal[0]*1024.0));
+    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[1], int(closest_normal[1]*1024.0));
+    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[2], int(closest_normal[2]*1024.0));
+    InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryTriCount, 1);
+
+    /*
     Particle particle = particles[id.x];
     Projection projection = projections[id.x];
 
@@ -944,6 +1037,7 @@ void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
             InterlockedAdd(translational_forces[tri_dynamic.obstacleIndex][2], int(particle_force[2] * 1024));
         }
     }
+    */
     
                                     /*
 
@@ -1202,7 +1296,7 @@ void CheckForProjection2(uint3 id : SV_DispatchThreadID ) {
                                     */
 
     //projections[id] = projection;
-//}
+}
 
 void CalculateBoidDirection(inout ObstacleDynamic o, inout float3 velocity, uint id) {
     float3 center = 0;
@@ -1261,7 +1355,13 @@ void CalculateBoidDirection(inout ObstacleDynamic o, inout float3 velocity, uint
     }
 
     newVelocity += close * (b.separationFactor * dt);
-    
+    //float boundaryTriCount = float(b.boundaryTriCount);
+    float3 obstacleForce = float3(
+        float(b.boundaryNormal[0])/(1024.0),
+        float(b.boundaryNormal[1])/(1024.0),
+        float(b.boundaryNormal[2])/(1024.0)
+    );
+    if (length(obstacleForce)>0.0) newVelocity += normalize(obstacleForce) * b.boundaryRange * dt;
     
     // Apply speed limits
     float speed = length(newVelocity);
