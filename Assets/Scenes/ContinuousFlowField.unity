@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.99999946, g: 0.99999946, b: 0.99999946, a: 1}
+  m_IndirectSpecularColor: {r: 0.9997447, g: 0.9997447, b: 0.9997447, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -1951,7 +1951,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &763980165
 Transform:
   m_ObjectHideFlags: 0
@@ -3409,18 +3409,6 @@ MonoBehaviour:
   _triangles: 
   fixed_vs: []
   vs_map: 
---- !u!114 &1055893374 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 9212849780297176117, guid: ad0f78b9233a4384d8edc12c2da35695,
-    type: 3}
-  m_PrefabInstance: {fileID: 2120648425}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7788394fbd5116f4f80d5b9dc305136f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!850595691 &1063634334
 LightingSettings:
   m_ObjectHideFlags: 0
@@ -3617,6 +3605,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -3662,6 +3651,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -4146,6 +4136,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -4191,6 +4182,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -4236,6 +4228,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -4281,6 +4274,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -4326,6 +4320,7 @@ MonoBehaviour:
       y: 0
       z: 0
     frictionCoefficient: 0
+    restitutionCoefficient: 0
     checkObstacleBounds: 0
     checkTriangleBounds: 0
     hasChanged: 0
@@ -113169,6 +113164,7 @@ MonoBehaviour:
   - obstacleID: 0
     obstacle: {fileID: 6393158761720834553}
     frictionCoefficient: 0
+    restitutionCoefficient: 0.5
     checkObstacleBounds: 1
     checkTriangleBounds: 1
     alwaysUpdate: 0
@@ -113178,6 +113174,7 @@ MonoBehaviour:
     isBoid: 0
     visualRange: 2
     innerRange: 0.2
+    boundaryRange: 0.25
     minSpeed: 0.5
     maxSpeed: 1.5
     turnSpeed: 2
@@ -113189,6 +113186,7 @@ MonoBehaviour:
     density: 1
     prevDensity: 1
     prevFriction: 0
+    prevReflection: 0.5
     prevIsStatic: 1
     prevApplyExternalForces: 0
     prevApplyGravity: 0
@@ -113206,6 +113204,7 @@ MonoBehaviour:
   - obstacleID: 0
     obstacle: {fileID: 391538773}
     frictionCoefficient: 0
+    restitutionCoefficient: 0.5
     checkObstacleBounds: 1
     checkTriangleBounds: 1
     alwaysUpdate: 0
@@ -113215,6 +113214,7 @@ MonoBehaviour:
     isBoid: 0
     visualRange: 2
     innerRange: 0.2
+    boundaryRange: 0.25
     minSpeed: 0.5
     maxSpeed: 1.5
     turnSpeed: 2
@@ -113226,6 +113226,7 @@ MonoBehaviour:
     density: 1
     prevDensity: 1
     prevFriction: 0
+    prevReflection: 0.5
     prevIsStatic: 1
     prevApplyExternalForces: 0
     prevApplyGravity: 0
@@ -113248,6 +113249,7 @@ MonoBehaviour:
     applyGravity: 0
     visualRange: 2
     innerRange: 0.2
+    boundaryRange: 0.25
     minSpeed: 0.5
     maxSpeed: 1.5
     turnSpeed: 2
@@ -113258,8 +113260,9 @@ MonoBehaviour:
     density: 1
   boids:
   - obstacleID: 0
-    obstacle: {fileID: 1055893374}
+    obstacle: {fileID: 763980169}
     frictionCoefficient: 0
+    restitutionCoefficient: 0.1
     checkObstacleBounds: 1
     checkTriangleBounds: 1
     alwaysUpdate: 0
@@ -113269,6 +113272,7 @@ MonoBehaviour:
     isBoid: 1
     visualRange: 0
     innerRange: 0
+    boundaryRange: 0.25
     minSpeed: 0
     maxSpeed: 0
     turnSpeed: 0
@@ -113280,6 +113284,7 @@ MonoBehaviour:
     density: 0
     prevDensity: 0
     prevFriction: 0
+    prevReflection: 0.5
     prevIsStatic: 0
     prevApplyExternalForces: 0
     prevApplyGravity: 0
@@ -124035,7 +124040,7 @@ MonoBehaviour:
   - -10
   - 3.4999986
   - 1
-  _particleMass: 0.0625
+  _particleMass: 0.125
   _dt: 0.00825
   _g:
   - 0.25
@@ -124043,9 +124048,9 @@ MonoBehaviour:
   - 0
   _h: 0.25
   _rest_density: 1000
-  _mu: 0.5
+  _mu: 0.001
   _damping_effect: -0.5
-  _k: 1.25
+  _k: 1
   _c: 5.77
   _spawnDistanceBetweenParticles: 0.25
   _renderType: 1
@@ -125042,17 +125047,17 @@ PrefabInstance:
     - target: {fileID: 5589783897524913727, guid: ad0f78b9233a4384d8edc12c2da35695,
         type: 3}
       propertyPath: m_LocalScale.x
-      value: 20
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 5589783897524913727, guid: ad0f78b9233a4384d8edc12c2da35695,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 20
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 5589783897524913727, guid: ad0f78b9233a4384d8edc12c2da35695,
         type: 3}
       propertyPath: m_LocalScale.z
-      value: 20
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 5589783897524913727, guid: ad0f78b9233a4384d8edc12c2da35695,
         type: 3}
@@ -125062,7 +125067,7 @@ PrefabInstance:
     - target: {fileID: 5589783897524913727, guid: ad0f78b9233a4384d8edc12c2da35695,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: 7.33
       objectReference: {fileID: 0}
     - target: {fileID: 5589783897524913727, guid: ad0f78b9233a4384d8edc12c2da35695,
         type: 3}

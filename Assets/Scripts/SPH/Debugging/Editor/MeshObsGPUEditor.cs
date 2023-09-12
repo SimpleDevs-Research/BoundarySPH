@@ -17,6 +17,7 @@ public class MeshObsGPUEditor : Editor
         
         if (GUILayout.Button("Generate Boid Transforms")) controller.GenerateBoidTransforms();
         if (GUILayout.Button("Reset Boids to Defaults")) controller.ResetBoidsToDefaults();
+        if (GUILayout.Button("Delete Boids")) controller.DeleteBoids();
         //if (GUILayout.Button("Generate Vertices")) _meshObs.GenerateMeshVertices();
 
         //if (GUILayout.Button("Preprocess Obstacles"))   manager.PreprocessObstacles();

@@ -85,6 +85,9 @@ public class ParticleController : MonoBehaviour
 
     public enum RenderType { Off, Particles, ParticlesTouchingObstacles, GridCells, Both }
     [Header("== DEBUG CONTROLS ==")]
+    [SerializeField] private float _startDelay = 2f;
+    public float startDelay => _startDelay;
+    private float _timeStarted = 0f, _timePassed = 0f;
     [SerializeField] private RenderType _renderType = RenderType.Particles;
     [SerializeField] private float[] _renderLimits;
     [SerializeField, Range(0f,30f)] private float _renderDenom = 10f;
@@ -383,6 +386,7 @@ public class ParticleController : MonoBehaviour
 
         Debug.Log("ParticleController: Particles Initialized!");
         t = Time.time;
+        _timeStarted = Time.time;
     }
 
     private void PrepareRecording() {
@@ -814,6 +818,8 @@ public class ParticleController : MonoBehaviour
         if (_record_statistics != RecordSettings.Off && !_recording_verified) return;
         // Update shader variables!
         UpdateShaderVariables(true);
+        // Check if we can integrate particles, based on _startDelay and _timePassed
+        if ((Time.time - _timeStarted) < _startDelay) return;
         // Update Particles!
         UpdateMullerParticles();
     }

@@ -93,6 +93,36 @@ namespace Helpers {
             Array.Copy(array, startIndex, subset, 0, length);
             return subset;
         }
+
+        // [Source: https://forum.unity.com/threads/encoding-vector2-and-vector3-variables-into-single-int-or-float-and-back.448346/]
+        // [Commentor: emotitron]
+        public static int encodeVector3ToInt(Vector3 v) {
+            //Vectors must stay within the -512 to 512 range per axis - no error handling coded here
+            //Add 512 to get numbers into the 0-1024 range rather than -512 to 512 range
+            //Multiply by 10 to save one decimal place from rounding
+            int xcomp = Mathf.RoundToInt((v.x * 10)) + 512;
+            int ycomp = Mathf.RoundToInt((v.y * 10)) + 512;
+            int zcomp = Mathf.RoundToInt((v.z * 10)) + 512;
+            return xcomp + ycomp * 1024 + zcomp * 1048576;
+        }
+        public static Vector3 decodeVector3FromInt(int i) {
+            //Get the leftmost bits first. The fractional remains are the bits to the right.
+            // 1024 is 2 ^ 10 - 1048576 is 2 ^ 20 - just saving some calculation time doing that in advance
+            float z = Mathf.Floor(i / 1048576);
+            float y = Mathf.Floor ((i - z * 1048576) / 1024);
+            float x = (i - y * 1024 - z * 1048576);
+            // subtract 512 to move numbers back into the -512 to 512 range rather than 0 - 1024
+            return new Vector3 ((x - 512) / 10, (y - 512) / 10, (z - 512) / 10);
+        }
+        public static SVector3 decodeSVector3FromInt(int i) {
+            //Get the leftmost bits first. The fractional remains are the bits to the right.
+            // 1024 is 2 ^ 10 - 1048576 is 2 ^ 20 - just saving some calculation time doing that in advance
+            float z = Mathf.Floor(i / 1048576);
+            float y = Mathf.Floor ((i - z * 1048576) / 1024);
+            float x = (i - y * 1024 - z * 1048576);
+            // subtract 512 to move numbers back into the -512 to 512 range rather than 0 - 1024
+            return new SVector3 ((x - 512) / 10, (y - 512) / 10, (z - 512) / 10);
+        }
     }
 
     [System.Serializable]

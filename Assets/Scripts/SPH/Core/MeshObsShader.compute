@@ -919,7 +919,7 @@ void CheckForObstaclesForBoids(uint3 id : SV_DispatchThreadID ) {
     // And those whose distances are big should be the smallest.
     // We'll use the boundaryRange as our cap, and determine the level of influence based on boundaryRange - distance
     float boundaryInfluence = boid_settings[o_dynamic.boidIndex].boundaryRange -boundaryDistance;
-    float3 influencedNormal = closest_normal * boundaryInfluence; 
+    float3 influencedNormal = closest_normal * boundaryInfluence;
     InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[0], int(influencedNormal[0]*1024.0));
     InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[1], int(influencedNormal[1]*1024.0));
     InterlockedAdd(boid_settings[o_dynamic.boidIndex].boundaryNormal[2], int(influencedNormal[2]*1024.0));
@@ -1362,13 +1362,15 @@ void CalculateBoidDirection(inout ObstacleDynamic o, inout float3 velocity, uint
     }
 
     newVelocity += close * (b.separationFactor * dt);
-    //float boundaryTriCount = float(b.boundaryTriCount);
     float3 obstacleForce = float3(
         float(b.boundaryNormal[0])/(1024.0),
         float(b.boundaryNormal[1])/(1024.0),
         float(b.boundaryNormal[2])/(1024.0)
     );
-    if (length(obstacleForce)>0.0) newVelocity += normalize(obstacleForce) * b.boundaryRange * dt;
+    if (length(obstacleForce)>0.0) {
+        float obsForceMag = clamp(length(obstacleForce),0.0,b.boundaryRange);
+        newVelocity += normalize(obstacleForce) * b.boundaryRange * (obsForceMag/b.boundaryRange) * dt;
+    }
     
     // Apply speed limits
     float speed = length(newVelocity);

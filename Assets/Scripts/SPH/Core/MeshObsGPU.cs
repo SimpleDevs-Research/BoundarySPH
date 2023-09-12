@@ -186,6 +186,13 @@ public class MeshObsGPU : MonoBehaviour
         }
     }
 
+    public void DeleteBoids() {
+        while(boids.Count > 0) {
+            if (boids[0].obstacle != null) DestroyImmediate(boids[0].obstacle.gameObject);
+            boids.RemoveAt(0);
+        }
+    }
+
     void OnDrawGizmos() {
         
         if (!Application.isPlaying || !_initialized) return;
