@@ -2106,8 +2106,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 651545863}
   m_LocalRotation: {x: 0.71325046, y: 0, z: 0, w: 0.70090926}
-  m_LocalPosition: {x: 0, y: -0.39, z: -0.09}
-  m_LocalScale: {x: 2, y: 20.09975, z: 1}
+  m_LocalPosition: {x: 0, y: -0.37, z: -1.16}
+  m_LocalScale: {x: 2, y: 18, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 767644877}
@@ -2700,6 +2700,7 @@ MonoBehaviour:
   _k: 0.8
   _c: 5.77
   _spawnDistanceBetweenParticles: 0.25
+  _startDelay: 2
   _renderType: 1
   _renderLimits:
   - -5
@@ -3143,6 +3144,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1133516763}
   - component: {fileID: 1133516764}
+  - component: {fileID: 1133516765}
   m_Layer: 0
   m_Name: FlatPlane
   m_TagString: Untagged
@@ -3187,6 +3189,7 @@ MonoBehaviour:
   _OBSTACLES_CONTROLLER: {fileID: 1491622165}
   _PRESSURE_RENDERER: {fileID: 0}
   _CF: {fileID: 0}
+  _RM: {fileID: 1133516765}
   _verbose: 1
   _particles_array:
   - position:
@@ -4931,6 +4934,25 @@ MonoBehaviour:
   _vertices_dynamic_array: []
   _edges_dynamic_array: []
   _translation_forces_array: []
+--- !u!114 &1133516765
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1133516762}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2c3cce049aa5ae49aabb6011757c15c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _BM: {fileID: 1133516764}
+  _PC: {fileID: 1879856408}
+  _SHADER: {fileID: 0}
+  _recordingStartSetting: 2
+  _delayBeforeStart: 0
+  _timeElapsed: 0
+  _initialized: 0
 --- !u!1 &1215821887
 GameObject:
   m_ObjectHideFlags: 0
@@ -116157,6 +116179,7 @@ MonoBehaviour:
   _k: 1
   _c: 5.77
   _spawnDistanceBetweenParticles: 0.125
+  _startDelay: 2
   _renderType: 1
   _renderLimits:
   - -100
