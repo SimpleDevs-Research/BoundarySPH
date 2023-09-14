@@ -135,6 +135,8 @@ public class ParticleController : MonoBehaviour
     private int _num_records_per_batch = 1000;
     [SerializeField, Tooltip("How long between each batch web request? If set to any value <= 0, will default to 0.01")]
     private float _time_between_requests = 0.01f;
+    [SerializeField] private float _dt_passed = 0f;
+    public float dt_passed => _dt_passed;
 
     // This stores all recordings for offline recording sessions
     //private Recording[] _offline_recordings;
@@ -853,6 +855,9 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.Dispatch(_INTEGRATE, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
         // Make sure that particles are within bounds, limit them if so
         //_SPH_Shader.Dispatch(_DAMPEN_BY_BOUNDS, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
+
+        // Update _dt_passed
+        _dt_passed += _dt;
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.

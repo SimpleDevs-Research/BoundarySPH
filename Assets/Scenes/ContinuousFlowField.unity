@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.9997447, g: 0.9997447, b: 0.9997447, a: 1}
+  m_IndirectSpecularColor: {r: 0.99999946, g: 0.99999946, b: 0.99999946, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -1808,6 +1808,7 @@ MonoBehaviour:
   _k: 0.85
   _c: 5.77
   _spawnDistanceBetweenParticles: 1.49
+  _startDelay: 2
   _renderType: 1
   _renderLimits: []
   _renderDenom: 10
@@ -1836,6 +1837,7 @@ MonoBehaviour:
   _record_duration: 10
   _num_records_per_batch: 1000
   _time_between_requests: 0.1
+  _dt_passed: 0
   _positions_request_textbox: {fileID: 0}
   _velocities_request_textbox: {fileID: 0}
   _densities_request_textbox: {fileID: 0}
@@ -3481,6 +3483,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1170818646}
   - component: {fileID: 1170818647}
+  - component: {fileID: 1170818648}
   m_Layer: 0
   m_Name: ContinuousFlowField
   m_TagString: Untagged
@@ -3526,6 +3529,7 @@ MonoBehaviour:
   _OBSTACLES_CONTROLLER: {fileID: 1244622168}
   _PRESSURE_RENDERER: {fileID: 0}
   _CF: {fileID: 1691400932}
+  _RM: {fileID: 1170818648}
   _verbose: 1
   _particles_array: []
   _particles_grid_array: 
@@ -3868,6 +3872,34 @@ MonoBehaviour:
       z: 0
   _edges_dynamic_array: []
   _translation_forces_array: []
+--- !u!114 &1170818648
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1170818645}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2c3cce049aa5ae49aabb6011757c15c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _BM: {fileID: 1170818647}
+  _PC: {fileID: 1691400929}
+  _SHADER: {fileID: 7200000, guid: 0cc8f804ea9098047bee2edc6931ed75, type: 3}
+  _recordingName: TestContinuousFlow
+  _recordingFilepath: Records
+  _recordingStartSetting: 2
+  _delayBeforeStart: 0.1
+  _recordTimeBuffer: 0.5
+  _positions_filepath: 
+  _velocities_filepath: 
+  _timeElapsed: 0
+  _numRecordsPassed: -1
+  particle_positions_array: []
+  particle_velocities_array: []
+  _filespace_initialized: 0
+  _initialized: 0
 --- !u!1 &1210046217
 GameObject:
   m_ObjectHideFlags: 0
@@ -124053,6 +124085,7 @@ MonoBehaviour:
   _k: 1
   _c: 5.77
   _spawnDistanceBetweenParticles: 0.25
+  _startDelay: 2
   _renderType: 1
   _renderLimits:
   - -25
@@ -124087,6 +124120,7 @@ MonoBehaviour:
   _record_duration: 10
   _num_records_per_batch: 1000
   _time_between_requests: 0.1
+  _dt_passed: 0
   _positions_request_textbox: {fileID: 0}
   _velocities_request_textbox: {fileID: 0}
   _densities_request_textbox: {fileID: 0}
