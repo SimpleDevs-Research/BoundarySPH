@@ -3484,6 +3484,7 @@ GameObject:
   - component: {fileID: 1170818646}
   - component: {fileID: 1170818647}
   - component: {fileID: 1170818648}
+  - component: {fileID: 1170818649}
   m_Layer: 0
   m_Name: ContinuousFlowField
   m_TagString: Untagged
@@ -3900,6 +3901,26 @@ MonoBehaviour:
   particle_velocities_array: []
   _filespace_initialized: 0
   _initialized: 0
+--- !u!114 &1170818649
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1170818645}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1268e9657ef0fae45a7e21d320a42d51, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _positionsFile: {fileID: 0}
+  _velocitiesFile: {fileID: 0}
+  _drawPositions: 0
+  _drawVelocities: 0
+  _positionsColor: {r: 0, g: 0, b: 1, a: 1}
+  _velocitiesColor: {r: 1, g: 0, b: 0, a: 1}
+  _testBounds: {x: 0, y: 10}
+  _hypercubeParams: {x: 1, y: 1, z: 1, w: 0.25}
 --- !u!1 &1210046217
 GameObject:
   m_ObjectHideFlags: 0
