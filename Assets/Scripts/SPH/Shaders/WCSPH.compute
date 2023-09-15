@@ -605,7 +605,7 @@ void Integrate(uint id : SV_DispatchThreadID) {
                 //p.position = projection.position + n * smoothingRadius + dt * v;
             }
 
-            v += dt * projection.external_force;
+            v += projection.frictionCoefficient * projection.external_force;
                 
             //p.position = (projection.position + n * smoothingRadius) + dt * v;
             //p.position = (projection.position + n * smoothingRadius);

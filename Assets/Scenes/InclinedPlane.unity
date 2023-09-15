@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.99999946, g: 0.99999946, b: 0.99999946, a: 1}
+  m_IndirectSpecularColor: {r: 0.9997447, g: 0.9997447, b: 0.9997447, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -149,7 +149,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 33300073}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -2.5, y: -2.5, z: -11}
+  m_LocalPosition: {x: 1, y: -2.5, z: -2.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1345,14 +1345,14 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 427732667}
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 12, y: 0, z: 0}
   m_LocalScale: {x: 5, y: 5, z: 22}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2066142522}
   m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!114 &427732669
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1383,7 +1383,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 427732667}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -1655,9 +1655,9 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "# Particles: 144\nmass: 0.015625 | h: 0.125 | mu: 0.0001 \nrest_density:
+  m_text: "# Particles: 64\nmass: 0.015625 | h: 0.125 | mu: 0.0001 \nrest_density:
     1000 | k: 1\ndt: 0.00825sec | Initial distance: 0.125\nDegrees of Inclination:
-    1\nz-axis visual range: -8.45 to 0.25"
+    1"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1911,7 +1911,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 612334990}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 2.5, y: 2.5, z: 11}
+  m_LocalPosition: {x: 23, y: 2.5, z: 2.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1994,14 +1994,14 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 651545863}
-  m_LocalRotation: {x: 0.71325046, y: 0, z: 0, w: 0.70090926}
-  m_LocalPosition: {x: 0, y: -0.37, z: -1.16}
-  m_LocalScale: {x: 2, y: 18, z: 1}
+  m_LocalRotation: {x: 0.5043442, y: 0.4956177, z: -0.5043442, w: 0.4956177}
+  m_LocalPosition: {x: 12, y: -0.37, z: 0}
+  m_LocalScale: {x: 2, y: 21, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 767644877}
   m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 89, y: -180, z: -180}
+  m_LocalEulerAnglesHint: {x: 89, y: -90, z: -180}
 --- !u!23 &651545865
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2188,7 +2188,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 762104616}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.0625, y: 0.125, z: -9.25}
+  m_LocalPosition: {x: 2.5625, y: 0.125, z: 0.0625}
   m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2400,7 +2400,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 849849094}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.75, y: 1.5, z: -8.5}
+  m_LocalPosition: {x: 3, y: 1, z: 0.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2656,7 +2656,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 912787444}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -2.5, y: -2.5, z: -11}
+  m_LocalPosition: {x: 1, y: -2.5, z: -2.5}
   m_LocalScale: {x: 0.75, y: 0.75, z: 0.75}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2739,7 +2739,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 932682365}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.75, y: 0, z: -10}
+  m_LocalPosition: {x: 2, y: 0, z: -0.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2822,7 +2822,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 943950869}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.75, y: 0, z: -10}
+  m_LocalPosition: {x: 2, y: 0, z: -0.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4840,8 +4840,8 @@ MonoBehaviour:
   _BM: {fileID: 1133516764}
   _PC: {fileID: 1879856408}
   _SHADER: {fileID: 7200000, guid: 0cc8f804ea9098047bee2edc6931ed75, type: 3}
-  _recordingName: TestReecording
-  _recordingFilepath: Records/
+  _recordingName: InclinedPlane-1Layer
+  _recordingFilepath: Recordings_ignore
   _recordingStartSetting: 2
   _delayBeforeStart: 0
   _recordTimeBuffer: 0.1
@@ -4865,12 +4865,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1268e9657ef0fae45a7e21d320a42d51, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _positionsFile: {fileID: 4900000, guid: 2c72ee7c227b7b04d8c1ec36ab985563, type: 3}
-  _velocitiesFile: {fileID: 4900000, guid: da6c61fc8bc1aa641baf1501566221a7, type: 3}
+  _positionsFile: {fileID: 4900000, guid: fd2656783d33d644da369cb97f0df0da, type: 3}
+  _velocitiesFile: {fileID: 0}
   _drawPositions: 1
   _drawVelocities: 1
   _positionsColor: {r: 0, g: 0, b: 1, a: 1}
   _velocitiesColor: {r: 1, g: 0, b: 0, a: 1}
+  _testBounds: {x: 0, y: 10}
   _hypercubeParams: {x: 1, y: 1, z: 1, w: 0.25}
 --- !u!1 &1180767609
 GameObject:
@@ -49128,7 +49129,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: '-
+  m_text: '
 
 '
   m_isRightToLeft: 0
@@ -49225,7 +49226,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1357536115}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.0625, y: 0, z: -9.375}
+  m_LocalPosition: {x: 2.4375, y: 0, z: -0.0625}
   m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -49348,7 +49349,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: '-
+  m_text: '
 
 '
   m_isRightToLeft: 0
@@ -49532,15 +49533,15 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1438361524}
-  m_LocalRotation: {x: 0, y: 0.8870109, z: -0.46174863, w: 0}
-  m_LocalPosition: {x: 0, y: 0.686, z: 0}
+  m_LocalRotation: {x: -0.40557975, y: 0.579228, z: -0.40557975, w: -0.579228}
+  m_LocalPosition: {x: 12.55, y: 1.27, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 589056126}
   m_Father: {fileID: 0}
   m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 55, y: 180, z: 0}
+  m_LocalEulerAnglesHint: {x: 70, y: 270, z: 0}
 --- !u!20 &1438361527
 Camera:
   m_ObjectHideFlags: 0
@@ -49566,7 +49567,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 97.7
+  field of view: 81.7
   orthographic: 0
   orthographic size: 5
   m_Depth: 0
@@ -49729,7 +49730,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: '-
+  m_text: '
 
 '
   m_isRightToLeft: 0
@@ -159455,26 +159456,26 @@ MonoBehaviour:
   _UPPER_BOUND_TRANSFORM: {fileID: 2041409972}
   _gridCellSize: 0.5
   _bufferCellsPerAxis: 0
-  _origin: {x: 0, y: 0, z: 0}
+  _origin: {x: 12, y: 0, z: 0}
   _innerBounds:
+  - 1
   - -2.5
   - -2.5
-  - -11
+  - 23
   - 2.5
   - 2.5
-  - 11
   _outerBounds:
+  - 1
   - -2.5
   - -2.5
-  - -11
+  - 23
   - 2.5
   - 2.5
-  - 11
-  _numCellsPerAxis: 0a0000000a0000002c000000
+  _numCellsPerAxis: 2c0000000a0000000a000000
   _gridScaling:
+  - 1
   - -2.5
   - -2.5
-  - -11
   sections: []
   particle_mesh: {fileID: 0}
   particle_material: {fileID: 0}
@@ -159645,7 +159646,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: '-
+  m_text: '
 
 '
   m_isRightToLeft: 0
@@ -160101,59 +160102,59 @@ MonoBehaviour:
   _UPPER_BOUND_TRANSFORM: {fileID: 612334991}
   _gridCellSize: 0.5
   _bufferCellsPerAxis: 0
-  _origin: {x: 0, y: 0, z: 0}
+  _origin: {x: 12, y: 0, z: 0}
   _innerBounds:
+  - 1
   - -2.5
   - -2.5
-  - -11
+  - 23
   - 2.5
   - 2.5
-  - 11
   _outerBounds:
+  - 1
   - -2.5
   - -2.5
-  - -11
+  - 23
   - 2.5
   - 2.5
-  - 11
-  _numCellsPerAxis: 0a0000000a0000002c000000
+  _numCellsPerAxis: 2c0000000a0000000a000000
   _gridScaling:
+  - 1
   - -2.5
   - -2.5
-  - -11
   sections:
   - LOWER_BOUND_REF: {fileID: 1357536116}
     UPPER_BOUND_REF: {fileID: 762104617}
-    _origin: {x: 0, y: 0.0625, z: -9.3125}
+    _origin: {x: 2.5, y: 0.0625, z: 0}
     _bounds:
-    - -0.0625
+    - 2.4375
     - 0
-    - -9.375
-    - 0.0625
+    - -0.0625
+    - 2.5625
     - 0.125
-    - -9.25
+    - 0.0625
     _gizmosColor: {r: 1, g: 0.9813726, b: 0, a: 0.5}
   - LOWER_BOUND_REF: {fileID: 932682366}
     UPPER_BOUND_REF: {fileID: 2045479338}
-    _origin: {x: 0, y: 0.0625, z: -9.25}
+    _origin: {x: 2.5, y: 0.0625, z: 0}
     _bounds:
-    - -0.75
+    - 2
     - 0
-    - -10
-    - 0.75
+    - -0.5
+    - 3
     - 0.125
-    - -8.5
+    - 0.5
     _gizmosColor: {r: 0, g: 0.10163808, b: 1, a: 0.5}
   - LOWER_BOUND_REF: {fileID: 943950870}
     UPPER_BOUND_REF: {fileID: 849849095}
-    _origin: {x: 0, y: 0.75, z: -9.25}
+    _origin: {x: 2.5, y: 0.5, z: 0}
     _bounds:
-    - -0.75
+    - 2
     - 0
-    - -10
-    - 0.75
-    - 1.5
-    - -8.5
+    - -0.5
+    - 3
+    - 1
+    - 0.5
     _gizmosColor: {r: 0, g: 1, b: 0.96764207, a: 0.5}
   particle_mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
   particle_material: {fileID: 2100000, guid: 8ab985200bd114041a66a7d2dd1b0929, type: 2}
@@ -160181,17 +160182,17 @@ MonoBehaviour:
   _SPH_Shader: {fileID: 7200000, guid: a770d7439db8e374ebf2cbfe57033849, type: 3}
   _POINT_CLOUD_OBSTACLE_MANAGER: {fileID: 0}
   _particleRenderSize: 0.12
-  _MAX_NUM_PARTICLES: 144
-  _numParticles: 144
-  _numParticlesPerAxis: 0c000000010000000c000000
+  _MAX_NUM_PARTICLES: 64
+  _numParticles: 64
+  _numParticlesPerAxis: 080000000100000008000000
   _numParticlesPerGridCell: 256
   _spawnBounds:
-  - -0.75
+  - 2
   - 0
-  - -10
-  - 0.75
+  - -0.5
+  - 3
   - 0.125
-  - -8.5
+  - 0.5
   _particleMass: 0.015625
   _dt: 0.00825
   _g:
@@ -160304,7 +160305,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Diagonal View
+  m_text: Inclined Plane
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -160933,7 +160934,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2041409971}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 2.5, y: 2.5, z: 11}
+  m_LocalPosition: {x: 23, y: 2.5, z: 2.5}
   m_LocalScale: {x: 0.75, y: 0.75, z: 0.75}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -161016,7 +161017,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2045479337}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.75, y: 0.125, z: -8.5}
+  m_LocalPosition: {x: 3, y: 0.125, z: 0.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

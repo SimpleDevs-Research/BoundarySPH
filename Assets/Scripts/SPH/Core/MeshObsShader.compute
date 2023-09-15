@@ -259,7 +259,7 @@ void UpdateVertices(uint id : SV_DispatchThreadID) {
         if (o_static.has_smr == 0) {
             worldPosition = LocalPointToWorldPoint(o_dynamic.position, o_dynamic.rotation, o_dynamic.scale, v_static.localPosition);
             // Update the exertion force the vertex will push onto particles.  Calculated first before the position is updated
-            v_dynamic.force = o_static.mass * (worldPosition - v_dynamic.position)/dt;
+            v_dynamic.force = (worldPosition - v_dynamic.position)/dt;
             // Update the world position of the current vertex
             v_dynamic.position = worldPosition;
         }
