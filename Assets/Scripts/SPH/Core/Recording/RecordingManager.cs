@@ -30,13 +30,13 @@ public class RecordingManager : MonoBehaviour
     [SerializeField] private float _recordTimeBuffer = 0.1f;
 
     [Header("=== RECORDING STATISTICS ===")]
-    [SerializeField, ReadOnly] private string _positions_filepath, _velocities_filepath, _pressures_filepath;
+    [SerializeField, ReadOnly] private string _positions_filepath, _velocities_filepath, _densities_filepath, _pressures_filepath;
     private float _timeStarted;
     private float _recordingTimeStarted;
     [SerializeField, ReadOnly] private float _timeElapsed;
     [SerializeField, ReadOnly] private int _numRecordsPassed = -1;
     [SerializeField] private float3[] particle_positions_array, particle_velocities_array;
-    [SerializeField] private float[] particle_pressures_array;
+    [SerializeField] private float[] particle_densities_array, particle_pressures_array;
     [SerializeField, ReadOnly] private bool _filespace_initialized = false;
     [SerializeField, ReadOnly] private bool _initialized = false;
 
@@ -45,9 +45,9 @@ public class RecordingManager : MonoBehaviour
     private int condenseParticleDataKernel;
     private ComputeBuffer particlePositionsHashedBuffer, particleVelocitiesHashedBuffer;
     private List<float3[]> position_raw_rows, velocity_raw_rows;
-    private List<float[]> pressure_raw_rows;
+    private List<float[]> density_raw_rows, pressure_raw_rows;
     private IEnumerator updateCoroutine;
-    private StreamWriter positions_writer, velocities_writer, pressures_writer;
+    private StreamWriter positions_writer, velocities_writer, densities_writer, pressures_writer;
  
     // This function must be called in order for the recording to actually start. It can be called via the editor in inspector, or called via `BufferManager`
     public void Initialize() {
@@ -130,14 +130,17 @@ public class RecordingManager : MonoBehaviour
         // We need to extract the data from our buffer
         particle_positions_array = new float3[_PC.numParticles];
         particle_velocities_array = new float3[_PC.numParticles];
+        particle_densities_array = new float[_PC.numParticles];
         particle_pressures_array = new float[_PC.numParticles];
         particlePositionsHashedBuffer.GetData(particle_positions_array);
         _BM.PARTICLES_VELOCITIES_BUFFER.GetData(particle_velocities_array);
+        _BM.PARTICLES_DENSITIES_BUFFER.GetData(particle_densities_array);
         _BM.PARTICLES_PRESSURES_BUFFER.GetData(particle_pressures_array);
 
         // push the current state of the array into our buffer space, that'll eventually be read by our coroutine
         position_raw_rows.Add(particle_positions_array);
         velocity_raw_rows.Add(particle_velocities_array);
+        density_raw_rows.Add(particle_densities_array);
         pressure_raw_rows.Add(particle_pressures_array);
     }
 
@@ -175,6 +178,7 @@ public class RecordingManager : MonoBehaviour
             // Initialize our filepaths
             _positions_filepath = finalFilepath + "positions.csv";
             _velocities_filepath = finalFilepath + "velocities.csv";
+            _densities_filepath = finalFilepath + "densities.csv";
             _pressures_filepath = finalFilepath + "pressures.csv";
             // Initialize our header
             string[] headers = new string[_PC.numParticles + 1];
@@ -186,14 +190,17 @@ public class RecordingManager : MonoBehaviour
             // Initialize our data lists
             position_raw_rows = new List<float3[]>();
             velocity_raw_rows = new List<float3[]>();
+            density_raw_rows = new List<float[]>();
             pressure_raw_rows = new List<float[]>();
             // Initialize our StreamWriters
             positions_writer = new StreamWriter(_positions_filepath);
             velocities_writer = new StreamWriter(_velocities_filepath);
+            densities_writer = new StreamWriter(_densities_filepath);
             pressures_writer = new StreamWriter(_pressures_filepath);
             // Write our headers into both writers
             positions_writer.WriteLine(h);
             velocities_writer.WriteLine(h);
+            densities_writer.WriteLine(h);
             pressures_writer.WriteLine(h);
             // Finally, indicate that we can write to files
             _filespace_initialized = true;
@@ -222,6 +229,14 @@ public class RecordingManager : MonoBehaviour
                 // Remove the first-most raw row
                 velocity_raw_rows.RemoveAt(0);
             }
+            if (density_raw_rows.Count > 0) {
+                newLine = ct+"," + string.Join(", ", density_raw_rows[0].Select(i =>  i.ToString()).ToArray());
+                //velocity_rows.Add(newLine);
+                // Write to our streamwriter
+                densities_writer.WriteLine(newLine);
+                // Remove the first-most raw row
+                density_raw_rows.RemoveAt(0);
+            }
             if (pressure_raw_rows.Count > 0) {
                 newLine = ct+"," + string.Join(", ", pressure_raw_rows[0].Select(i =>  i.ToString()).ToArray());
                 //velocity_rows.Add(newLine);
@@ -238,12 +253,15 @@ public class RecordingManager : MonoBehaviour
     void OnDestroy() {
         if (updateCoroutine != null) {
             // We need to end the coroutine and therefore end the file writing, to prevent data corruption
+            while(position_raw_rows.Count > 0 || velocity_raw_rows.Count > 0 || density_raw_rows.Count > 0 || pressure_raw_rows.Count > 0) {}
             StopCoroutine(updateCoroutine);
             // We must flush and close opur writers
             positions_writer.Flush();
             positions_writer.Close();
             velocities_writer.Flush();
             velocities_writer.Close();
+            densities_writer.Flush();
+            densities_writer.Close();
             pressures_writer.Flush();
             pressures_writer.Close();
         }
