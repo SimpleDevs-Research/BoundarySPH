@@ -102,7 +102,7 @@ public class BufferManager : MonoBehaviour
         MESHOBS_GRID_BUFFER = new ComputeBuffer(numGridCells, sizeof(int));
         MESHOBS_REARRANGED_OBSTACLES_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint));
 
-        MESHOBS_OBSTACLES_STATIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*9 + sizeof(float));
+        MESHOBS_OBSTACLES_STATIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*9 + sizeof(float)*7);
         MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*15 + sizeof(float)*22);
         MESHOBS_TRIANGLES_STATIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*9);
         MESHOBS_TRIANGLES_DYNAMIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*22);

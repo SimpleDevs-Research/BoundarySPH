@@ -7,6 +7,87 @@ using SaveMethods = Helpers.SaveSystemMethods;
 using System.Linq;
 using Unity.Mathematics;
 
+[System.Serializable]
+public class RecordingWriter {
+    public StreamWriter writer;
+    public ComputeBuffer bufferRef;
+    public int numParticles;
+    public RecordingWriter(string fp, ComputeBuffer buffer, int n) {
+        writer = new StreamWriter(fp);
+        bufferRef = buffer;
+        numParticles = n;
+    }
+
+    public virtual void GetData() {}
+    public virtual void WriteData(string ct) {}
+    public virtual bool HasRawRows() { return true; }
+
+    public void DestroyWriter() {
+        writer.Flush();
+        writer.Close();
+    }
+}
+
+public class RecordingWriterFloat3 : RecordingWriter {
+    public List<float3[]> raws;
+
+    public RecordingWriterFloat3(string fp, ComputeBuffer buffer, int n, string header) : base(fp, buffer, n) {
+        writer.WriteLine(header);
+        raws = new List<float3[]>();
+    }
+
+    public override void GetData() {
+        // Prep the new current data array
+        float3[] current_data = new float3[numParticles];
+        // Get the data from the buffer
+        bufferRef.GetData(current_data);
+        // Save the line
+        raws.Add(current_data);
+    }
+
+    public override void WriteData(string ct) {
+        if (raws.Count == 0) return;
+        // Prepare the next line
+        string newLine = ct+"," + string.Join(", ", raws[0].Select(i => i[0].ToString()+"|"+i[1]+"|"+i[2].ToString()).ToArray());
+        // Write to our streamwriter
+        writer.WriteLine(newLine);
+        // Remove the first-most raw row
+        raws.RemoveAt(0);
+    }
+
+    public override bool HasRawRows() { return raws.Count > 0; }
+}
+
+public class RecordingWriterFloat : RecordingWriter {
+    public List<float[]> raws;
+
+    public RecordingWriterFloat(string fp, ComputeBuffer buffer, int n, string header) : base(fp, buffer, n) {
+        writer.WriteLine(header);
+        raws = new List<float[]>();
+    }
+
+    public override void GetData() {
+        // Prep the new current data array
+        float[] current_data = new float[numParticles];
+        // Get the data from the buffer
+        bufferRef.GetData(current_data);
+        // Save the line
+        raws.Add(current_data);
+    }
+
+    public override void WriteData(string ct) {
+        if (raws.Count == 0) return;
+        // Prepare the next line
+        string newLine = ct+"," + string.Join(", ", raws[0].Select(i =>  i.ToString()).ToArray());
+        // Write to our streamwriter
+        writer.WriteLine(newLine);
+        // Remove the first-most raw row
+        raws.RemoveAt(0);
+    }
+
+    public override bool HasRawRows() { return raws.Count > 0; }
+}
+
 public class RecordingManager : MonoBehaviour
 {
     public enum RecStart {
@@ -35,6 +116,7 @@ public class RecordingManager : MonoBehaviour
     private float _recordingTimeStarted;
     [SerializeField, ReadOnly] private float _timeElapsed;
     [SerializeField, ReadOnly] private int _numRecordsPassed = -1;
+    [SerializeField, ReadOnly] private List<RecordingWriter> _writers;
     [SerializeField] private float3[] particle_positions_array, particle_velocities_array;
     [SerializeField] private float[] particle_densities_array, particle_pressures_array;
     [SerializeField, ReadOnly] private bool _filespace_initialized = false;
@@ -128,6 +210,10 @@ public class RecordingManager : MonoBehaviour
         _SHADER.Dispatch(condenseParticleDataKernel, Mathf.CeilToInt((float)_PC.numParticles / 64f), 1, 1);
 
         // We need to extract the data from our buffer
+        foreach(RecordingWriter w in _writers) {
+            w.GetData();
+        }
+        /*
         particle_positions_array = new float3[_PC.numParticles];
         particle_velocities_array = new float3[_PC.numParticles];
         particle_densities_array = new float[_PC.numParticles];
@@ -142,6 +228,7 @@ public class RecordingManager : MonoBehaviour
         velocity_raw_rows.Add(particle_velocities_array);
         density_raw_rows.Add(particle_densities_array);
         pressure_raw_rows.Add(particle_pressures_array);
+        */
     }
 
     private void InitializeShader() {
@@ -187,6 +274,17 @@ public class RecordingManager : MonoBehaviour
                 headers[i] = (i-1).ToString();
             }
             string h = string.Join(",",headers);
+            // Initialize our RecordingWriters
+            RecordingWriterFloat3 positionsWriter = new RecordingWriterFloat3(_positions_filepath, particlePositionsHashedBuffer, _PC.numParticles, h);
+            RecordingWriterFloat3 velocitiesWriter = new RecordingWriterFloat3(_velocities_filepath, _BM.PARTICLES_VELOCITIES_BUFFER, _PC.numParticles, h);
+            RecordingWriterFloat densitiesWriter = new RecordingWriterFloat(_densities_filepath, _BM.PARTICLES_DENSITIES_BUFFER, _PC.numParticles, h);
+            RecordingWriterFloat pressuresWriter = new RecordingWriterFloat(_pressures_filepath, _BM.PARTICLES_PRESSURES_BUFFER, _PC.numParticles, h);
+            // Add our writers
+            _writers.Add(positionsWriter);
+            _writers.Add(velocitiesWriter);
+            _writers.Add(densitiesWriter);
+            _writers.Add(pressuresWriter);
+            /*
             // Initialize our data lists
             position_raw_rows = new List<float3[]>();
             velocity_raw_rows = new List<float3[]>();
@@ -202,6 +300,7 @@ public class RecordingManager : MonoBehaviour
             velocities_writer.WriteLine(h);
             densities_writer.WriteLine(h);
             pressures_writer.WriteLine(h);
+            */
             // Finally, indicate that we can write to files
             _filespace_initialized = true;
         }
@@ -213,6 +312,10 @@ public class RecordingManager : MonoBehaviour
         while(_filespace_initialized) {
             //string ct = _timeElapsed.ToString();
             string ct = _PC.dt_passed.ToString();
+            foreach(RecordingWriter w in _writers) {
+                w.WriteData(ct);
+            }
+            /*
             if (position_raw_rows.Count > 0) {
                 newLine = ct+"," + string.Join(", ", position_raw_rows[0].Select(i => i[0].ToString()+"|"+i[1]+"|"+i[2].ToString()).ToArray());
                 //position_rows.Add(newLine);
@@ -245,6 +348,7 @@ public class RecordingManager : MonoBehaviour
                 // Remove the first-most raw row
                 pressure_raw_rows.RemoveAt(0);
             }
+            */
             yield return null;
         }
         yield return null;
@@ -253,9 +357,20 @@ public class RecordingManager : MonoBehaviour
     void OnDestroy() {
         if (updateCoroutine != null) {
             // We need to end the coroutine and therefore end the file writing, to prevent data corruption
-            while(position_raw_rows.Count > 0 || velocity_raw_rows.Count > 0 || density_raw_rows.Count > 0 || pressure_raw_rows.Count > 0) {}
+            bool stillHasRaws = false;
+            do {
+                stillHasRaws = false;
+                foreach(RecordingWriter w in _writers) {
+                    stillHasRaws = stillHasRaws || w.HasRawRows();
+                }
+            } while (stillHasRaws);
+            //while(position_raw_rows.Count > 0 || velocity_raw_rows.Count > 0 || density_raw_rows.Count > 0 || pressure_raw_rows.Count > 0) {}
             StopCoroutine(updateCoroutine);
             // We must flush and close opur writers
+            foreach(RecordingWriter w in _writers) {
+                w.DestroyWriter();
+            }
+            /*
             positions_writer.Flush();
             positions_writer.Close();
             velocities_writer.Flush();
@@ -264,6 +379,7 @@ public class RecordingManager : MonoBehaviour
             densities_writer.Close();
             pressures_writer.Flush();
             pressures_writer.Close();
+            */
         }
         if (particlePositionsHashedBuffer != null) particlePositionsHashedBuffer.Release();
         if (particleVelocitiesHashedBuffer != null) particleVelocitiesHashedBuffer.Release();
