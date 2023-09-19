@@ -109,6 +109,7 @@ public class RecordingManager : MonoBehaviour
     [SerializeField] private RecStart _recordingStartSetting = RecStart.Off;
     [SerializeField] private float _delayBeforeStart = 0f;
     [SerializeField] private float _recordTimeBuffer = 0.1f;
+    [SerializeField] private bool _recordPositions = true, _recordVelocities = true, _recordDensities = true, _recordPressures = true;
 
     [Header("=== RECORDING STATISTICS ===")]
     [SerializeField, ReadOnly] private string _positions_filepath, _velocities_filepath, _densities_filepath, _pressures_filepath;
@@ -117,8 +118,6 @@ public class RecordingManager : MonoBehaviour
     [SerializeField, ReadOnly] private float _timeElapsed;
     [SerializeField, ReadOnly] private int _numRecordsPassed = -1;
     [SerializeField, ReadOnly] private List<RecordingWriter> _writers;
-    [SerializeField] private float3[] particle_positions_array, particle_velocities_array;
-    [SerializeField] private float[] particle_densities_array, particle_pressures_array;
     [SerializeField, ReadOnly] private bool _filespace_initialized = false;
     [SerializeField, ReadOnly] private bool _initialized = false;
 
@@ -126,10 +125,7 @@ public class RecordingManager : MonoBehaviour
     // === PRIVATE VARIABLES ===
     private int condenseParticleDataKernel;
     private ComputeBuffer particlePositionsHashedBuffer, particleVelocitiesHashedBuffer;
-    private List<float3[]> position_raw_rows, velocity_raw_rows;
-    private List<float[]> density_raw_rows, pressure_raw_rows;
     private IEnumerator updateCoroutine;
-    private StreamWriter positions_writer, velocities_writer, densities_writer, pressures_writer;
  
     // This function must be called in order for the recording to actually start. It can be called via the editor in inspector, or called via `BufferManager`
     public void Initialize() {
@@ -190,6 +186,9 @@ public class RecordingManager : MonoBehaviour
             return;
         }
 
+        // End early as well if we don't have any writers
+        if (_writers.Count > 0) return;
+
         // Update the elapsed time
         _timeElapsed = Time.time - _recordingTimeStarted;
 
@@ -213,22 +212,6 @@ public class RecordingManager : MonoBehaviour
         foreach(RecordingWriter w in _writers) {
             w.GetData();
         }
-        /*
-        particle_positions_array = new float3[_PC.numParticles];
-        particle_velocities_array = new float3[_PC.numParticles];
-        particle_densities_array = new float[_PC.numParticles];
-        particle_pressures_array = new float[_PC.numParticles];
-        particlePositionsHashedBuffer.GetData(particle_positions_array);
-        _BM.PARTICLES_VELOCITIES_BUFFER.GetData(particle_velocities_array);
-        _BM.PARTICLES_DENSITIES_BUFFER.GetData(particle_densities_array);
-        _BM.PARTICLES_PRESSURES_BUFFER.GetData(particle_pressures_array);
-
-        // push the current state of the array into our buffer space, that'll eventually be read by our coroutine
-        position_raw_rows.Add(particle_positions_array);
-        velocity_raw_rows.Add(particle_velocities_array);
-        density_raw_rows.Add(particle_densities_array);
-        pressure_raw_rows.Add(particle_pressures_array);
-        */
     }
 
     private void InitializeShader() {
@@ -248,14 +231,11 @@ public class RecordingManager : MonoBehaviour
     private void InitializeShaderBuffers() {
         // We need to initialize two buffers: one for particle positions, and another for particle velocities
         particlePositionsHashedBuffer = new ComputeBuffer(_PC.numParticles, sizeof(float)*3);
-        //particleVelocitiesHashedBuffer = new ComputeBuffer(_PC.numParticles, sizeof(int));
 
         // Set buffers
         _SHADER.SetBuffer(condenseParticleDataKernel, "particles", _BM.PARTICLES_BUFFER);
         _SHADER.SetBuffer(condenseParticleDataKernel, "particle_velocities", _BM.PARTICLES_VELOCITIES_BUFFER);
         _SHADER.SetBuffer(condenseParticleDataKernel, "particle_positions", particlePositionsHashedBuffer);
-        //_SHADER.SetBuffer(condenseParticleDataKernel, "particle_positions_hashed", particlePositionsHashedBuffer);
-        //_SHADER.SetBuffer(condenseParticleDataKernel, "particle_velocities_hashed", particleVelocitiesHashedBuffer);
     }
 
     private void InitializeFiles() {
@@ -275,80 +255,41 @@ public class RecordingManager : MonoBehaviour
             }
             string h = string.Join(",",headers);
             // Initialize our RecordingWriters
-            RecordingWriterFloat3 positionsWriter = new RecordingWriterFloat3(_positions_filepath, particlePositionsHashedBuffer, _PC.numParticles, h);
-            RecordingWriterFloat3 velocitiesWriter = new RecordingWriterFloat3(_velocities_filepath, _BM.PARTICLES_VELOCITIES_BUFFER, _PC.numParticles, h);
-            RecordingWriterFloat densitiesWriter = new RecordingWriterFloat(_densities_filepath, _BM.PARTICLES_DENSITIES_BUFFER, _PC.numParticles, h);
-            RecordingWriterFloat pressuresWriter = new RecordingWriterFloat(_pressures_filepath, _BM.PARTICLES_PRESSURES_BUFFER, _PC.numParticles, h);
-            // Add our writers
-            _writers.Add(positionsWriter);
-            _writers.Add(velocitiesWriter);
-            _writers.Add(densitiesWriter);
-            _writers.Add(pressuresWriter);
-            /*
-            // Initialize our data lists
-            position_raw_rows = new List<float3[]>();
-            velocity_raw_rows = new List<float3[]>();
-            density_raw_rows = new List<float[]>();
-            pressure_raw_rows = new List<float[]>();
-            // Initialize our StreamWriters
-            positions_writer = new StreamWriter(_positions_filepath);
-            velocities_writer = new StreamWriter(_velocities_filepath);
-            densities_writer = new StreamWriter(_densities_filepath);
-            pressures_writer = new StreamWriter(_pressures_filepath);
-            // Write our headers into both writers
-            positions_writer.WriteLine(h);
-            velocities_writer.WriteLine(h);
-            densities_writer.WriteLine(h);
-            pressures_writer.WriteLine(h);
-            */
+            if (_recordPositions) {
+                // Add the positions writer
+                RecordingWriterFloat3 positionsWriter = new RecordingWriterFloat3(_positions_filepath, particlePositionsHashedBuffer, _PC.numParticles, h);
+                _writers.Add(positionsWriter);
+            }
+            if (_recordVelocities) {
+                // Add the velocities writer
+                RecordingWriterFloat3 velocitiesWriter = new RecordingWriterFloat3(_velocities_filepath, _BM.PARTICLES_VELOCITIES_BUFFER, _PC.numParticles, h);
+                _writers.Add(velocitiesWriter);
+            }
+            if (_recordDensities) {
+                // Add the densities writer
+                RecordingWriterFloat densitiesWriter = new RecordingWriterFloat(_densities_filepath, _BM.PARTICLES_DENSITIES_BUFFER, _PC.numParticles, h);
+                _writers.Add(densitiesWriter);
+            }
+            if (_recordPressures) {
+                // Add the pressures writer
+                RecordingWriterFloat pressuresWriter = new RecordingWriterFloat(_pressures_filepath, _BM.PARTICLES_PRESSURES_BUFFER, _PC.numParticles, h);
+                _writers.Add(pressuresWriter);
+            }            
             // Finally, indicate that we can write to files
             _filespace_initialized = true;
         }
     }
 
     private IEnumerator FilesaveCoroutine() {
-        string newLine;
         // We can only do the stuff in this coroutine if we have initialized the filesave stuff.
         while(_filespace_initialized) {
             //string ct = _timeElapsed.ToString();
             string ct = _PC.dt_passed.ToString();
-            foreach(RecordingWriter w in _writers) {
-                w.WriteData(ct);
+            if (_writers.Count > 0) {
+                foreach(RecordingWriter w in _writers) {
+                    w.WriteData(ct);
+                }
             }
-            /*
-            if (position_raw_rows.Count > 0) {
-                newLine = ct+"," + string.Join(", ", position_raw_rows[0].Select(i => i[0].ToString()+"|"+i[1]+"|"+i[2].ToString()).ToArray());
-                //position_rows.Add(newLine);
-                // Write to our streamwriter
-                positions_writer.WriteLine(newLine);
-                // Remove the first-most raw row
-                position_raw_rows.RemoveAt(0);
-            }
-            if (velocity_raw_rows.Count > 0) {
-                newLine = ct+"," + string.Join(", ", velocity_raw_rows[0].Select(i =>  i[0].ToString()+"|"+i[1]+"|"+i[2].ToString()).ToArray());
-                //velocity_rows.Add(newLine);
-                // Write to our streamwriter
-                velocities_writer.WriteLine(newLine);
-                // Remove the first-most raw row
-                velocity_raw_rows.RemoveAt(0);
-            }
-            if (density_raw_rows.Count > 0) {
-                newLine = ct+"," + string.Join(", ", density_raw_rows[0].Select(i =>  i.ToString()).ToArray());
-                //velocity_rows.Add(newLine);
-                // Write to our streamwriter
-                densities_writer.WriteLine(newLine);
-                // Remove the first-most raw row
-                density_raw_rows.RemoveAt(0);
-            }
-            if (pressure_raw_rows.Count > 0) {
-                newLine = ct+"," + string.Join(", ", pressure_raw_rows[0].Select(i =>  i.ToString()).ToArray());
-                //velocity_rows.Add(newLine);
-                // Write to our streamwriter
-                pressures_writer.WriteLine(newLine);
-                // Remove the first-most raw row
-                pressure_raw_rows.RemoveAt(0);
-            }
-            */
             yield return null;
         }
         yield return null;
@@ -360,26 +301,20 @@ public class RecordingManager : MonoBehaviour
             bool stillHasRaws = false;
             do {
                 stillHasRaws = false;
-                foreach(RecordingWriter w in _writers) {
-                    stillHasRaws = stillHasRaws || w.HasRawRows();
+                if (_writers.Count > 0) {
+                    foreach(RecordingWriter w in _writers) {
+                        stillHasRaws = stillHasRaws || w.HasRawRows();
+                    }
                 }
             } while (stillHasRaws);
             //while(position_raw_rows.Count > 0 || velocity_raw_rows.Count > 0 || density_raw_rows.Count > 0 || pressure_raw_rows.Count > 0) {}
             StopCoroutine(updateCoroutine);
             // We must flush and close opur writers
-            foreach(RecordingWriter w in _writers) {
-                w.DestroyWriter();
+            if (_writers.Count > 0) {
+                foreach(RecordingWriter w in _writers) {
+                    w.DestroyWriter();
+                }
             }
-            /*
-            positions_writer.Flush();
-            positions_writer.Close();
-            velocities_writer.Flush();
-            velocities_writer.Close();
-            densities_writer.Flush();
-            densities_writer.Close();
-            pressures_writer.Flush();
-            pressures_writer.Close();
-            */
         }
         if (particlePositionsHashedBuffer != null) particlePositionsHashedBuffer.Release();
         if (particleVelocitiesHashedBuffer != null) particleVelocitiesHashedBuffer.Release();

@@ -238,7 +238,11 @@ RWStructuredBuffer<Projection> projections;
 StructuredBuffer<int> inputVals;
 RWStructuredBuffer<int> outputVals;
 
-#pragma kernel FindMin(uint id : SV_DispatchThreadID, )
+#pragma kernel FindMin
+[numthreads(8,1,1)]
+void FindMin(uint thread_id : SV_DispatchThreadID, uint groupID : SV_GroupID, uint groupThreadID : SV_GroupThreadID) {
+
+}
 
 #pragma kernel ResetVertexForces
 [numthreads(64,1,1)]

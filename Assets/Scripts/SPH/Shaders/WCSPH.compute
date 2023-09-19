@@ -601,7 +601,11 @@ void Integrate(uint id : SV_DispatchThreadID) {
             }
             if (sign(dot(innermostPoint-projection.position,n))<0.0) {
                 float3 inward = (projection.position + n * smoothingRadius) - p.position;
-                if (length(inward) > 0.0) v += normalize(inward) * clamp(length(inward),0.0,smoothingRadius);
+                if (length(inward) > 0.0) {
+                    float vLength = length(v);
+                    float3 newV = v + (normalize(inward) * clamp(length(inward),0.0,smoothingRadius));
+                    if (length(newV) > 0.0) v = normalize(newV) * vLength;
+                }
                 //p.position = projection.position + n * smoothingRadius + dt * v;
             }
 
