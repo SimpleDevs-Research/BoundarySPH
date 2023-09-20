@@ -187,7 +187,7 @@ public class RecordingManager : MonoBehaviour
         }
 
         // End early as well if we don't have any writers
-        if (_writers.Count > 0) return;
+        if (_writers.Count == 0) return;
 
         // Update the elapsed time
         _timeElapsed = Time.time - _recordingTimeStarted;

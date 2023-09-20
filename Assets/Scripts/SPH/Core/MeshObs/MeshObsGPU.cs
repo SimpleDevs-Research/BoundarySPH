@@ -308,12 +308,12 @@ public class MeshObsGPU : MonoBehaviour
         }
         
         if (drawProjectionGizmos) {
-            minLength = Mathf.Min(_BM.particles_array.Length, _BM.particles_external_forces_array.Length);
+            minLength = Mathf.Min(_BM.particles_array.Length, _BM.particles_external_forces_array.Length, _BM.particles_densities_array.Length);
             for(int i = 0; i < minLength; i++) {
                 Gizmos.color = Color.red;
-                Gizmos.DrawSphere(_BM.particles_external_forces_array[i].position, 0.25f);
+                Gizmos.DrawSphere(_BM.particles_external_forces_array[i].position, 0.1f);
                 Gizmos.color = Color.grey;
-                Gizmos.DrawSphere(_BM.particles_external_forces_array[i].projection, 0.2f);
+                Gizmos.DrawSphere(_BM.particles_external_forces_array[i].projection, 0.075f);
                 /*
                 float3 n = new(
                     (float)projections_array[i].normal[0] / 1024f,
@@ -325,6 +325,12 @@ public class MeshObsGPU : MonoBehaviour
                 Handles.DrawLine(
                     _BM.particles_external_forces_array[i].position, 
                     _BM.particles_external_forces_array[i].position + _BM.particles_external_forces_array[i].normal, 
+                    3
+                );
+                Handles.color = Color.green;
+                Handles.DrawLine(
+                    _BM.particles_external_forces_array[i].position, 
+                    _BM.particles_external_forces_array[i].position + _BM.particles_external_forces_array[i].external_force/_BM.particles_densities_array[i] * _BM.dt, 
                     3
                 );
                 /*

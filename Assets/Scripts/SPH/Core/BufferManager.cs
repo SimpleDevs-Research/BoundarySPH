@@ -156,6 +156,8 @@ public class BufferManager : MonoBehaviour
         if (_translation_forces_array.Length > 0) MESHOBS_TRANSLATION_FORCES_BUFFER.GetData(_translation_forces_array);
     }
 
+    public float dt => (_PARTICLE_CONTROLLER!=null) ? _PARTICLE_CONTROLLER.dt : 0f;
+
     void OnDestroy() {
         if (PARTICLES_BUFFER != null) PARTICLES_BUFFER.Release();
         if (PARTICLES_GRID_BUFFER != null) PARTICLES_GRID_BUFFER.Release();

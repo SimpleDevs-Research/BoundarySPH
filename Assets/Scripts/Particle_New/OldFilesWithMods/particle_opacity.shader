@@ -72,13 +72,13 @@ Shader "SPH/ParticleOpacity"
 			float a = 1.0;
 			//if (velocity_denom > 0.0) a = clamp(length(velocity_buffer[unity_InstanceID])/velocity_denom,0.0,1.0);
 			if (velocity_denom > 0.0) a = clamp(length(pressure_buffer[unity_InstanceID])/velocity_denom,0.0,1.0);
-			finalColor = defaultColor;
+			finalColor = defaultColor * (1.0-a) + secondaryColor * a;
 			float3 pos = particle_buffer[unity_InstanceID].position;
             if (
                 pos[0] < render_limits_buffer[0] || pos[1] < render_limits_buffer[1] || pos[2] < render_limits_buffer[2] 
                 || pos[0] > render_limits_buffer[3] || pos[1] > render_limits_buffer[4] || pos[2] > render_limits_buffer[5]
             ) finalColor.a = 0.0;
-			else finalColor.a = a;
+			//else finalColor.a = a;
 			//if (particle_buffer[unity_InstanceID].render == 0) finalColor[3] = 0.1;
 		#endif
 
