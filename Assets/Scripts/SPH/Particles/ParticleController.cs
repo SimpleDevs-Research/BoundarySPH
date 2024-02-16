@@ -24,6 +24,8 @@ public class ParticleController : MonoBehaviour
     private ComputeShader _SPH_Shader = null;
     [SerializeField, Tooltip("Reference to a Point Cloud Obstacle Manager. Only used if using a PointCloudObstacleManager system somewhere.")]
     private PointCloudObstacleManager _POINT_CLOUD_OBSTACLE_MANAGER = null;
+    [SerializeField, Tooltip("Reference to a csvWriter that will record our findings for us.")]
+    private CSVWriter recorder;
 
     [Header("== PARTICLE CONFIGURATIONS ==")]
     [SerializeField, Tooltip("How big (visually) should the particles be?")]
@@ -69,6 +71,8 @@ public class ParticleController : MonoBehaviour
     public float c => _c;
     private float _time_elapsed = 0f;
     private int _frames_elapsed = 0;
+    private float _total_time_elapsed = 0f;
+    private int _total_frames_elapsed = 0;
 
     [SerializeField] private float _spawnDistanceBetweenParticles = 1.45f;
     public float spawnDistanceBetweenParticles => _spawnDistanceBetweenParticles;
@@ -107,7 +111,7 @@ public class ParticleController : MonoBehaviour
     [SerializeField] private bool gizmos_external_force = false;
     [SerializeField] private Color gizmos_external_force_color = Color.yellow;
     
-    public enum RecordSettings { Off, Online }
+    public enum RecordSettings { Off, CSV, Online }
 
     [Header("== RECORDING CONFIGURATIONS ==")]
     [SerializeField, Tooltip("Public toggle to determine if we should be recording.")]
@@ -392,6 +396,10 @@ public class ParticleController : MonoBehaviour
     }
 
     private void PrepareRecording() {
+
+        RecordCSV();
+
+        /*
         // Firstly, if the directory is empty, then we cannot record. So we default to turning off
         if (
             _record_positions_url.Length == 0
@@ -482,6 +490,7 @@ public class ParticleController : MonoBehaviour
             StartCoroutine(WebRequests.PostRequestWithJSON(_record_pressures_url+"create",session_data,false,OnlineRecordingCallback));
         }
 
+        */
         /*
         if (_record_fps_url.Length > 0) {
             _fps_recording_session = new RecordingSession(
@@ -817,7 +826,7 @@ public class ParticleController : MonoBehaviour
     void Update() {
         // We can't do anything if `grid` is null or if our compute shader is null
         if (_GRID == null || _SPH_Shader == null) return;
-        if (_record_statistics != RecordSettings.Off && !_recording_verified) return;
+        //if (_record_statistics != RecordSettings.Off && !_recording_verified) return;
         // Update shader variables!
         UpdateShaderVariables(true);
         // Check if we can integrate particles, based on _startDelay and _timePassed
@@ -861,6 +870,7 @@ public class ParticleController : MonoBehaviour
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.
+        /*
         if (_record_statistics != RecordSettings.Off && _recording_started) {
             // Update time elapsed
             _time_elapsed += _dt;
@@ -869,6 +879,25 @@ public class ParticleController : MonoBehaviour
             if (!_recording_saved && _time_elapsed <= _record_duration) Record();
             // If we've reached our time limit, do indicate that we've saved!
             if (!_recording_saved && (_time_elapsed >= _record_duration || _time_elapsed + _dt > _record_duration)) StartCoroutine(SaveRecording());
+        }
+        */
+        if (_record_statistics == RecordSettings.CSV) {
+            // Here, we want to capture some important details
+            // - We will instantiate a new file for every recording we capture. 
+            // - We will time each capture on a time interval, meaning we will at least ensure that we won't lag the system.
+            // - Each file will contain the following:
+            //      1. the filename should contain the recorded timestamp (total elapsed time), the frame number itself, and the fps
+            //      2. all subsequent lines should represent a particle each
+            //      3. For each line/particle, we'll record their ID, position, velocity, density, and pressure value
+
+            // First, update the time elapsed and frames elapsed
+            _time_elapsed += _dt;
+            _frames_elapsed += 1;
+
+            // Second, if our time elapsed goes beyond our record_duration, we have to record
+            if (_time_elapsed >= _record_duration) {
+                RecordCSV();
+            }
         }
 
         RENDER_LIMITS_BUFFER.SetData(_renderLimits);
@@ -1120,6 +1149,45 @@ public class ParticleController : MonoBehaviour
         */
     }
 
+    private void RecordCSV() {
+        // STATS
+        float fps = (_time_elapsed > 0f) ? (float)_frames_elapsed / _time_elapsed : 0f;     // Calculate the FPS based on frames and time passed
+        _total_time_elapsed += _time_elapsed;                   // Update the total time and frames elapsed
+        _total_frames_elapsed += _frames_elapsed;
+        _time_elapsed = 0f;                                     // Reset _frames and _time_elapsed
+        _frames_elapsed = 0;
+
+        // GET DATA
+        OP.Particle[] temp_particles = new OP.Particle[_numParticles];
+            _BM.PARTICLES_BUFFER.GetData(temp_particles);
+        
+        float3[] temp_velocities = new float3[_numParticles];
+            _BM.PARTICLES_VELOCITIES_BUFFER.GetData(temp_velocities);
+
+        float[] temp_densities = new float[_numParticles];
+            _BM.PARTICLES_DENSITIES_BUFFER.GetData(temp_densities);
+
+        float[] temp_pressures = new float[_numParticles];
+            _BM.PARTICLES_PRESSURES_BUFFER.GetData(temp_pressures);
+        
+        // CSV WRITER INITIALIZATION
+        recorder.fileName = $"{_total_frames_elapsed}-{_total_time_elapsed}-{fps}";
+        recorder.Initialize();
+
+        // CSV UPDATE
+        for(int i = 0; i < _numParticles; i++) {    
+            recorder.AddPayload(i);                             // particle id
+            recorder.AddPayload(temp_particles[i].position);    // particle position
+            recorder.AddPayload(temp_velocities[i]);            // particle velocity
+            recorder.AddPayload(temp_densities[i]);             // particle density
+            recorder.AddPayload(temp_pressures[i]);             // particle pressure
+            recorder.WriteLine();
+        }
+
+        // Flush and Disable CSV
+        recorder.Disable();
+    }
+
     private IEnumerator PositionsBatchRequester() {
         while(_record_statistics == RecordSettings.Online) {
             if (_positions_batch_queue.Count == 0) {
@@ -1315,6 +1383,7 @@ public class ParticleController : MonoBehaviour
         PARTICLE_OFFSETS_BUFFER.Release();
         FORCES_BUFFER.Release();
         RENDER_LIMITS_BUFFER.Release();
+        recorder.Disable();
     }
 
     private void OnlineSaveCallback(WebRequests.Response response) {
