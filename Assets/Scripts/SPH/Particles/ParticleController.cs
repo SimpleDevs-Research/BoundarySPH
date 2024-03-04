@@ -96,7 +96,7 @@ public class ParticleController : MonoBehaviour
     private float _timeStarted = 0f, _timePassed = 0f;
     [SerializeField] private RenderType _renderType = RenderType.Particles;
     [SerializeField] private float[] _renderLimits;
-    [SerializeField, Range(0f,100f)] private float _renderDenom = 10f;
+    [SerializeField, Range(0f,1000f)] private float _renderDenom = 10f;
 
     private float t;
 
