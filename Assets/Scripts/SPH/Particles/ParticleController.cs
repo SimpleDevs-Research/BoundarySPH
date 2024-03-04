@@ -70,8 +70,10 @@ public class ParticleController : MonoBehaviour
     private float _c = 5.77f;
     public float c => _c;
     private float _time_elapsed = 0f;
+    private float _real_time_elapsed = 0f;
     private int _frames_elapsed = 0;
     private float _total_time_elapsed = 0f;
+    private float _total_real_time_elapsed = 0f;
     private int _total_frames_elapsed = 0;
 
     [SerializeField] private float _spawnDistanceBetweenParticles = 1.45f;
@@ -94,7 +96,7 @@ public class ParticleController : MonoBehaviour
     private float _timeStarted = 0f, _timePassed = 0f;
     [SerializeField] private RenderType _renderType = RenderType.Particles;
     [SerializeField] private float[] _renderLimits;
-    [SerializeField, Range(0f,30f)] private float _renderDenom = 10f;
+    [SerializeField, Range(0f,100f)] private float _renderDenom = 10f;
 
     private float t;
 
@@ -892,6 +894,7 @@ public class ParticleController : MonoBehaviour
 
             // First, update the time elapsed and frames elapsed
             _time_elapsed += _dt;
+            _real_time_elapsed += Time.deltaTime;
             _frames_elapsed += 1;
 
             // Second, if our time elapsed goes beyond our record_duration, we have to record
@@ -907,7 +910,7 @@ public class ParticleController : MonoBehaviour
                 _GRID.particle_material.SetFloat(num_particles_per_cell_property, (float)_numParticlesPerGridCell);
                 _GRID.particle_material.SetFloat(render_denom_property, _renderDenom);
                 _GRID.particle_material.SetInt(render_touching_property, 0);
-                _GRID.particle_material.SetBuffer(pressure_buffer_property, _BM.PARTICLES_PRESSURES_BUFFER);
+                _GRID.particle_material.SetBuffer(pressure_buffer_property, _BM.PARTICLES_PRESSURE_FORCES_BUFFER);
                 _GRID.particle_material.SetBuffer(velocity_buffer_property, _BM.PARTICLES_VELOCITIES_BUFFER);
                 _GRID.particle_material.SetBuffer(particle_buffer_property, _BM.PARTICLES_BUFFER);
                 _GRID.particle_material.SetBuffer(render_limits_property, RENDER_LIMITS_BUFFER);
@@ -1151,10 +1154,12 @@ public class ParticleController : MonoBehaviour
 
     private void RecordCSV() {
         // STATS
-        float fps = (_time_elapsed > 0f) ? (float)_frames_elapsed / _time_elapsed : 0f;     // Calculate the FPS based on frames and time passed
+        float fps = (_real_time_elapsed > 0f) ? (float)_frames_elapsed / _real_time_elapsed : 0f;     // Calculate the FPS based on frames and time passed
         _total_time_elapsed += _time_elapsed;                   // Update the total time and frames elapsed
+        _total_real_time_elapsed += _real_time_elapsed;
         _total_frames_elapsed += _frames_elapsed;
         _time_elapsed = 0f;                                     // Reset _frames and _time_elapsed
+        _real_time_elapsed = 0f;
         _frames_elapsed = 0;
 
         // GET DATA
@@ -1167,11 +1172,11 @@ public class ParticleController : MonoBehaviour
         float[] temp_densities = new float[_numParticles];
             _BM.PARTICLES_DENSITIES_BUFFER.GetData(temp_densities);
 
-        float[] temp_pressures = new float[_numParticles];
-            _BM.PARTICLES_PRESSURES_BUFFER.GetData(temp_pressures);
+        float3[] temp_pressures = new float3[_numParticles];
+            _BM.PARTICLES_PRESSURE_FORCES_BUFFER.GetData(temp_pressures);
         
         // CSV WRITER INITIALIZATION
-        recorder.fileName = $"{_total_frames_elapsed}-{_total_time_elapsed}-{fps}";
+        recorder.fileName = $"{_total_frames_elapsed}-{_total_time_elapsed}-{_total_real_time_elapsed}-{fps}";
         recorder.Initialize();
 
         // CSV UPDATE

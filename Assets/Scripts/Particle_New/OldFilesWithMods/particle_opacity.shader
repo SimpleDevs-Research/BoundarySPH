@@ -37,7 +37,7 @@ Shader "SPH/ParticleOpacity"
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
 			StructuredBuffer<particle> particle_buffer;
 			StructuredBuffer<float3> velocity_buffer;
-			StructuredBuffer<float> pressure_buffer;
+			StructuredBuffer<float3> pressure_buffer;
 			StructuredBuffer<float> render_limits_buffer;
 		#endif
 
