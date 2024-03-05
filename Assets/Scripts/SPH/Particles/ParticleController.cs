@@ -616,8 +616,8 @@ public class ParticleController : MonoBehaviour
         if (_obstacles_textbox.Count > 0) foreach(TextMeshProUGUI t in _obstacles_textbox) t.text = $"{_BM.MESHOBS_OBSTACLES_STATIC_BUFFER.count} Obstacles";
         if (_obstacle_details_textbox.Count > 0) foreach(TextMeshProUGUI t in _obstacle_details_textbox) t.text = $"(V:{_BM.MESHOBS_VERTICES_STATIC_BUFFER.count} | E:{_BM.MESHOBS_EDGES_STATIC_BUFFER.count} | T:{_BM.MESHOBS_TRIANGLES_STATIC_BUFFER.count})";
         if (_fps_textbox.Count > 0) foreach(TextMeshProUGUI t in _fps_textbox) t.text = $"{_fps} FPS";
-        if (_deltatime_passed_textbox.Count > 0) foreach(TextMeshProUGUI t in _deltatime_passed_textbox) t.text = $"Simulation time: {_dt_passed} sec.";
-        if (_realtime_passed_textbox.Count > 0) foreach(TextMeshProUGUI t in _realtime_passed_textbox) t.text = $"Real time: {_real_time_elapsed} sec.";
+        if (_deltatime_passed_textbox.Count > 0) foreach(TextMeshProUGUI t in _deltatime_passed_textbox) t.text = $"Simulation time: {_total_dt_elapsed + _dt_passed} sec.";
+        if (_realtime_passed_textbox.Count > 0) foreach(TextMeshProUGUI t in _realtime_passed_textbox) t.text = $"Real time: {_total_real_time_elapsed + _real_time_elapsed} sec.";
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.
