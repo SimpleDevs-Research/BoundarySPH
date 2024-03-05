@@ -34,7 +34,9 @@ public class BufferManager : MonoBehaviour
     public ComputeBuffer MESHOBS_OBSTACLES_DYNAMIC_BUFFER;      // Stores the dynamic characteristics of mesh obstacles
     public ComputeBuffer MESHOBS_TRIANGLES_STATIC_BUFFER;       // Stores the static characteristics of mesh triangles
     public ComputeBuffer MESHOBS_TRIANGLES_DYNAMIC_BUFFER;      // Stores the dynamic characteristics of mesh triangles
+    public ComputeBuffer MESHOBS_VERTICES_STATIC_BUFFER;        // Stores the static characteristics of mesh vertices
     public ComputeBuffer MESHOBS_VERTICES_DYNAMIC_BUFFER;       // Stores the dynamic characteristics of mesh vertices
+    public ComputeBuffer MESHOBS_EDGES_STATIC_BUFFER;           // Stores the static characteristics of mesh vertices
     public ComputeBuffer MESHOBS_EDGES_DYNAMIC_BUFFER;          // Stores the dynamic characteristics of mesh edges
     public ComputeBuffer MESHOBS_TRANSLATION_FORCES_BUFFER;     // Stores the translational forces experienced BY an obstacle due to forces such as gravity or pressure fields
     public ComputeBuffer MESHOBS_TORQUE_FORCES_BUFFER;          // Stores the rotational forces experienced BY an obstacle due to forces such as gravity or pressure fields
@@ -69,8 +71,12 @@ public class BufferManager : MonoBehaviour
     public OP.TriangleStatic[] triangles_static_array => _triangles_static_array;
     [SerializeField] private OP.TriangleDynamic[] _triangles_dynamic_array;
     public OP.TriangleDynamic[] triangles_dynamic_array => _triangles_dynamic_array;
+    [SerializeField] private OP.VertexStatic[] _vertices_static_array;
+    public OP.VertexStatic[] vertices_static_array => _vertices_static_array;
     [SerializeField] private OP.VertexDynamic[] _vertices_dynamic_array;
     public OP.VertexDynamic[] vertices_dynamic_array => _vertices_dynamic_array;
+    [SerializeField] private OP.EdgeStatic[] _edges_static_array;
+    public OP.EdgeStatic[] edges_static_array => _edges_static_array;
     [SerializeField] private float3[] _edges_dynamic_array;
     public float3[] edges_dynamic_array => _edges_dynamic_array;
     [SerializeField] private int3[] _translation_forces_array;
@@ -106,7 +112,9 @@ public class BufferManager : MonoBehaviour
         MESHOBS_OBSTACLES_DYNAMIC_BUFFER = new ComputeBuffer(numObstacles, sizeof(uint)*15 + sizeof(float)*22);
         MESHOBS_TRIANGLES_STATIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*9);
         MESHOBS_TRIANGLES_DYNAMIC_BUFFER = new ComputeBuffer(numTriangles, sizeof(uint)*7 + sizeof(float)*22);
+        MESHOBS_VERTICES_STATIC_BUFFER = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*6);
         MESHOBS_VERTICES_DYNAMIC_BUFFER = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*9);
+        MESHOBS_EDGES_STATIC_BUFFER = new ComputeBuffer(numEdges, sizeof(uint)*5 + sizeof(float)*6);
         MESHOBS_EDGES_DYNAMIC_BUFFER = new ComputeBuffer(numEdges, sizeof(float)*3);
 
         MESHOBS_TRANSLATION_FORCES_BUFFER = new ComputeBuffer(numObstacles, sizeof(int)*3);
@@ -151,7 +159,9 @@ public class BufferManager : MonoBehaviour
         if (_obstacles_dynamic_array.Length > 0) MESHOBS_OBSTACLES_DYNAMIC_BUFFER.GetData(_obstacles_dynamic_array);
         if (_triangles_static_array.Length > 0) MESHOBS_TRIANGLES_STATIC_BUFFER.GetData(_triangles_static_array);
         if (_triangles_dynamic_array.Length > 0) MESHOBS_TRIANGLES_DYNAMIC_BUFFER.GetData(_triangles_dynamic_array);
+        if (_vertices_static_array.Length > 0) MESHOBS_VERTICES_STATIC_BUFFER.GetData(_vertices_static_array);
         if (_vertices_dynamic_array.Length > 0) MESHOBS_VERTICES_DYNAMIC_BUFFER.GetData(_vertices_dynamic_array);
+        if (_edges_static_array.Length > 0) MESHOBS_EDGES_STATIC_BUFFER.GetData(_edges_static_array);
         if (_edges_dynamic_array.Length > 0) MESHOBS_EDGES_DYNAMIC_BUFFER.GetData(_edges_dynamic_array);
         if (_translation_forces_array.Length > 0) MESHOBS_TRANSLATION_FORCES_BUFFER.GetData(_translation_forces_array);
     }
@@ -175,7 +185,9 @@ public class BufferManager : MonoBehaviour
         if (MESHOBS_OBSTACLES_DYNAMIC_BUFFER != null) MESHOBS_OBSTACLES_DYNAMIC_BUFFER.Release();
         if (MESHOBS_TRIANGLES_STATIC_BUFFER != null) MESHOBS_TRIANGLES_STATIC_BUFFER.Release();
         if (MESHOBS_TRIANGLES_DYNAMIC_BUFFER != null) MESHOBS_TRIANGLES_DYNAMIC_BUFFER.Release();
+        if (MESHOBS_VERTICES_STATIC_BUFFER != null) MESHOBS_VERTICES_STATIC_BUFFER.Release();
         if (MESHOBS_VERTICES_DYNAMIC_BUFFER != null) MESHOBS_VERTICES_DYNAMIC_BUFFER.Release();
+        if (MESHOBS_EDGES_STATIC_BUFFER != null) MESHOBS_EDGES_STATIC_BUFFER.Release();
         if (MESHOBS_EDGES_DYNAMIC_BUFFER != null) MESHOBS_EDGES_DYNAMIC_BUFFER.Release();
         if (MESHOBS_TRANSLATION_FORCES_BUFFER != null) MESHOBS_TRANSLATION_FORCES_BUFFER.Release();
         if (MESHOBS_TORQUE_FORCES_BUFFER != null) MESHOBS_TORQUE_FORCES_BUFFER.Release();

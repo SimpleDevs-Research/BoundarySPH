@@ -121,13 +121,41 @@ public class ParticleController : MonoBehaviour
         public float3[] temp_velocities;
         public float[] temp_densities;
         public float3[] temp_pressures;
-        public string fileName;
-        public Recording(OP.Particle[] pa, float3[] ve, float[] de, float3[] pr, string fn) {
+        public RecordingFrame frameData;
+        public Recording(
+                OP.Particle[] pa, float3[] ve, float[] de, float3[] pr, 
+                int frame, float dt_passed_sec, float rl_passed_sec, float fps, 
+                int n_obstacles, int n_vertices, int n_edges, int n_triangles
+        ) {
             this.temp_particles = pa;
             this.temp_velocities = ve;
             this.temp_densities = de;
             this.temp_pressures = pr;
-            this.fileName = fn;
+            this.frameData = new RecordingFrame(
+                frame, dt_passed_sec, rl_passed_sec, fps,
+                n_obstacles, n_vertices, n_edges, n_triangles 
+            );
+        }
+    }
+    public class RecordingFrame {
+        public int frame;
+        public float dt_passed_sec;
+        public float rl_passed_sec;
+        public float fps;
+        public int n_obstacles, n_vertices, n_edges, n_triangles;
+        public string fileName => $"nFrames_{frame}-dt_{dt_passed_sec}-realtime_{rl_passed_sec}-fps_{fps}";
+        public RecordingFrame(
+                int frame, float dt_passed_sec, float rl_passed_sec, float fps,
+                int n_obstacles, int n_vertices, int n_edges, int n_triangles
+        ) {
+            this.frame = frame;
+            this.dt_passed_sec = dt_passed_sec;
+            this.rl_passed_sec = rl_passed_sec;
+            this.fps = fps;
+            this.n_obstacles = n_obstacles;
+            this.n_vertices = n_vertices;
+            this.n_edges = n_edges;
+            this.n_triangles = n_triangles;
         }
     }
 
@@ -138,13 +166,12 @@ public class ParticleController : MonoBehaviour
     private float _record_interval = 1f;
     private IEnumerator _recordCoroutine = null;
     private Queue<Recording> _recordQueue = new Queue<Recording>();
+    private Queue<RecordingFrame> _recordFrameQueue = new Queue<RecordingFrame>();
 
-    [SerializeField] private TextMeshProUGUI _nParticles_textbox = null;
-    [SerializeField] private TextMeshProUGUI _fps_textbox = null;
-    [SerializeField] private TextMeshProUGUI _velocities_request_textbox = null;
-    [SerializeField] private TextMeshProUGUI _densities_request_textbox = null;
-    [SerializeField] private TextMeshProUGUI _pressures_request_textbox = null;
-    //[SerializeField] private TextMeshProUGUI _fps_request_textbox = null;
+    [SerializeField] private List<TextMeshProUGUI> _nParticles_textbox = new List<TextMeshProUGUI>();
+    [SerializeField] private List<TextMeshProUGUI> _obstacles_textbox = new List<TextMeshProUGUI>();
+    [SerializeField] private List<TextMeshProUGUI> _obstacle_details_textbox = new List<TextMeshProUGUI>();
+    [SerializeField] private List<TextMeshProUGUI> _fps_textbox = new List<TextMeshProUGUI>();
 
     void OnDrawGizmos() {
         if (!Application.isPlaying) return;
@@ -583,8 +610,10 @@ public class ParticleController : MonoBehaviour
         _fps = (_real_time_elapsed > 0f) ? (float)_frames_elapsed / _real_time_elapsed : 0f;     // Calculate the FPS based on frames and time passed
 
         // Update visualization textboxes if they exist
-        if (_nParticles_textbox != null) _nParticles_textbox.text = $"{_numParticles} Particles";
-        if (_fps_textbox != null) _fps_textbox.text = $"{_fps} FPS";
+        if (_nParticles_textbox.Count > 0) foreach(TextMeshProUGUI t in _nParticles_textbox) t.text = $"{_numParticles} Particles";
+        if (_obstacles_textbox.Count > 0) foreach(TextMeshProUGUI t in _obstacles_textbox) t.text = $"{_BM.MESHOBS_OBSTACLES_STATIC_BUFFER.count} Obstacles";
+        if (_obstacle_details_textbox.Count > 0) foreach(TextMeshProUGUI t in _obstacle_details_textbox) t.text = $"(V:{_BM.MESHOBS_VERTICES_STATIC_BUFFER.count} | E:{_BM.MESHOBS_EDGES_STATIC_BUFFER.count} | T:{_BM.MESHOBS_TRIANGLES_STATIC_BUFFER.count})";
+        if (_fps_textbox.Count > 0) foreach(TextMeshProUGUI t in _fps_textbox) t.text = $"{_fps} FPS";
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.
@@ -701,10 +730,19 @@ public class ParticleController : MonoBehaviour
             _BM.PARTICLES_DENSITIES_BUFFER.GetData(temp_densities);
         float3[] temp_pressures = new float3[_numParticles];
             _BM.PARTICLES_PRESSURE_FORCES_BUFFER.GetData(temp_pressures);
-        string recordFilename = $"nFrames_{_total_frames_elapsed}-dt_{_total_dt_elapsed}-realtime_{_total_real_time_elapsed}-fps_{_fps}";    
 
+        // Remember that each of these dynamic and static variations of the vertices, triangles, and edges all are the same size. So it doesn't matter if we get the number of them from either the static or dyanmic buffers
+        int n_obstacles = (_BM.MESHOBS_OBSTACLES_STATIC_BUFFER != null) ? _BM.MESHOBS_OBSTACLES_STATIC_BUFFER.count : 0;
+        int n_vertices = (_BM.MESHOBS_VERTICES_STATIC_BUFFER != null) ? _BM.MESHOBS_VERTICES_STATIC_BUFFER.count : 0;
+        int n_edges = (_BM.MESHOBS_EDGES_STATIC_BUFFER != null) ? _BM.MESHOBS_EDGES_STATIC_BUFFER.count : 0;
+        int n_triangles = (_BM.MESHOBS_TRIANGLES_STATIC_BUFFER != null) ? _BM.MESHOBS_TRIANGLES_STATIC_BUFFER.count : 0;
+        
         // Create a new entry in a queue that holds all the recordings    
-        _recordQueue.Enqueue(new Recording(temp_particles, temp_velocities, temp_densities, temp_pressures, recordFilename));
+        _recordQueue.Enqueue(new Recording(
+            temp_particles, temp_velocities, temp_densities, temp_pressures, 
+            _total_frames_elapsed, _total_dt_elapsed, _total_real_time_elapsed, _fps,
+            n_obstacles, n_vertices, n_edges, n_triangles
+        ));
     }
 
     private IEnumerator RecordCycle() {
@@ -719,7 +757,7 @@ public class ParticleController : MonoBehaviour
             Recording r = _recordQueue.Dequeue();
 
             // Initialize the recorder
-            recorder.fileName = r.fileName;
+            recorder.fileName = r.frameData.fileName;
             recorder.Initialize();
             // Write our CSVs
             for(int i = 0; i < _numParticles; i++) {    
@@ -733,6 +771,9 @@ public class ParticleController : MonoBehaviour
 
             // Flush and Disable CSV
             recorder.Disable();
+
+            // Pass `r`'s RecordingFrame to the new queue
+            _recordFrameQueue.Enqueue(r.frameData);
 
             // Yield return null
             yield return null;
@@ -748,10 +789,33 @@ public class ParticleController : MonoBehaviour
         PARTICLE_OFFSETS_BUFFER.Release();
         FORCES_BUFFER.Release();
         RENDER_LIMITS_BUFFER.Release();
+        
+        // Make sure all records are processed
         if (_recordCoroutine != null) {
-            while (_recordQueue.Count != 0) {}
+            while (_recordQueue.Count > 0) {}
             StopCoroutine(_recordCoroutine);
         }
+        // Make sure all frame data are processed
+        // Initialize the recorder for frame data
+        recorder.fileName = "simulation_records";
+        recorder.columns = new List<string> {"frame","dt_passed_sec","rl_passed_sec","fps","n_obstacles","n_vertices","n_edges","n_triangles","filename"};
+        recorder.Initialize();
+        while(_recordFrameQueue.Count > 0) {
+            // Get the top record in our queue
+            RecordingFrame r = _recordFrameQueue.Dequeue();        
+            // Write to the CSV file    
+            recorder.AddPayload(r.frame);                       // current frame
+            recorder.AddPayload(r.dt_passed_sec);               // Amount of delta time passed since the start
+            recorder.AddPayload(r.rl_passed_sec);               // Amount of real-world time passed since the start
+            recorder.AddPayload(r.fps);                         // The fps at this frame
+            recorder.AddPayload(r.n_obstacles);                 // The number of obstacles
+            recorder.AddPayload(r.n_vertices);                  // The number of vertices
+            recorder.AddPayload(r.n_edges);                     // The number of edges
+            recorder.AddPayload(r.n_triangles);                 // The number of triangles
+            recorder.AddPayload(r.fileName+".csv");             // The associated filename of this particular frame
+            recorder.WriteLine();
+        }
+        // Flush and Disable CSV
         recorder.Disable();
     }
 
