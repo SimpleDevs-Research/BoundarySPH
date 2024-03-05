@@ -15,7 +15,7 @@ public class ParticleControllerEditor : Editor
         
         DrawDefaultInspector();
         
-        if (GUILayout.Button("Start Recording")) _pc.StartRecording();
+        //if (GUILayout.Button("Start Recording")) _pc.StartRecording();
         
     }
 }

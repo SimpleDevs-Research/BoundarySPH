@@ -69,12 +69,14 @@ public class ParticleController : MonoBehaviour
     [SerializeField, Tooltip("`c` - the speed of sound (10^-4 m/s, to model low Reynolds number flows). Used as a part of the `equation of state` to relate density to pressure. This is derived from the method mentioned in [https://www.sciencedirect.com/science/article/pii/S0045793021003145#b19], but the speed of sound value is derived from Morris et al. [https://www.sciencedirect.com/science/article/pii/S0021999197957764]")]
     private float _c = 5.77f;
     public float c => _c;
-    private float _time_elapsed = 0f;
+    private float _dt_passed = 0f;
+    public float dt_passed => _dt_passed;
     private float _real_time_elapsed = 0f;
     private int _frames_elapsed = 0;
-    private float _total_time_elapsed = 0f;
+    private float _total_dt_elapsed = 0f;
     private float _total_real_time_elapsed = 0f;
     private int _total_frames_elapsed = 0;
+    private float _fps = 0f;
 
     [SerializeField] private float _spawnDistanceBetweenParticles = 1.45f;
     public float spawnDistanceBetweenParticles => _spawnDistanceBetweenParticles;
@@ -113,163 +115,36 @@ public class ParticleController : MonoBehaviour
     [SerializeField] private bool gizmos_external_force = false;
     [SerializeField] private Color gizmos_external_force_color = Color.yellow;
     
-    public enum RecordSettings { Off, CSV, Online }
+    public enum RecordSettings { Off, CSV }
+    public class Recording {
+        public OP.Particle[] temp_particles;        
+        public float3[] temp_velocities;
+        public float[] temp_densities;
+        public float3[] temp_pressures;
+        public string fileName;
+        public Recording(OP.Particle[] pa, float3[] ve, float[] de, float3[] pr, string fn) {
+            this.temp_particles = pa;
+            this.temp_velocities = ve;
+            this.temp_densities = de;
+            this.temp_pressures = pr;
+            this.fileName = fn;
+        }
+    }
 
     [Header("== RECORDING CONFIGURATIONS ==")]
     [SerializeField, Tooltip("Public toggle to determine if we should be recording.")]
     private RecordSettings _record_statistics = RecordSettings.Off;
-    [SerializeField, Tooltip("If recording online, then this identifies if we got a response."), ReadOnly] 
-    private bool _recording_verified = false;
-    [SerializeField] private bool _record_on_start = true;
-    [SerializeField,ReadOnly] private bool _recording_started = false;
-
-    [SerializeField, Tooltip("Files are saved as JSONs. Do not include the file extension in the name.")] 
-    private string _record_name = "SPH_Findings";
-    [SerializeField, Tooltip("The base URL that we send position data to.")]
-    private string _record_positions_url = "";
-    [SerializeField, Tooltip("The base URL that we send velocity data to.")]
-    private string _record_velocities_url = "";
-    [SerializeField, Tooltip("The base URL that we send density data to.")]
-    private string _record_densities_url = "";
-    [SerializeField, Tooltip("The base URL that we send pressure data to.")]
-    private string _record_pressures_url = "";
-    [SerializeField, Tooltip("The base URL that we send fps data to.")]
-    private string _record_fps_url = "";
     [SerializeField, Tooltip("The duraction (in seconds) of the recording session")] 
-    private float _record_duration = 10f;
-    [SerializeField, Tooltip("How many records per batch? If Set to <= 0, will default to # particles")]
-    private int _num_records_per_batch = 1000;
-    [SerializeField, Tooltip("How long between each batch web request? If set to any value <= 0, will default to 0.01")]
-    private float _time_between_requests = 0.01f;
-    [SerializeField] private float _dt_passed = 0f;
-    public float dt_passed => _dt_passed;
+    private float _record_interval = 1f;
+    private IEnumerator _recordCoroutine = null;
+    private Queue<Recording> _recordQueue = new Queue<Recording>();
 
-    // This stores all recordings for offline recording sessions
-    //private Recording[] _offline_recordings;
-    // This stores a queue for all updates that need to be passed along to our server
-    private List<OnlineRecordingBatch> _positions_batch_queue = new List<OnlineRecordingBatch>();
-    private List<OnlineRecordingBatch> _velocities_batch_queue = new List<OnlineRecordingBatch>();
-    private List<OnlineRecordingBatch> _densities_batch_queue = new List<OnlineRecordingBatch>();
-    private List<OnlineRecordingBatch> _pressures_batch_queue = new List<OnlineRecordingBatch>();
-    private List<OnlineRecordingBatch> _fps_batch_queue = new List<OnlineRecordingBatch>();
-    
-    private OnlineRecordingBatch _positions_current_batch = null;
-    private OnlineRecordingBatch _velocities_current_batch = null;
-    private OnlineRecordingBatch _densities_current_batch = null;
-    private OnlineRecordingBatch _pressures_current_batch = null;
-    //private OnlineRecordingBatch _fps_current_batch = null;
-
-    [SerializeField] private TextMeshProUGUI _positions_request_textbox = null;
+    [SerializeField] private TextMeshProUGUI _nParticles_textbox = null;
+    [SerializeField] private TextMeshProUGUI _fps_textbox = null;
     [SerializeField] private TextMeshProUGUI _velocities_request_textbox = null;
     [SerializeField] private TextMeshProUGUI _densities_request_textbox = null;
     [SerializeField] private TextMeshProUGUI _pressures_request_textbox = null;
     //[SerializeField] private TextMeshProUGUI _fps_request_textbox = null;
-
-    /*
-    [SerializeField] private bool _record_online = true;
-    [SerializeField, Tooltip("If recording online, this will be the HTTP url. If not, it will be the directory that you want to save the files in")] 
-    private string _record_directory;
-    [SerializeField, Tooltip("Simply a check if you want to save records or not.")] 
-    private bool _record_statistics;
-    
-    private bool _record => _record_name.Length > 0 && _record_duration > 0f && _record_statistics;
-    
-    */
-
-    [System.Serializable]
-    public class Recording {
-        public int particle_id;
-        public List<SVector3> positions;
-        public List<SVector3> velocities;
-        public List<float> densities;
-        public List<float> pressures;
-        public Recording(int particle_id) {
-            this.particle_id = particle_id;
-            this.positions = new List<SVector3>();
-            this.velocities = new List<SVector3>();
-            this.densities = new List<float>();
-            this.pressures = new List<float>();
-        }
-    }
-    [System.Serializable]
-    public class OnlineRecording {
-        public int particle_id;
-        public float timestamp;
-        public int frame;
-        public List<float> value;
-        public OnlineRecording(int particle_id, float timestamp, int frame) {
-            this.particle_id = particle_id;
-            this.timestamp = timestamp;
-            this.frame = frame;
-            this.value = new List<float>();
-        }
-        public OnlineRecording(int particle_id, float timestamp, int frame, SVector3 value) {
-            this.particle_id = particle_id;
-            this.timestamp = timestamp;
-            this.frame = frame;
-            this.value = new List<float>();
-            this.value.Add(value.x);
-            this.value.Add(value.y);
-            this.value.Add(value.z);
-        }
-    }
-    [System.Serializable]
-    public class OnlineRecordingBatch {
-        public List<OnlineRecording> batch;
-        public OnlineRecordingBatch() {
-            batch = new List<OnlineRecording>();
-        }
-    }
-    [System.Serializable]
-    public class RecordingSession {
-        public string session_name;
-        public string timestamp;
-        public float dt;
-        public int num_particles;
-        public float render_radius;
-        public float h;
-        public float rest_density;
-        public float mu;
-        public float k;
-        public string metric;
-
-        public float duration;
-        public int frames;
-        public int success;
-
-        public RecordingSession(
-                string session_name,
-                string timestamp,
-                float dt, 
-                int num_particles, 
-                float render_radius, 
-                float h, 
-                float rest_density,
-                float mu,
-                float k,
-                string metric
-        ) {
-            this.session_name = session_name;
-            this.timestamp = timestamp;
-            this.dt = dt;
-            this.num_particles = num_particles;
-            this.render_radius = render_radius;            
-            this.h = h;
-            this.rest_density = rest_density;
-            this.mu = mu;
-            this.k = k;
-            this.metric = metric;
-        }
-    }
-
-    private RecordingSession _positions_recording_session = null;
-    private RecordingSession _velocities_recording_session = null;
-    private RecordingSession _densities_recording_session = null;
-    private RecordingSession _pressures_recording_session = null;
-    //private RecordingSession _fps_recording_session = null;
-    private string _recording_save_name;
-
-    private bool _recording_saved = false;
 
     void OnDrawGizmos() {
         if (!Application.isPlaying) return;
@@ -398,177 +273,11 @@ public class ParticleController : MonoBehaviour
     }
 
     private void PrepareRecording() {
-
-        RecordCSV();
-
-        /*
-        // Firstly, if the directory is empty, then we cannot record. So we default to turning off
-        if (
-            _record_positions_url.Length == 0
-            && _record_velocities_url.Length == 0
-            && _record_densities_url.Length == 0
-            && _record_pressures_url.Length == 0
-            && _record_fps_url.Length == 0
-        ) {
-            _record_statistics = RecordSettings.Off;
-            _recording_verified = true;
-            return;
-        }
-
-        // Prepare # records per batch, if using online
-        if (_num_records_per_batch <= 0) _num_records_per_batch = _numParticles;
-        // Prepare time interval between requests, if using online
-        if (_time_between_requests <= 0f) _time_between_requests = 0.01f;
-        // Get the current timestamp
-        string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-
-        // We need to let the system know if we want to start the recording or not upon the startign of the simulation.
-        _recording_started = _record_on_start;
-        
-        // Create our recording sessions
-        string session_data;
-        if (_record_positions_url.Length > 0) {
-            _positions_recording_session = new RecordingSession(
-                _record_name+"_positions",
-                timestamp, _dt,
-                _numParticles, particleRenderRadius, 
-                _h, _rest_density, _mu, _k,
-                "positions"
-            );
-            // Convert our recording session into a string
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_positions_recording_session);
-            // Create a new batch, which will act as our initial batch
-            _positions_current_batch = new OnlineRecordingBatch();
-            // Next, we initialize the recording by calling to our API
-            // The callback function `OnlineRecordingCallback` determines if we record during the update loop
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_positions_url+"create",session_data,false,OnlineRecordingCallback));
-        }
-        if (_record_velocities_url.Length > 0) {
-            _velocities_recording_session = new RecordingSession(
-                _record_name+"_velocities",
-                timestamp, _dt,
-                _numParticles, particleRenderRadius, 
-                _h, _rest_density, _mu, _k,
-                "velocities"
-            );
-            // Convert our recording session into a string
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_velocities_recording_session);
-            // Create a new batch, which will act as our initial batch
-            _velocities_current_batch = new OnlineRecordingBatch();
-            // Next, we initialize the recording by calling to our API
-            // The callback function `OnlineRecordingCallback` determines if we record during the update loop
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_velocities_url+"create",session_data,false,OnlineRecordingCallback));
-        }
-        if (_record_densities_url.Length > 0) {
-            _densities_recording_session = new RecordingSession(
-                _record_name+"_densities",
-                timestamp, _dt,
-                _numParticles, particleRenderRadius, 
-                _h, _rest_density, _mu, _k,
-                "densities"
-            );
-            // Convert our recording session into a string
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_densities_recording_session);
-            // Create a new batch, which will act as our initial batch
-            _densities_current_batch = new OnlineRecordingBatch();
-            // Next, we initialize the recording by calling to our API
-            // The callback function `OnlineRecordingCallback` determines if we record during the update loop
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_densities_url+"create",session_data,false,OnlineRecordingCallback));
-        }
-        if (_record_pressures_url.Length > 0) {
-            _pressures_recording_session = new RecordingSession(
-                _record_name+"_pressures",
-                timestamp, _dt,
-                _numParticles, particleRenderRadius, 
-                _h, _rest_density, _mu, _k,
-                "pressures"
-            );
-            // Convert our recording session into a string
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_pressures_recording_session);
-            // Create a new batch, which will act as our initial batch
-            _pressures_current_batch = new OnlineRecordingBatch();
-            // Next, we initialize the recording by calling to our API
-            // The callback function `OnlineRecordingCallback` determines if we record during the update loop
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_pressures_url+"create",session_data,false,OnlineRecordingCallback));
-        }
-
-        */
-        /*
-        if (_record_fps_url.Length > 0) {
-            _fps_recording_session = new RecordingSession(
-                _record_name+"_fps",
-                timestamp, _dt,
-                1, particleRenderRadius, 
-                _h, _rest_density, _mu, _k,
-                "fps"
-            );
-            // Convert our recording session into a string
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_pressures_recording_session);
-            // Create a new batch, which will act as our initial batch
-            _pressures_current_batch = new OnlineRecordingBatch();
-            // Next, we initialize the recording by calling to our API
-            // The callback function `OnlineRecordingCallback` determines if we record during the update loop
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_pressures_url+"create",session_data,false,OnlineRecordingCallback));
-        }
-        */
-        
-        /*
-        // If we're recording online, we need to contact the server to check if we can record
-        if (_record_statistics == RecordSettings.Online) {            
-            // Firstly, convert our recording session into a string
-            string session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_recording_session);
-            // Create a new batch, which will act as our initial batch
-            _online_current_batch = new OnlineRecordingBatch();
-            // Next, we initialize the recording by calling to our API
-            // The callback function `OnlineRecordingCallback` determines if we record during the update loop
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_directory+"create",session_data,false,OnlineRecordingCallback));
-        }
-        */
-        /*
-        // If we're recording offline, we need to initialize folders and the like
-        else {
-            // We first need to determine the directory we'll be saving inside
-            string recording_save_dir = SaveSystemMethods.GetSaveLoadDirectory(_record_directory);
-            // We create that directory if it doesn't exist yet
-            SaveSystemMethods.CheckOrCreateDirectory(recording_save_dir);
-            // We then Check or Create the recording_save_dir + _record_name directory. Delete an existing one if needed
-            _recording_save_name = (_record_name.EndsWith("/")) 
-                ? recording_save_dir + timestamp + "_" + _record_name 
-                : recording_save_dir + timestamp + "_" + _record_name + "/";
-            // We have to delete the old directory, if one exists. We won't stand for overlapping recordings
-            SaveSystemMethods.DeleteDirectory(_recording_save_name);
-            // We create the save directory
-            SaveSystemMethods.CheckOrCreateDirectory(_recording_save_name);
-            // Create separate folder inside of this current session folder for all particles
-            SaveSystemMethods.CheckOrCreateDirectory(_recording_save_name+"particles/");
-            // We need to create recordings for each particle
-            _offline_recordings = new Recording[_numParticles];
-            for(int i = 0; i < _numParticles; i++) _offline_recordings[i] = new Recording(i);
-            // Add our first entry into the recording
-            Record();
-            // Toggle our boolean for record verification
-            _recording_verified = true;
-        }
-        */
-    }
-
-    public void StartRecording() {
-        _recording_started = true;
-    }
-
-    private void OnlineRecordingCallback(WebRequests.Response response) {
-        if (!response.success) {
-            _record_statistics = RecordSettings.Off;
-            Debug.LogError(response.response);
-        }
-        _recording_verified = true;
-        // We start the coroutine for the batch processing
-        if (_record_positions_url.Length > 0) StartCoroutine(PositionsBatchRequester());
-        if (_record_velocities_url.Length > 0) StartCoroutine(VelocitiesBatchRequester());
-        if (_record_densities_url.Length > 0) StartCoroutine(DensitiesBatchRequester());
-        if (_record_pressures_url.Length > 0) StartCoroutine(PressuresBatchRequester());
-        // Record our first entry
-        if (_recording_started) Record();
+        // Prepare the coroutine for the recordings
+        _recordCoroutine = RecordCycle();
+        StartCoroutine(_recordCoroutine);
+        // Make our initial recording
+        MakeRecord();
     }
 
     private int _BLOCK_SIZE = 512;
@@ -867,23 +576,19 @@ public class ParticleController : MonoBehaviour
         // Make sure that particles are within bounds, limit them if so
         //_SPH_Shader.Dispatch(_DAMPEN_BY_BOUNDS, Mathf.CeilToInt((float)_numParticles / 256f), 1, 1);
 
-        // Update _dt_passed
+        // Update the time elapsed and frames elapsed
         _dt_passed += _dt;
+        _real_time_elapsed += Time.deltaTime;
+        _frames_elapsed += 1;
+        _fps = (_real_time_elapsed > 0f) ? (float)_frames_elapsed / _real_time_elapsed : 0f;     // Calculate the FPS based on frames and time passed
+
+        // Update visualization textboxes if they exist
+        if (_nParticles_textbox != null) _nParticles_textbox.text = $"{_numParticles} Particles";
+        if (_fps_textbox != null) _fps_textbox.text = $"{_fps} FPS";
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.
-        /*
-        if (_record_statistics != RecordSettings.Off && _recording_started) {
-            // Update time elapsed
-            _time_elapsed += _dt;
-            _frames_elapsed += 1;
-            // Still record if we haven't saved yet
-            if (!_recording_saved && _time_elapsed <= _record_duration) Record();
-            // If we've reached our time limit, do indicate that we've saved!
-            if (!_recording_saved && (_time_elapsed >= _record_duration || _time_elapsed + _dt > _record_duration)) StartCoroutine(SaveRecording());
-        }
-        */
-        if (_record_statistics == RecordSettings.CSV) {
+        if (_record_statistics == RecordSettings.CSV && _dt_passed >= _record_interval) {
             // Here, we want to capture some important details
             // - We will instantiate a new file for every recording we capture. 
             // - We will time each capture on a time interval, meaning we will at least ensure that we won't lag the system.
@@ -892,15 +597,8 @@ public class ParticleController : MonoBehaviour
             //      2. all subsequent lines should represent a particle each
             //      3. For each line/particle, we'll record their ID, position, velocity, density, and pressure value
 
-            // First, update the time elapsed and frames elapsed
-            _time_elapsed += _dt;
-            _real_time_elapsed += Time.deltaTime;
-            _frames_elapsed += 1;
-
-            // Second, if our time elapsed goes beyond our record_duration, we have to record
-            if (_time_elapsed >= _record_duration) {
-                RecordCSV();
-            }
+            // If our time elapsed goes beyond our record_duration, we have to record
+            MakeRecord();
         }
 
         RENDER_LIMITS_BUFFER.SetData(_renderLimits);
@@ -985,399 +683,61 @@ public class ParticleController : MonoBehaviour
 
     }
 
-    private void Record() {
-        if (_record_statistics == RecordSettings.Off || _recording_saved) return;
-
-        // Current timestamp and frame are captured in `_time_elapsed` and `_frames_elapsed`
-
-        // We're recording online. In this case, we're working with batches of data
-        // The batch we're working with is `_online_current_batch`.
-        // At specific time intervals, we pass on 
-        //      `_positions/velocities/densities/pressures_current_batch` to our 
-        //      `_positions/velocities/densities/pressures_batch_queue` List, 
-        //      which is looked at by a separate coroutine
-
-        // OnlineRecordingBatch is merely a container for a list of type OnlineRecording
-        // Our server is expecting the data in the following format:
-        // - particle_id : int
-        // - timestamp : float
-        // - frame : int
-        // - value : SVector3
-
-        // Depending on what data we're recording, we'll do each separately
-        OP.Particle[] temp_particles = new OP.Particle[0];
-        float3[] temp_velocities = new float3[0];
-        float[] temp_densities = new float[0];
-        float3[] temp_pressures = new float3[0];
-        if (_record_positions_url.Length > 0) {
-            temp_particles = new OP.Particle[_numParticles];
-            _BM.PARTICLES_BUFFER.GetData(temp_particles);
-        }
-        if (_record_velocities_url.Length > 0) {
-            temp_velocities = new float3[_numParticles];
-            _BM.PARTICLES_VELOCITIES_BUFFER.GetData(temp_velocities);
-        }
-        if (_record_densities_url.Length > 0) {
-            temp_densities = new float[_numParticles];
-            _BM.PARTICLES_DENSITIES_BUFFER.GetData(temp_densities);
-        }
-        if (_record_pressures_url.Length > 0) {
-            temp_pressures = new float3[_numParticles];
-            _BM.PARTICLES_PRESSURE_FORCES_BUFFER.GetData(temp_pressures);
-        }
-
-        // Initialize the data package and particle
-        OnlineRecording r;
-        OP.Particle p;
-        for(int i = 0; i < _numParticles; i++) {    
-            // Do we need to update positions?
-            if (_record_positions_url.Length > 0) {
-                r = new OnlineRecording(i,_time_elapsed,_frames_elapsed);
-                // We need to update positions batch
-                p = temp_particles[i];
-                r.value = new List<float>() { p.position[0], p.position[1], p.position[2] };
-                _positions_current_batch.batch.Add(r);
-                // At this moment, if the # of records in our batch exceeds _num_records_per_batch, we pass the batch and create a new one
-                if (_positions_current_batch.batch.Count >= _num_records_per_batch) {
-                    // Enqueue the batch for processing
-                    _positions_batch_queue.Add(_positions_current_batch);
-                    // create a new batch
-                    _positions_current_batch = new OnlineRecordingBatch();
-                }
-            }
-
-            // Do we need to update velocities?
-            if (_record_velocities_url.Length > 0) {
-                r = new OnlineRecording(i,_time_elapsed,_frames_elapsed);
-                // We need to update velocities batch
-                r.value = new List<float>() { temp_velocities[i][0], temp_velocities[i][1], temp_velocities[i][2] };
-                _velocities_current_batch.batch.Add(r);
-                // At this moment, if the # of records in our batch exceeds _num_records_per_batch, we pass the batch and create a new one
-                if (_velocities_current_batch.batch.Count >= _num_records_per_batch) {
-                    // Enqueue the batch for processing
-                    _velocities_batch_queue.Add(_velocities_current_batch);
-                    // create a new batch
-                    _velocities_current_batch = new OnlineRecordingBatch();
-                }
-            }
-
-            // Do we need to update densities
-            if (_record_densities_url.Length > 0) {
-                r = new OnlineRecording(i,_time_elapsed,_frames_elapsed);
-                // We need to update densities batch
-                r.value = new List<float>() { temp_densities[i] };
-                _densities_current_batch.batch.Add(r);
-                // At this moment, if the # of records in our batch exceeds _num_records_per_batch, we pass the batch and create a new one
-                if (_densities_current_batch.batch.Count >= _num_records_per_batch) {
-                    // Enqueue the batch for processing
-                    _densities_batch_queue.Add(_densities_current_batch);
-                    // create a new batch
-                    _densities_current_batch = new OnlineRecordingBatch();
-                }
-            }
-
-            // Do we need to update pressures
-            if (_record_pressures_url.Length > 0) {
-                r = new OnlineRecording(i,_time_elapsed,_frames_elapsed);
-                // We need to update densities batch
-                r.value = new List<float>() { temp_pressures[i][0], temp_pressures[i][1], temp_pressures[i][2] };
-                _pressures_current_batch.batch.Add(r);
-                // At this moment, if the # of records in our batch exceeds _num_records_per_batch, we pass the batch and create a new one
-                if (_pressures_current_batch.batch.Count >= _num_records_per_batch) {
-                    // Enqueue the batch for processing
-                    _pressures_batch_queue.Add(_pressures_current_batch);
-                    // create a new batch
-                    _pressures_current_batch = new OnlineRecordingBatch();
-                }
-            }
-        }
-
-        /*
-        // We must determine best course of action depending on what kind of recording we are using
-        if (_record_statistics == RecordSettings.Online) {
-            // We're recording online. In this case, we're working with batches of data
-            // The batch we're working with is `_online_current_batch`.
-            // At specific time intervals, we pass on `_online_current_batch` to our `_positions_batch_queue` Queue, which is looked at by a separate coroutine
-            // OnlineRecordingBatch is merely a container for a list of type OnlineRecording
-            // Our server is expecting the data in the following format:
-            // - particle_id : int
-            // - timestamp : float
-            // - frame : int
-            // - position : SVector3
-            // - velocity : SVector3
-            // - density : float
-            // - pressure : SVector3
-            
-            // Initialize the data package
-            OnlineRecording r;
-            for(int i = 0; i < _numParticles; i++) {
-                Particle p = temp_particles[i];
-                r = new OnlineRecording(
-                    i,
-                    _time_elapsed,
-                    _frames_elapsed,
-                    p.position,
-                    temp_velocities[i],
-                    temp_densities[i],
-                    temp_pressures[i]
-                );
-                // push our current record into the current `online_current_batch`
-                _online_current_batch.batch.Add(r);
-                // At this moment, if the # of records in our batch exceeds _num_records_per_batch, we pass the batch and create a new one
-                if (_online_current_batch.batch.Count >= _num_records_per_batch) {
-                    // Enqueue the batch for processing
-                    _positions_batch_queue.Add(_online_current_batch);
-                    // create a new batch
-                    _online_current_batch = new OnlineRecordingBatch();
-                }
-            }
-        } else {
-            // We're recording offline. This means we have a different process more optimized for local handling
-            Recording r;
-            for(int i = 0; i < _numParticles; i++) {
-                r = _offline_recordings[i];
-                // Add to position
-                r.positions.Add(new SVector3(temp_particles[i].position[0],temp_particles[i].position[1],temp_particles[i].position[2]));
-                // Add to velocities
-                r.velocities.Add(new SVector3(temp_velocities[i][0],temp_velocities[i][1],temp_velocities[i][2]));
-                // Add to densities
-                r.densities.Add(temp_densities[i]);
-                // Add to pressures
-                r.pressures.Add((new SVector3(temp_pressures[i][0], temp_pressures[i][1], temp_pressures[i][2])).magnitude);
-                // Set it back inside _recordings
-                _offline_recordings[i] = r;
-            }
-            Debug.Log("Saving Recording!");
-        }    
-        */
-    }
-
-    private void RecordCSV() {
+    private void MakeRecord() {
         // STATS
-        float fps = (_real_time_elapsed > 0f) ? (float)_frames_elapsed / _real_time_elapsed : 0f;     // Calculate the FPS based on frames and time passed
-        _total_time_elapsed += _time_elapsed;                   // Update the total time and frames elapsed
+        _total_dt_elapsed += _dt_passed;                   // Update the total time and frames elapsed
         _total_real_time_elapsed += _real_time_elapsed;
         _total_frames_elapsed += _frames_elapsed;
-        _time_elapsed = 0f;                                     // Reset _frames and _time_elapsed
+        _dt_passed = 0f;                                     // Reset _frames and _dt_passed
         _real_time_elapsed = 0f;
         _frames_elapsed = 0;
 
         // GET DATA
         OP.Particle[] temp_particles = new OP.Particle[_numParticles];
             _BM.PARTICLES_BUFFER.GetData(temp_particles);
-        
         float3[] temp_velocities = new float3[_numParticles];
             _BM.PARTICLES_VELOCITIES_BUFFER.GetData(temp_velocities);
-
         float[] temp_densities = new float[_numParticles];
             _BM.PARTICLES_DENSITIES_BUFFER.GetData(temp_densities);
-
         float3[] temp_pressures = new float3[_numParticles];
             _BM.PARTICLES_PRESSURE_FORCES_BUFFER.GetData(temp_pressures);
-        
-        // CSV WRITER INITIALIZATION
-        recorder.fileName = $"{_total_frames_elapsed}-{_total_time_elapsed}-{_total_real_time_elapsed}-{fps}";
-        recorder.Initialize();
+        string recordFilename = $"nFrames_{_total_frames_elapsed}-dt_{_total_dt_elapsed}-realtime_{_total_real_time_elapsed}-fps_{_fps}";    
 
-        // CSV UPDATE
-        for(int i = 0; i < _numParticles; i++) {    
-            recorder.AddPayload(i);                             // particle id
-            recorder.AddPayload(temp_particles[i].position);    // particle position
-            recorder.AddPayload(temp_velocities[i]);            // particle velocity
-            recorder.AddPayload(temp_densities[i]);             // particle density
-            recorder.AddPayload(temp_pressures[i]);             // particle pressure
-            recorder.WriteLine();
-        }
-
-        // Flush and Disable CSV
-        recorder.Disable();
+        // Create a new entry in a queue that holds all the recordings    
+        _recordQueue.Enqueue(new Recording(temp_particles, temp_velocities, temp_densities, temp_pressures, recordFilename));
     }
 
-    private IEnumerator PositionsBatchRequester() {
-        while(_record_statistics == RecordSettings.Online) {
-            if (_positions_batch_queue.Count == 0) {
+    private IEnumerator RecordCycle() {
+        while(true) {
+            // Don't do anything if our queue is empty
+            if ( _recordQueue.Count == 0) {
                 yield return null;
                 continue;
             }
-            // We grab the first item in the queue
-            OnlineRecordingBatch b = _positions_batch_queue[0];
-            _positions_batch_queue.Remove(b);
-            
-            if (_positions_request_textbox != null) 
-                _positions_request_textbox.text = $"Positions: {_positions_batch_queue.Count} Request Remaining";
-            // We build the JSON for this batch
-            string b_data = SaveSystemMethods.ConvertToJSON<OnlineRecordingBatch>(b);
-            // We pass it to our server
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_positions_url+"update_batch",b_data,false));
-            // We wait for a specific time to prevent overloading the server
-            yield return new WaitForSeconds(_time_between_requests);
-        }
-    }
-    private IEnumerator VelocitiesBatchRequester() {
-        while(_record_statistics == RecordSettings.Online) {
-            if (_velocities_batch_queue.Count == 0) {
-                yield return null;
-                continue;
+
+            // Get the top record in our queue
+            Recording r = _recordQueue.Dequeue();
+
+            // Initialize the recorder
+            recorder.fileName = r.fileName;
+            recorder.Initialize();
+            // Write our CSVs
+            for(int i = 0; i < _numParticles; i++) {    
+                recorder.AddPayload(i);                             // particle id
+                recorder.AddPayload(r.temp_particles[i].position);    // particle position
+                recorder.AddPayload(r.temp_velocities[i]);            // particle velocity
+                recorder.AddPayload(r.temp_densities[i]);             // particle density
+                recorder.AddPayload(r.temp_pressures[i]);             // particle pressure
+                recorder.WriteLine();
             }
-            // We grab the first item in the queue
-            OnlineRecordingBatch b = _velocities_batch_queue[0];
-            _velocities_batch_queue.Remove(b);
-            
-            if (_velocities_request_textbox != null) 
-                _velocities_request_textbox.text = $"Velocities: {_velocities_batch_queue.Count} Request Remaining";
-            // We build the JSON for this batch
-            string b_data = SaveSystemMethods.ConvertToJSON<OnlineRecordingBatch>(b);
-            // We pass it to our server
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_velocities_url+"update_batch",b_data,false));
-            // We wait for a specific time to prevent overloading the server
-            yield return new WaitForSeconds(_time_between_requests);
+
+            // Flush and Disable CSV
+            recorder.Disable();
+
+            // Yield return null
+            yield return null;
         }
     }
-    private IEnumerator DensitiesBatchRequester() {
-        while(_record_statistics == RecordSettings.Online) {
-            if (_densities_batch_queue.Count == 0) {
-                yield return null;
-                continue;
-            }
-            // We grab the first item in the queue
-            OnlineRecordingBatch b = _densities_batch_queue[0];
-            _densities_batch_queue.Remove(b);
-            
-            if (_densities_request_textbox != null) 
-                _densities_request_textbox.text = $"Densities: {_densities_batch_queue.Count} Request Remaining";
-            // We build the JSON for this batch
-            string b_data = SaveSystemMethods.ConvertToJSON<OnlineRecordingBatch>(b);
-            // We pass it to our server
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_densities_url+"update_batch",b_data,false));
-            // We wait for a specific time to prevent overloading the server
-            yield return new WaitForSeconds(_time_between_requests);
-        }
-    }
-    private IEnumerator PressuresBatchRequester() {
-        while(_record_statistics == RecordSettings.Online) {
-            if (_pressures_batch_queue.Count == 0) {
-                yield return null;
-                continue;
-            }
-            // We grab the first item in the queue
-            OnlineRecordingBatch b = _pressures_batch_queue[0];
-            _pressures_batch_queue.Remove(b);
-            
-            if (_pressures_request_textbox != null) 
-                _pressures_request_textbox.text = $"Pressures: {_pressures_batch_queue.Count} Request Remaining";
-            // We build the JSON for this batch
-            string b_data = SaveSystemMethods.ConvertToJSON<OnlineRecordingBatch>(b);
-            // We pass it to our server
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_pressures_url+"update_batch",b_data,false));
-            // We wait for a specific time to prevent overloading the server
-            yield return new WaitForSeconds(_time_between_requests);
-        }
-    }
-
-    private IEnumerator SaveRecording() {
-        // Turn off saving
-        _recording_saved = true;
-        
-        // Pass on the current batch to our requesters.
-        string session_data;
-        if (_record_positions_url.Length > 0) {
-            _positions_batch_queue.Add(_positions_current_batch);
-            // Save duration-related data
-            _positions_recording_session.duration = _time_elapsed;
-            _positions_recording_session.frames = _frames_elapsed;
-            _positions_recording_session.success = 1;
-            // Convert and save session to JSON
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_positions_recording_session);
-            // Update our API
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_positions_url+"update_session",session_data,false,OnlineSaveCallback));
-            yield return null;
-        }
-        if (_record_velocities_url.Length > 0) {
-            _velocities_batch_queue.Add(_velocities_current_batch);
-            _velocities_recording_session.duration = _time_elapsed;
-            _velocities_recording_session.frames = _frames_elapsed;
-            _velocities_recording_session.success = 1;
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_velocities_recording_session);
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_velocities_url+"update_session",session_data,false,OnlineSaveCallback));
-            yield return null;
-        }
-        if (_record_densities_url.Length > 0) {
-            _densities_batch_queue.Add(_densities_current_batch);
-            _densities_recording_session.duration = _time_elapsed;
-            _densities_recording_session.frames = _frames_elapsed;
-            _densities_recording_session.success = 1;
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_densities_recording_session);
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_densities_url+"update_session",session_data,false,OnlineSaveCallback));
-            yield return null;
-        }
-        if (_record_pressures_url.Length > 0) {
-            _pressures_batch_queue.Add(_pressures_current_batch);
-            _pressures_recording_session.duration = _time_elapsed;
-            _pressures_recording_session.frames = _frames_elapsed;
-            _pressures_recording_session.success = 1;
-            session_data = SaveSystemMethods.ConvertToJSON<RecordingSession>(_pressures_recording_session);
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_pressures_url+"update_session",session_data,false,OnlineSaveCallback));
-            yield return null;
-        }
-
-        // Depending on if we're offline or online, decide the next course of action
-        /*
-        if (_record_statistics == RecordSettings.Online) {
-            StartCoroutine(WebRequests.PostRequestWithJSON(_record_directory+"update_session",session_data,false,OnlineSaveCallback));
-            yield return null;
-        } else {
-            SaveSystemMethods.SaveJSON(_recording_save_name+"session", session_data);
-            yield return null;
-            // Save particle data
-            string record_json_data;
-            int save_count = 0;
-            for(int i = 0; i < _numParticles; i++) {
-                record_json_data = SaveSystemMethods.ConvertToJSON<Recording>(_offline_recordings[i]);
-                SaveSystemMethods.SaveJSON($"{_recording_save_name}particles/{i}",record_json_data);
-                save_count += 1;
-                if (save_count >= 10000) {
-                    save_count = 0;
-                    yield return null;
-                }
-            }
-            Debug.Log("Saving Particle Data Recording!");
-            yield return null;
-        }
-        */
-    }
-
-    /*
-    private void Record() {
-        if (_recording_saved || _recording_session == null) return;
-
-        
-        
-        Recording r;
-        for(int i = 0; i < _numParticles; i++) {
-            r = _recordings[i];
-            // Add to position
-            r.positions.Add(new SVector3(temp_particles[i].position[0],temp_particles[i].position[1],temp_particles[i].position[2]));
-            // Add to velocities
-            r.velocities.Add(new SVector3(temp_velocities[i][0],temp_velocities[i][1],temp_velocities[i][2]));
-            // Add to densities
-            r.densities.Add(temp_densities[i]);
-            // Add to pressures
-            r.pressures.Add((new SVector3(temp_pressures[i][0], temp_pressures[i][1], temp_pressures[i][2])).magnitude);
-            // Set it back inside _recordings
-            _recordings[i] = r;
-        }
-
-        // If the time elapsed is equal to or greater than _record_duration, then we save our recording session into a JSON
-        if (_time_elapsed >= _record_duration || _time_elapsed + _dt > _record_duration) {
-            // Prevent future saves
-            _recording_saved = true;
-            // Convert and save particle data via Coroutine
-            StartCoroutine(SaveRecordingCoroutine());
-        } else {
-            Debug.Log("Saving Recording!");
-        }
-    }
-    */
 
     void OnDestroy() {
         ARG_BUFFER.Release();
@@ -1388,6 +748,10 @@ public class ParticleController : MonoBehaviour
         PARTICLE_OFFSETS_BUFFER.Release();
         FORCES_BUFFER.Release();
         RENDER_LIMITS_BUFFER.Release();
+        if (_recordCoroutine != null) {
+            while (_recordQueue.Count != 0) {}
+            StopCoroutine(_recordCoroutine);
+        }
         recorder.Disable();
     }
 
