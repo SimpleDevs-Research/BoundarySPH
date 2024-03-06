@@ -621,7 +621,7 @@ public class ParticleController : MonoBehaviour
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.
-        if (_record_statistics == RecordSettings.CSV && _dt_passed >= _record_interval) {
+        if (_record_statistics == RecordSettings.CSV && _real_time_elapsed >= _record_interval) {
             // Here, we want to capture some important details
             // - We will instantiate a new file for every recording we capture. 
             // - We will time each capture on a time interval, meaning we will at least ensure that we won't lag the system.
