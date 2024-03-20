@@ -167,13 +167,7 @@ public class ParticleController : MonoBehaviour
     private IEnumerator _recordCoroutine = null;
     private Queue<Recording> _recordQueue = new Queue<Recording>();
     private Queue<RecordingFrame> _recordFrameQueue = new Queue<RecordingFrame>();
-
-    [SerializeField] private List<TextMeshProUGUI> _nParticles_textbox = new List<TextMeshProUGUI>();
-    [SerializeField] private List<TextMeshProUGUI> _obstacles_textbox = new List<TextMeshProUGUI>();
-    [SerializeField] private List<TextMeshProUGUI> _obstacle_details_textbox = new List<TextMeshProUGUI>();
-    [SerializeField] private List<TextMeshProUGUI> _fps_textbox = new List<TextMeshProUGUI>();
-    [SerializeField] private List<TextMeshProUGUI> _deltatime_passed_textbox = new List<TextMeshProUGUI>();
-    [SerializeField] private List<TextMeshProUGUI> _realtime_passed_textbox = new List<TextMeshProUGUI>();
+    [SerializeField] private RecordingCanvas textboxes = null;
 
     void OnDrawGizmos() {
         if (!Application.isPlaying) return;
@@ -299,6 +293,15 @@ public class ParticleController : MonoBehaviour
         Debug.Log("ParticleController: Particles Initialized!");
         t = Time.time;
         _timeStarted = Time.time;
+
+        if (textboxes != null) {
+            textboxes.nParticles.gameObject.SetActive(true);
+            textboxes.nObstacles.gameObject.SetActive(true);
+            textboxes.obstacleDetails.gameObject.SetActive(true);
+            textboxes.fps.gameObject.SetActive(true);
+            textboxes.deltaTime.gameObject.SetActive(true);
+            textboxes.realTime.gameObject.SetActive(true);
+        }
     }
 
     private void PrepareRecording() {
@@ -612,16 +615,18 @@ public class ParticleController : MonoBehaviour
         _fps = (_real_time_elapsed > 0f) ? (float)_frames_elapsed / _real_time_elapsed : 0f;     // Calculate the FPS based on frames and time passed
 
         // Update visualization textboxes if they exist
-        if (_nParticles_textbox.Count > 0) foreach(TextMeshProUGUI t in _nParticles_textbox) t.text = $"{_numParticles} Particles";
-        if (_obstacles_textbox.Count > 0) foreach(TextMeshProUGUI t in _obstacles_textbox) t.text = $"{_BM.MESHOBS_OBSTACLES_STATIC_BUFFER.count} Obstacles";
-        if (_obstacle_details_textbox.Count > 0) foreach(TextMeshProUGUI t in _obstacle_details_textbox) t.text = $"(V:{_BM.MESHOBS_VERTICES_STATIC_BUFFER.count} | E:{_BM.MESHOBS_EDGES_STATIC_BUFFER.count} | T:{_BM.MESHOBS_TRIANGLES_STATIC_BUFFER.count})";
-        if (_fps_textbox.Count > 0) foreach(TextMeshProUGUI t in _fps_textbox) t.text = $"{_fps} FPS";
-        if (_deltatime_passed_textbox.Count > 0) foreach(TextMeshProUGUI t in _deltatime_passed_textbox) t.text = $"Simulation time: {_total_dt_elapsed + _dt_passed} sec.";
-        if (_realtime_passed_textbox.Count > 0) foreach(TextMeshProUGUI t in _realtime_passed_textbox) t.text = $"Real time: {_total_real_time_elapsed + _real_time_elapsed} sec.";
+        if (textboxes != null) {
+            textboxes.nParticles.text = $"{_numParticles} Particles";
+            textboxes.nObstacles.text = $"{_BM.MESHOBS_OBSTACLES_STATIC_BUFFER.count} Obstacles";
+            textboxes.obstacleDetails.text = $"(V:{_BM.MESHOBS_VERTICES_STATIC_BUFFER.count} | E:{_BM.MESHOBS_EDGES_STATIC_BUFFER.count} | T:{_BM.MESHOBS_TRIANGLES_STATIC_BUFFER.count})";
+            textboxes.fps.text = $"{_fps} FPS";
+            textboxes.deltaTime.text = $"Simulation time: {_total_dt_elapsed + _dt_passed} sec.";
+            textboxes.realTime.text = $"Real time: {_total_real_time_elapsed + _real_time_elapsed} sec.";
+        }
 
         // If we're recording, record our session
         // Also note: if we're waiting for the recording to start, we won't actually record anything yet.
-        if (_record_statistics == RecordSettings.CSV && _real_time_elapsed >= _record_interval) {
+        if (_real_time_elapsed >= _record_interval) {
             // Here, we want to capture some important details
             // - We will instantiate a new file for every recording we capture. 
             // - We will time each capture on a time interval, meaning we will at least ensure that we won't lag the system.
@@ -724,6 +729,8 @@ public class ParticleController : MonoBehaviour
         _dt_passed = 0f;                                     // Reset _frames and _dt_passed
         _real_time_elapsed = 0f;
         _frames_elapsed = 0;
+
+        if (_record_statistics != RecordSettings.CSV) return;
 
         // GET DATA
         OP.Particle[] temp_particles = new OP.Particle[_numParticles];

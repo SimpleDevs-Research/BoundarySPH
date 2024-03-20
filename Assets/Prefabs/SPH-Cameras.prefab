@@ -1209,6 +1209,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4322999897171957127}
   - component: {fileID: 4322999897171957126}
+  - component: {fileID: 672159901686785246}
   m_Layer: 0
   m_Name: 1.TopCamera
   m_TagString: MainCamera
@@ -1275,6 +1276,25 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!114 &672159901686785246
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4322999897171957124}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbf4d31367c3a4345bde536f642c518a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  title: {fileID: 6768884190225954532}
+  nParticles: {fileID: 8004295267803883521}
+  nObstacles: {fileID: 981217974085384585}
+  obstacleDetails: {fileID: 838258782847702517}
+  fps: {fileID: 8796609637335502823}
+  deltaTime: {fileID: 1290509944356584029}
+  realTime: {fileID: 7626575466870521915}
 --- !u!1 &4322999897185287236
 GameObject:
   m_ObjectHideFlags: 0
@@ -1422,6 +1442,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4322999897343313345}
   - component: {fileID: 4322999897343313350}
+  - component: {fileID: 3509607195985047949}
   m_Layer: 0
   m_Name: 2.SideCamera
   m_TagString: MainCamera
@@ -1488,6 +1509,25 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!114 &3509607195985047949
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4322999897343313348}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbf4d31367c3a4345bde536f642c518a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  title: {fileID: 5734698083520650304}
+  nParticles: {fileID: 2843020188522981378}
+  nObstacles: {fileID: 8490678739995753453}
+  obstacleDetails: {fileID: 847382823082285986}
+  fps: {fileID: 4344489881538636766}
+  deltaTime: {fileID: 3511870723905698517}
+  realTime: {fileID: 5486974853227084920}
 --- !u!1 &4322999897520959528
 GameObject:
   m_ObjectHideFlags: 0
@@ -1499,6 +1539,7 @@ GameObject:
   - component: {fileID: 4322999897520959531}
   - component: {fileID: 4322999897520959530}
   - component: {fileID: 4322999897520959509}
+  - component: {fileID: 1470229466030007990}
   m_Layer: 0
   m_Name: 4.DiagonalCamera
   m_TagString: MainCamera
@@ -1573,6 +1614,25 @@ AudioListener:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4322999897520959528}
   m_Enabled: 1
+--- !u!114 &1470229466030007990
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4322999897520959528}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbf4d31367c3a4345bde536f642c518a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  title: {fileID: 4322999897624058389}
+  nParticles: {fileID: 4322999897185287238}
+  nObstacles: {fileID: 4322999898699567164}
+  obstacleDetails: {fileID: 4322999897166258051}
+  fps: {fileID: 4322999898672239432}
+  deltaTime: {fileID: 1032245452943211852}
+  realTime: {fileID: 2491730262122087946}
 --- !u!1 &4322999897624058411
 GameObject:
   m_ObjectHideFlags: 0
@@ -2267,6 +2327,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4322999898458302150}
   - component: {fileID: 4322999898458302145}
+  - component: {fileID: 7272985765037249431}
   m_Layer: 0
   m_Name: 3.ForwardCamera
   m_TagString: MainCamera
@@ -2333,6 +2394,25 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!114 &7272985765037249431
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4322999898458302151}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbf4d31367c3a4345bde536f642c518a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  title: {fileID: 4322999898913824563}
+  nParticles: {fileID: 4322999898000637176}
+  nObstacles: {fileID: 4322999898248156414}
+  obstacleDetails: {fileID: 4322999898312381957}
+  fps: {fileID: 4322999898807349004}
+  deltaTime: {fileID: 8712711908604426150}
+  realTime: {fileID: 865961743057202411}
 --- !u!1 &4322999898672239438
 GameObject:
   m_ObjectHideFlags: 0

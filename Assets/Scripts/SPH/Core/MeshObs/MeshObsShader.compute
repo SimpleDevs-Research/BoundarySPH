@@ -488,9 +488,9 @@ void ResetTempProjections(uint id : SV_DispatchThreadID) {
     //torque_forces[id] = int3(0,0,0);
 }
 
-#pragma kernel ClearAppliedPressures
+#pragma kernel ClearAppliedPressuresAndBoids
 [numthreads(8,1,1)]
-void ClearAppliedPressures(uint id : SV_DispatchThreadID) {
+void ClearAppliedPressuresAndBoids(uint id : SV_DispatchThreadID) {
     if (id >= (uint)numObstacles) return;
     translational_forces[id] = int3(0,0,0);
     ObstacleDynamic o_dynamic = obstacles_dynamic[id];
@@ -498,6 +498,13 @@ void ClearAppliedPressures(uint id : SV_DispatchThreadID) {
         boid_settings[o_dynamic.boidIndex].boundaryNormal = int3(0,0,0);
         boid_settings[o_dynamic.boidIndex].boundaryTriCount = 0;
     }
+}
+#pragma kernel ClearAppliedPressures
+[numthreads(8,1,1)]
+void ClearAppliedPressures(uint id : SV_DispatchThreadID) {
+    if (id >= (uint)numObstacles) return;
+    translational_forces[id] = int3(0,0,0);
+    ObstacleDynamic o_dynamic = obstacles_dynamic[id];
 }
 
 #pragma kernel ClearGrid
@@ -1469,9 +1476,9 @@ void CalculateBoidDirection(inout ObstacleDynamic o, inout float3 velocity, uint
     velocity = newVelocity;
 }
 
-#pragma kernel IntegrateObstacles
+#pragma kernel IntegrateObstaclesAndBoids
 [numthreads(16,1,1)]
-void IntegrateObstacles(uint id : SV_DispatchThreadID) {
+void IntegrateObstaclesAndBoids(uint id : SV_DispatchThreadID) {
     if (id >= (uint)numObstacles) return;
 
     // Get the dynamic properties of the current obstacle
@@ -1502,6 +1509,44 @@ void IntegrateObstacles(uint id : SV_DispatchThreadID) {
     if (o_dynamic.isBoid) {
         CalculateBoidDirection(o_dynamic, v, id);
     }
+
+    // Apply the resulting forces at a delta time, and then integrate the position
+    float3 acceleration = gForce + (tForce / o_dynamic.density);
+    v += acceleration * dt;
+    o_dynamic.position += v * dt;
+
+    // return
+    obstacle_velocities[id] = v;
+    obstacles_dynamic[id] = o_dynamic;
+}
+
+#pragma kernel IntegrateObstacles
+[numthreads(16,1,1)]
+void IntegrateObstacles(uint id : SV_DispatchThreadID) {
+    if (id >= (uint)numObstacles) return;
+
+    // Get the dynamic properties of the current obstacle
+    ObstacleDynamic o_dynamic = obstacles_dynamic[id];
+    // If the obstacle is a static one, return early
+    if (o_dynamic.isStatic == 1) return;
+
+    // Get the pressure force, but only if external forces are allowed
+    float3 tForce = float3(0,0,0);
+    float3 gForce = float3(0,0,0);
+    if (o_dynamic.applyExternalForces == 1) {
+        int3 translational_force = translational_forces[id];
+        float3 tForce = float3(
+            float(translational_force[0])/1024.0,
+            float(translational_force[1])/1024.0,
+            float(translational_force[2])/1024.0
+        );
+    }
+    if (o_dynamic.applyGravity == 1) {
+        gForce = g;
+    }
+
+    // Get the velocity of the obstacle
+    float3 v = obstacle_velocities[id];
 
     // Apply the resulting forces at a delta time, and then integrate the position
     float3 acceleration = gForce + (tForce / o_dynamic.density);
