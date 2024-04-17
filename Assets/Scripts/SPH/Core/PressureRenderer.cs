@@ -148,7 +148,7 @@ public class PressureRenderer : MonoBehaviour
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "bounds", BOUNDS_BUFFER);
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "particles", _BM.PARTICLES_BUFFER);
         _SHADER.SetBuffer(_UPDATE_PRESSURES, "density", _BM.PARTICLES_DENSITIES_BUFFER);
-        _SHADER.SetBuffer(_UPDATE_PRESSURES, "pressures", _BM.PARTICLES_PRESSURES_BUFFER);
+        _SHADER.SetBuffer(_UPDATE_PRESSURES, "pressures", _BM.PARTICLES_PRESSURE_BUFFER);
 
         _SHADER.SetBuffer(_CONDENSE_PRESSURES, "grid", PRESSURE_GRID_BUFFER);
         _SHADER.SetBuffer(_CONDENSE_PRESSURES, "pressures", _BM.PARTICLES_PRESSURE_GRID_BUFFER);
@@ -181,7 +181,7 @@ public class PressureRenderer : MonoBehaviour
         if (_renderPressures) RenderPressures();
 
         if (_getPressures) {
-            _BM.PARTICLES_PRESSURES_BUFFER.GetData(_tempPressures);
+            _BM.PARTICLES_PRESSURE_BUFFER.GetData(_tempPressures);
             PRESSURE_GRID_BUFFER.GetData(_tempCells);
             //TEMP_PARTICLES_BUFFER.GetData(_tempParticles);
         }

@@ -7,7 +7,8 @@ using OP = ObstaclePrimitives.Structs;
 public class BufferManager : MonoBehaviour
 {
     [Header("=== CONTROLLERS and RENDERERS ===")]
-    public ParticleController _PARTICLE_CONTROLLER;
+    //public ParticleController _PARTICLE_CONTROLLER;
+    public Simulation3D _PARTICLE_CONTROLLER;
     public BoidsController _BOIDS_CONTROLLER;
     public MeshObsGPU _OBSTACLES_CONTROLLER;
     public PressureRenderer _PRESSURE_RENDERER;
@@ -18,7 +19,9 @@ public class BufferManager : MonoBehaviour
     public ComputeBuffer PARTICLES_BUFFER;                      // Stores particles' position data
     public ComputeBuffer PARTICLES_VELOCITIES_BUFFER;           // Stores particles' velocity data
     public ComputeBuffer PARTICLES_DENSITIES_BUFFER;            // Stores particles' density data
-    public ComputeBuffer PARTICLES_PRESSURES_BUFFER;            // Stores particles' pressure data (within their kernel)
+    public ComputeBuffer PARTICLES_NEAR_DENSITIES_BUFFER;            // Stores particles' density data
+    public ComputeBuffer PARTICLES_PRESSURE_BUFFER;            // Stores particles' pressure data (within their kernel)
+    public ComputeBuffer PARTICLES_NEAR_PRESSURE_BUFFER;            // Stores particles' pressure data (within their kernel)
     public ComputeBuffer PARTICLES_PRESSURE_FORCES_BUFFER;      // Stores the pressure force experienced BY a particle based on its kernel radius
     public ComputeBuffer PARTICLES_VISCOSITY_FORCES_BUFFER;     // Stores the viscosity force experienced BY a particle based on its kernel radius
     public ComputeBuffer PARTICLES_EXTERNAL_FORCES_BUFFER;      // Stores the external forces experienced BY a particle due to forces such as gravity
@@ -54,8 +57,12 @@ public class BufferManager : MonoBehaviour
     public float3[] particles_velocities_array => _particles_velocities_array;
     [SerializeField] private float[] _particles_densities_array;
     public float[] particles_densities_array => _particles_densities_array;
+    [SerializeField] private float[] _particles_near_densities_array;
+    public float[] particles_near_densities_array => _particles_near_densities_array;
     [SerializeField] private float[] _particles_pressures_array;
     public float[] particles_pressures_array => _particles_pressures_array;
+    [SerializeField] private float[] _particles_near_pressures_array;
+    public float[] particles_near_pressures_array => _particles_near_pressures_array;
     [SerializeField] private OP.Projection[] _particles_external_forces_array;
     public OP.Projection[] particles_external_forces_array => _particles_external_forces_array;
     
@@ -88,7 +95,9 @@ public class BufferManager : MonoBehaviour
 
         PARTICLES_VELOCITIES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*3);
         PARTICLES_DENSITIES_BUFFER = new ComputeBuffer(numParticles, sizeof(float));
-        PARTICLES_PRESSURES_BUFFER = new ComputeBuffer(numParticles, sizeof(float));
+        PARTICLES_NEAR_DENSITIES_BUFFER = new ComputeBuffer(numParticles, sizeof(float));
+        PARTICLES_PRESSURE_BUFFER = new ComputeBuffer(numParticles, sizeof(float));
+        PARTICLES_NEAR_PRESSURE_BUFFER = new ComputeBuffer(numParticles, sizeof(float));
 
         PARTICLES_PRESSURE_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*3);
         PARTICLES_VISCOSITY_FORCES_BUFFER = new ComputeBuffer(numParticles, sizeof(float)*3);
@@ -98,7 +107,9 @@ public class BufferManager : MonoBehaviour
         _particles_grid_array = new int[Mathf.Min(_particles_grid_array.Length, numGridCells)];
         _particles_velocities_array = new float3[Mathf.Min(_particles_velocities_array.Length, numParticles)];
         _particles_densities_array = new float[Mathf.Min(_particles_densities_array.Length, numParticles)];
+        _particles_near_densities_array = new float[Mathf.Min(_particles_near_densities_array.Length, numParticles)];
         _particles_pressures_array = new float[Mathf.Min(_particles_pressures_array.Length, numParticles)];
+        _particles_near_pressures_array = new float[Mathf.Min(_particles_near_pressures_array.Length, numParticles)];
         _particles_external_forces_array = new OP.Projection[Mathf.Min(_particles_external_forces_array.Length, numParticles)];
 
         if (_verbose) Debug.Log("[BUFFER MANAGER] Particle buffers initialized!");
@@ -150,7 +161,9 @@ public class BufferManager : MonoBehaviour
         if (_particles_grid_array.Length > 0) PARTICLES_GRID_BUFFER.GetData(_particles_grid_array);
         if (_particles_velocities_array.Length > 0) PARTICLES_VELOCITIES_BUFFER.GetData(_particles_velocities_array);
         if (_particles_densities_array.Length > 0) PARTICLES_DENSITIES_BUFFER.GetData(_particles_densities_array);
-        if (_particles_pressures_array.Length > 0) PARTICLES_PRESSURES_BUFFER.GetData(_particles_pressures_array);
+        if (_particles_near_densities_array.Length > 0) PARTICLES_NEAR_DENSITIES_BUFFER.GetData(_particles_near_densities_array);
+        if (_particles_pressures_array.Length > 0) PARTICLES_PRESSURE_BUFFER.GetData(_particles_pressures_array);
+        if (_particles_near_pressures_array.Length > 0) PARTICLES_NEAR_PRESSURE_BUFFER.GetData(_particles_near_pressures_array);
         if (_particles_external_forces_array.Length > 0) PARTICLES_EXTERNAL_FORCES_BUFFER.GetData(_particles_external_forces_array);
 
         if (_obstacles_grid_array.Length > 0) MESHOBS_GRID_BUFFER.GetData(_obstacles_grid_array);
@@ -173,7 +186,9 @@ public class BufferManager : MonoBehaviour
         if (PARTICLES_GRID_BUFFER != null) PARTICLES_GRID_BUFFER.Release();
         if (PARTICLES_VELOCITIES_BUFFER != null) PARTICLES_VELOCITIES_BUFFER.Release();
         if (PARTICLES_DENSITIES_BUFFER != null) PARTICLES_DENSITIES_BUFFER.Release();
-        if (PARTICLES_PRESSURES_BUFFER != null) PARTICLES_PRESSURES_BUFFER.Release();
+        if (PARTICLES_NEAR_DENSITIES_BUFFER != null) PARTICLES_NEAR_DENSITIES_BUFFER.Release();
+        if (PARTICLES_PRESSURE_BUFFER != null) PARTICLES_PRESSURE_BUFFER.Release();
+        if (PARTICLES_NEAR_PRESSURE_BUFFER != null) PARTICLES_NEAR_PRESSURE_BUFFER.Release();
         if (PARTICLES_PRESSURE_GRID_BUFFER != null) PARTICLES_PRESSURE_GRID_BUFFER.Release();
         if (PARTICLES_PRESSURE_FORCES_BUFFER != null) PARTICLES_PRESSURE_FORCES_BUFFER.Release();
         if (PARTICLES_VISCOSITY_FORCES_BUFFER != null) PARTICLES_VISCOSITY_FORCES_BUFFER.Release();

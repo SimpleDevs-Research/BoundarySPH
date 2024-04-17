@@ -1,0 +1,380 @@
+// Includes. Incorporating Sebastian's code
+#include "./FluidMaths3D.hlsl"
+#include "./SpatialHash3D.hlsl"
+
+// Constants. Are only updated once and never updated again
+uint numParticles;
+float epsilon;
+float pi;
+
+// Changeable Variables. These may be updated as the simulation runs through its course.
+float particleMass;
+float deltaTime;
+float3 external_force;              // gravity
+float smoothingRadius;                // h
+float rest_density;                 // p_0
+float viscosity_influence;          // mu
+float pressure_influence;           // bulk modulus
+float near_pressure_influence;
+float damping_effect;
+
+// Important Structs
+struct Particle {
+    float3 position;
+    float3 force;
+    int render;
+};
+struct Projection {
+    uint triangleID;
+    float3 projection;
+    float3 position;
+    float3 normal;
+    float3 particle_force;      // force exerted into the boundary by the particle
+    float3 external_force;      // force exerted toward the particle by the boundary due to velocity
+    int counter;
+    float frictionCoefficient;
+    float restitutionCoefficient;
+
+    float3 e1;
+    float3 e2;
+    float3 e1_2DN;
+    float3 e2_2DN;
+    float3 e1_3DN;
+    float3 e2_3DN;
+};
+
+// Buffers
+RWStructuredBuffer<Particle> particles;
+RWStructuredBuffer<float3> predictedPositions;
+RWStructuredBuffer<float3> velocities;
+RWStructuredBuffer<float> densities;
+RWStructuredBuffer<float> near_densities;
+RWStructuredBuffer<float> pressures;
+RWStructuredBuffer<float> nearPressures;
+RWStructuredBuffer<Projection> obstacleForces;
+RWStructuredBuffer<uint3> spatialIndices;   // used for spatial hashing. We do not touch these. EVER.
+RWStructuredBuffer<uint> spatialOffsets;    // used for spatial hashing. We do not touch these. EVER.
+
+
+#pragma kernel UpdateExternalForces
+[numthreads(256,1,1)]
+void UpdateExternalForces(uint3 id : SV_DispatchThreadID) {
+    // Don't run if we reach an ID that isn't part of our particles
+    if (id.x >= numParticles) return;
+
+	// Add external force (AKA gravity) to our particle's velocity
+	velocities[id.x] += external_force * deltaTime;
+
+	// Now here, we actually do something interesting: we actuallly make a PREDICTION of where the particle would be if no other influence were to affect the particle
+    // The idea is that we would be performing SPH calculations on predictions of where a particle might be.
+    // The benefit being that we don't actually move the particle yet - all particle movements are estimated prior, then we finally implement the translation at the way end.
+	// The other thing is that we don't use `deltaTime` - instead, we use a different delta time. Based on both my and Sebastian's observations, predictions were more stable when a standard delta time was implemented.
+    // No idea why this is. May need to look into it further. But if it works, it works.
+    predictedPositions[id.x] = particles[id.x].position + velocities[id.x] * 1 / 120.0;
+}
+
+#pragma kernel UpdateSpatialHash
+[numthreads(256,1,1)]
+void UpdateSpatialHash(uint3 id : SV_DispatchThreadID) {
+    // Don't run if we reach an ID that isn't part of our particles
+    if (id.x >= numParticles) return;
+
+	// I'll briefly explain what's going on here.
+    // With SPH, we need some neighborhood search implementation to let particles optimize search times regarding which particles are likely to be close enough.
+    // Instead of searching all other particles (making this step an n^n process), we optimize by having the particle search only the regional neighborhood around the particle.
+    // Traditionally, we'd use grids and identify which particles were in each grid; then it became a simple matter of querying which grid cells were neighbors to our particle's grid cell...
+    // ... then querying which particles were IN those neighboring cells, then performing any high-fidelity distance check. That's fine, and it's implemented here.
+    // However, we can even FURTHER optimize this by implementing sorting of indexes when it comes to grid cell indices and particle indices in cells.
+    // Kind of like instead of searching a messy drawer where you KNOW you put your favorite t-shirt but since it's disorganized you have to take some time to search, we can
+    // optimize by sorting those t-shirts, so that you can more quickly identify which shirt is which. In thiscase, we use Bitonic Sort.
+
+    // A much nicer description of this method is provided by Sebastian, who has done the legwork to describe everything about this process in detail. https://www.youtube.com/watch?v=rSKMYc1CQHE
+    
+    // Reset offsets
+	spatialOffsets[id.x] = numParticles;
+
+	// Update index buffer
+	uint index = id.x;
+	int3 cell = GetCell3D(predictedPositions[index], smoothingRadius);
+	uint hash = HashCell3D(cell);
+	uint key = KeyFromHash(hash, numParticles);
+	spatialIndices[id.x] = uint3(index, hash, key);
+}
+
+/*
+// Helper function: spiky kernel, power of 2
+float SpikyKernelPow2(float dst, float radius) {
+	if (dst < radius) {
+		float scale = 15 / (2 * pi * pow(radius, 5));
+		float v = radius - dst;
+		return v * v * scale;
+	}
+	return 0;
+}
+float SpikyKernelPow3(float dst, float radius) {
+	if (dst < radius) {
+		float scale = 15 / (pi * pow(radius, 6));
+		float v = radius - dst;
+		return v * v * v * scale;
+	}
+	return 0;
+}
+*/
+
+#pragma kernel UpdateDensity
+[numthreads(256,1,1)]
+void UpdateDensity(uint3 id : SV_DispatchThreadID) {
+    // Don't run if we reach an ID that isn't part of our particles
+    if (id.x >= numParticles) return;
+
+    // Use the predicted position of the current particle
+	float3 pos = predictedPositions[id.x];
+
+    // We need the cell id
+	int3 originCell = GetCell3D(pos, smoothingRadius);
+	float sqrRadius = smoothingRadius * smoothingRadius;
+    float radius3 = smoothingRadius * sqrRadius;
+	float density = (315.0 * particleMass) / (64.0 * pi * radius3);
+	float nearDensity = (315.0 * particleMass) / (64.0 * pi * radius3);
+
+	// Neighbour search
+	for (int i = 0; i < 27; i ++) {
+		uint hash = HashCell3D(originCell + offsets3D[i]);
+		uint key = KeyFromHash(hash, numParticles);
+		uint currIndex = spatialOffsets[key];
+
+		while (currIndex < numParticles)
+		{
+			uint3 indexData = spatialIndices[currIndex];
+			currIndex ++;
+			// Exit if no longer looking at correct bin
+			if (indexData[2] != key) break;
+			// Skip if hash does not match
+			if (indexData[1] != hash) continue;
+
+			uint neighbourIndex = indexData[0];
+			float3 neighbourPos = predictedPositions[neighbourIndex];
+			float3 offsetToNeighbour = neighbourPos - pos;
+			float sqrDstToNeighbour = dot(offsetToNeighbour, offsetToNeighbour);
+
+			// Skip if not within radius
+			if (sqrDstToNeighbour > sqrRadius) continue;
+
+			// Calculate density and near density
+			float dst = sqrt(sqrDstToNeighbour);
+			density += particleMass * SpikyKernelPow2(dst, smoothingRadius);
+			nearDensity += particleMass * NearDensityKernel(dst, smoothingRadius);
+		}
+	}
+	
+	densities[id.x] = density;
+    near_densities[id.x] = nearDensity;
+}
+
+float PressureFromDensity(float density) {
+	return (density - rest_density) * pressure_influence;
+}
+
+float NearPressureFromDensity(float nearDensity) {
+	return nearDensity * near_pressure_influence;
+}
+
+/*
+float DerivativeSpikyPow3(float dst, float radius) {
+	if (dst <= radius) {
+		float scale = 45 / (pow(radius, 6) * PI);
+		float v = radius - dst;
+		return -v * v * scale;
+	}
+	return 0;
+}
+
+// 3d conversion: done
+float DerivativeSpikyPow2(float dst, float radius) {
+	if (dst <= radius) {
+		float scale = 15 / (pow(radius, 5) * PI);
+		float v = radius - dst;
+		return -v * scale;
+	}
+	return 0;
+}
+*/
+
+#pragma kernel UpdatePressure
+[numthreads(256,1,1)]
+void UpdatePressure(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles) return;
+
+	// Calculate pressure
+	float density = densities[id.x];
+	float densityNear = near_densities[id.x];
+	float pressure = PressureFromDensity(density);
+	float nearPressure = NearPressureFromDensity(densityNear);
+	float3 pressureForce = 0;
+	
+	float3 pos = predictedPositions[id.x];
+	int3 originCell = GetCell3D(pos, smoothingRadius);
+	float sqrRadius = smoothingRadius * smoothingRadius;
+
+	// Neighbour search
+	for (int i = 0; i < 27; i ++)
+	{
+		uint hash = HashCell3D(originCell + offsets3D[i]);
+		uint key = KeyFromHash(hash, numParticles);
+		uint currIndex = spatialOffsets[key];
+
+		while (currIndex < numParticles)
+		{
+			uint3 indexData = spatialIndices[currIndex];
+			currIndex ++;
+			// Exit if no longer looking at correct bin
+			if (indexData[2] != key) break;
+			// Skip if hash does not match
+			if (indexData[1] != hash) continue;
+
+			uint neighbourIndex = indexData[0];
+			// Skip if looking at self
+			if (neighbourIndex == id.x) continue;
+
+			float3 neighbourPos = predictedPositions[neighbourIndex];
+			float3 offsetToNeighbour = neighbourPos - pos;
+			float sqrDstToNeighbour = dot(offsetToNeighbour, offsetToNeighbour);
+
+			// Skip if not within radius
+			if (sqrDstToNeighbour > sqrRadius) continue;
+
+			// Calculate pressure force
+			float densityNeighbour = densities[neighbourIndex];
+			float nearDensityNeighbour = near_densities[neighbourIndex];
+			float neighbourPressure = PressureFromDensity(densityNeighbour);
+			float neighbourPressureNear = NearPressureFromDensity(nearDensityNeighbour);
+
+			float sharedPressure = (pressure + neighbourPressure) / 2;
+			float sharedNearPressure = (nearPressure + neighbourPressureNear) / 2;
+
+			float dst = sqrt(sqrDstToNeighbour);
+			float3 dir = dst > 0 ? offsetToNeighbour / dst : float3(0, 1, 0);
+
+			pressureForce += dir * DerivativeSpikyPow2(dst, smoothingRadius) * sharedPressure / densityNeighbour;
+			pressureForce += dir * DerivativeSpikyPow3(dst, smoothingRadius) * sharedNearPressure / nearDensityNeighbour;
+		}
+	}
+
+	float3 acceleration = pressureForce / density;
+	velocities[id.x] += acceleration * deltaTime;
+    pressures[id.x] = pressure;
+}
+
+/*
+float SmoothingKernelPoly6(float dst, float radius) {
+	if (dst < radius) {
+		float scale = 315 / (64 * PI * pow(abs(radius), 9));
+		float v = radius * radius - dst * dst;
+		return v * v * v * scale;
+	}
+	return 0;
+}
+*/
+
+#pragma kernel UpdateViscosity
+[numthreads(256,1,1)]
+void UpdateViscosity(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles) return;
+		
+	float3 pos = predictedPositions[id.x];
+	int3 originCell = GetCell3D(pos, smoothingRadius);
+	float sqrRadius = smoothingRadius * smoothingRadius;
+
+	float3 viscosityForce = 0;
+	float3 velocity = velocities[id.x];
+
+	// Neighbour search
+	for (int i = 0; i < 27; i ++)
+	{
+		uint hash = HashCell3D(originCell + offsets3D[i]);
+		uint key = KeyFromHash(hash, numParticles);
+		uint currIndex = spatialOffsets[key];
+
+		while (currIndex < numParticles)
+		{
+			uint3 indexData = spatialIndices[currIndex];
+			currIndex ++;
+			// Exit if no longer looking at correct bin
+			if (indexData[2] != key) break;
+			// Skip if hash does not match
+			if (indexData[1] != hash) continue;
+
+			uint neighbourIndex = indexData[0];
+			// Skip if looking at self
+			if (neighbourIndex == id.x) continue;
+
+			float3 neighbourPos = predictedPositions[neighbourIndex];
+			float3 offsetToNeighbour = neighbourPos - pos;
+			float sqrDstToNeighbour = dot(offsetToNeighbour, offsetToNeighbour);
+
+			// Skip if not within radius
+			if (sqrDstToNeighbour > sqrRadius) continue;
+
+			// Calculate viscosity
+			float dst = sqrt(sqrDstToNeighbour);
+			float3 neighbourVelocity = velocities[neighbourIndex];
+			viscosityForce += (neighbourVelocity - velocity) * SmoothingKernelPoly6(dst, smoothingRadius);
+		}
+	}
+	velocities[id.x] += viscosityForce * viscosity_influence * deltaTime;
+}
+
+#pragma kernel UpdatePositions
+[numthreads(256,1,1)]
+void UpdatePositions(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numParticles) return;
+
+    float3 v = velocities[id.x];
+    Particle p = particles[id.x];
+    Projection projection = obstacleForces[id.x];
+
+    /*
+    // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
+    float3 a = (pressureForces[id] + viscosityForces[id] + density[id] * g) / density[id];
+    v += a * deltaTime;
+    */
+
+    float distfinal = distance(projection.position, p.position);
+    if (projection.counter > 0 && length(projection.normal) > 0.0) {
+        float3 n = normalize(projection.normal);
+        float3 innermostPoint = p.position - n * smoothingRadius;
+        if (distfinal <= smoothingRadius) {
+            if (length(v)>0.0 && dot(v,n) <= 0.0) {
+                // This series of equations was derived from that of Carlos Alberto Dutra Fraga Filho.
+                // Report: https://doi.org/10.21203/rs.3.rs-3214518/v1
+                // The collided, reflected velocity comes in a normal form and a tangential form.
+                // Note: to calculate the magnitude of a vector A as a component along another vector B, we use the following formula:
+                // dot(A,B)/dot(B,B)
+                // However, since B (which is the normal vector) is a normalized normal, the denominator just ends up being 1
+                // Therefore, we only need to calculate dot(A,B). To get the magnitude, we get the absolute value of this value
+                // The magnitude of the normal component of vel_ref is the same as the magnitude of the normal component of the incoming vector
+                float vn = abs(dot(v,-n));
+                float3 vtan = v - (-n*vn);
+                float vt = length(vtan);
+                float3 vrn = n * vn * projection.restitutionCoefficient;
+                float3 vrt = vtan * (1.0-projection.frictionCoefficient); 
+                v = vrn + vrt;
+                v += projection.frictionCoefficient * (projection.external_force) * deltaTime;
+            }
+            if (sign(dot(innermostPoint-projection.position,n))<0.0) {
+                float3 inward = (projection.position + n * smoothingRadius) - p.position;
+                if (length(inward) > 0.0) {
+                    float vLength = length(v);
+                    float3 newV = v + (normalize(inward) * clamp(length(inward),0.0,smoothingRadius));
+                    if (length(newV) > 0.0) v = normalize(newV) * vLength;
+                }
+            }
+            
+        }
+    }
+
+    if (length(v) > 0.0) v = normalize(v) * clamp(length(v),0.0,30.0);
+
+    velocities[id.x] = v;
+    particles[id.x].position += v * deltaTime;   
+}

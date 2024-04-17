@@ -66,6 +66,9 @@ public class ParticleController : MonoBehaviour
     [SerializeField, Tooltip("`k` - technically the ideal gas constant, but some people (Bindel) refer this as the bulk modulus value.")]
     private float _k = 1f;
     public float k => _k;
+    [SerializeField, Tooltip("`nk` - similar to `k` above, but for really close particle-particle interactions")]
+    private float _nk = 1f;
+    public float nk => _nk;
     [SerializeField, Tooltip("`c` - the speed of sound (10^-4 m/s, to model low Reynolds number flows). Used as a part of the `equation of state` to relate density to pressure. This is derived from the method mentioned in [https://www.sciencedirect.com/science/article/pii/S0045793021003145#b19], but the speed of sound value is derived from Morris et al. [https://www.sciencedirect.com/science/article/pii/S0021999197957764]")]
     private float _c = 5.77f;
     public float c => _c;
@@ -85,11 +88,14 @@ public class ParticleController : MonoBehaviour
     int num_particles_per_cell_property = Shader.PropertyToID("numParticlesPerCell");
     int render_touching_property = Shader.PropertyToID("renderTouching");
     int particle_buffer_property = Shader.PropertyToID("particle_buffer");
-    int pressure_buffer_property = Shader.PropertyToID("pressure_buffer");
-    int velocity_buffer_property = Shader.PropertyToID("velocity_buffer");
+    int density_buffer_property = Shader.PropertyToID("density_buffer");
     int grid_cell_buffer_property = Shader.PropertyToID("grid_cell_buffer");
     int render_limits_property = Shader.PropertyToID("render_limits_buffer");
-    int render_denom_property = Shader.PropertyToID("velocity_denom");
+
+    int rest_density_property = Shader.PropertyToID("rest_density");
+    int bulk_modulus_property = Shader.PropertyToID("bulk_modulus");
+    int max_color_val_property = Shader.PropertyToID("max_color_val");
+    int render_color_property = Shader.PropertyToID("render_color");
 
     public enum RenderType { Off, Particles, ParticlesTouchingObstacles, GridCells, Both }
     [Header("== DEBUG CONTROLS ==")]
@@ -98,10 +104,11 @@ public class ParticleController : MonoBehaviour
     private float _timeStarted = 0f, _timePassed = 0f;
     [SerializeField] private RenderType _renderType = RenderType.Particles;
     [SerializeField] private float[] _renderLimits;
-    [SerializeField, Range(0f,1000f)] private float _renderDenom = 10f;
 
     private float t;
 
+    [SerializeField] private bool render_colors = false;
+    [SerializeField] private float max_color_value = 0.0f;
     [SerializeField] private bool gizmos_particles = false;
     [SerializeField] private Color gizmos_particle_color = Color.blue;
     [SerializeField] private bool gizmos_velocities = false;
@@ -243,7 +250,7 @@ public class ParticleController : MonoBehaviour
     }
 
     public void CalculateParticles() {
-        _spawnDistanceBetweenParticles = Mathf.Clamp(_spawnDistanceBetweenParticles,particleRenderRadius,_h);
+        //_spawnDistanceBetweenParticles = Mathf.Clamp(_spawnDistanceBetweenParticles,particleRenderRadius,_h);
         // GridCellSize is a global value across this grid. _particleRenderSize is unique to this controller
         int numParticlesPerCellAxis = Mathf.CeilToInt(_GRID.gridCellSize / _spawnDistanceBetweenParticles);
         // If we have a section index, we use that section's bounds. Otherwise, we use the grid's inner bounds
@@ -390,6 +397,7 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetFloat("viscosity_coefficient", _mu);
         _SPH_Shader.SetFloat("damping", _damping_effect);
         _SPH_Shader.SetFloat("bulkModulus", _k);
+        _SPH_Shader.SetFloat("nearBulkModulus", _nk);
         _SPH_Shader.SetFloats("g", _g);
         _SPH_Shader.SetFloat("c", _c);
 
@@ -410,8 +418,9 @@ public class ParticleController : MonoBehaviour
     private int _GENERATE_PARTICLES;
     private int _UPDATE_GRID;
     private int _COMPUTE_DENSITY;
-    private int _COMPUTE_INTERNAL_FORCES;
-    private int _INTEGRATE, _INTEGRATE_DEBUG;
+    private int _COMPUTE_PRESSURE_FORCES, _COMPUTE_VISCOSITY_FORCES;
+    private int _INTEGRATE;
+    //_INTEGRATE_DEBUG;
     private int _DAMPEN_BY_BOUNDS;
     private void InitializeKernels() {
         // Used on initialization. _CLEAR_GRID also is performed at the beginning of each update loop
@@ -420,9 +429,10 @@ public class ParticleController : MonoBehaviour
         // These are run during each update loop
         _UPDATE_GRID = _SPH_Shader.FindKernel("UpdateGridCellCounts");
         _COMPUTE_DENSITY = _SPH_Shader.FindKernel("CV_ComputeDensity");
-        _COMPUTE_INTERNAL_FORCES = _SPH_Shader.FindKernel("ComputeInternalForces");
+        _COMPUTE_PRESSURE_FORCES = _SPH_Shader.FindKernel("ComputePressureForces");
+        _COMPUTE_VISCOSITY_FORCES = _SPH_Shader.FindKernel("ComputeViscosityForces");
         _INTEGRATE = _SPH_Shader.FindKernel("Integrate");
-        _INTEGRATE_DEBUG = _SPH_Shader.FindKernel("Integrate_Debug");
+        //_INTEGRATE_DEBUG = _SPH_Shader.FindKernel("Integrate_Debug");
         _DAMPEN_BY_BOUNDS = _SPH_Shader.FindKernel("DampenByBounds");
     }
 
@@ -445,7 +455,7 @@ public class ParticleController : MonoBehaviour
         //_BM.PARTICLES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float)*6+sizeof(int));
         //_BM.PARTICLES_GRID_BUFFER = new ComputeBuffer(_GRID.numGridCells, sizeof(int)*2 + sizeof(float)*3);
         //_BM.PARTICLES_DENSITIES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float));
-        //_BM.PARTICLES_PRESSURES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float));
+        //_BM.PARTICLES_PRESSURE_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, sizeof(float));
         //_BM.PARTICLES_VELOCITIES_BUFFER = new ComputeBuffer(_numParticles + _NUM_BOUNDARY_PARTICLES, 3 * sizeof(float));
         //_BM.PARTICLES_PRESSURE_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
         //_BM.PARTICLES_VISCOSITY_FORCES_BUFFER = new ComputeBuffer(_numParticles, sizeof(float)*3);
@@ -517,10 +527,10 @@ public class ParticleController : MonoBehaviour
 
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "bounds", SPAWN_BOUNDS_BUFFER);
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "particles", _BM.PARTICLES_BUFFER);
-        _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "density", _BM.PARTICLES_DENSITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "densities", _BM.PARTICLES_DENSITIES_BUFFER);
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "force", FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
-        _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "pressure", _BM.PARTICLES_PRESSURES_BUFFER);
+        _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "pressures", _BM.PARTICLES_PRESSURE_BUFFER);
         _SPH_Shader.SetBuffer(_GENERATE_PARTICLES, "externalForces", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
 
         _SPH_Shader.SetBuffer(_UPDATE_GRID, "particles", _BM.PARTICLES_BUFFER);
@@ -532,33 +542,43 @@ public class ParticleController : MonoBehaviour
         _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "grid", _BM.PARTICLES_GRID_BUFFER);
         _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "cellLimits", CELL_LIMITS_BUFFER);
         _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "particleNeighbors", PARTICLE_NEIGHBORS_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "density", _BM.PARTICLES_DENSITIES_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "pressure", _BM.PARTICLES_PRESSURES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "densities", _BM.PARTICLES_DENSITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "near_densities", _BM.PARTICLES_NEAR_DENSITIES_BUFFER);
+        //_SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
+        //_SPH_Shader.SetBuffer(_COMPUTE_DENSITY, "pressure", _BM.PARTICLES_PRESSURE_BUFFER);
 
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "particles", _BM.PARTICLES_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "grid", _BM.PARTICLES_GRID_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "cellLimits", CELL_LIMITS_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "particleNeighbors", PARTICLE_NEIGHBORS_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "density", _BM.PARTICLES_DENSITIES_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "pressureForces", _BM.PARTICLES_PRESSURE_FORCES_BUFFER);
-        _SPH_Shader.SetBuffer(_COMPUTE_INTERNAL_FORCES, "viscosityForces", _BM.PARTICLES_VISCOSITY_FORCES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_PRESSURE_FORCES, "particles", _BM.PARTICLES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_PRESSURE_FORCES, "grid", _BM.PARTICLES_GRID_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_PRESSURE_FORCES, "cellLimits", CELL_LIMITS_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_PRESSURE_FORCES, "particleNeighbors", PARTICLE_NEIGHBORS_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_PRESSURE_FORCES, "densities", _BM.PARTICLES_DENSITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_PRESSURE_FORCES, "near_densities", _BM.PARTICLES_NEAR_DENSITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_PRESSURE_FORCES, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_PRESSURE_FORCES, "pressures", _BM.PARTICLES_PRESSURE_BUFFER);
+
+        _SPH_Shader.SetBuffer(_COMPUTE_VISCOSITY_FORCES, "particles", _BM.PARTICLES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_VISCOSITY_FORCES, "grid", _BM.PARTICLES_GRID_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_VISCOSITY_FORCES, "cellLimits", CELL_LIMITS_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_VISCOSITY_FORCES, "particleNeighbors", PARTICLE_NEIGHBORS_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_VISCOSITY_FORCES, "densities", _BM.PARTICLES_DENSITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_COMPUTE_VISCOSITY_FORCES, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
 
         _SPH_Shader.SetBuffer(_INTEGRATE, "particles", _BM.PARTICLES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "force", FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "pressureForces", _BM.PARTICLES_PRESSURE_FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "viscosityForces", _BM.PARTICLES_VISCOSITY_FORCES_BUFFER);
-        _SPH_Shader.SetBuffer(_INTEGRATE, "density", _BM.PARTICLES_DENSITIES_BUFFER);
+        _SPH_Shader.SetBuffer(_INTEGRATE, "densities", _BM.PARTICLES_DENSITIES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE, "externalForces", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
 
+        /*
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "particles", _BM.PARTICLES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "velocity", _BM.PARTICLES_VELOCITIES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "force", FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "pressureForces", _BM.PARTICLES_PRESSURE_FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "viscosityForces", _BM.PARTICLES_VISCOSITY_FORCES_BUFFER);
         _SPH_Shader.SetBuffer(_INTEGRATE_DEBUG, "density", _BM.PARTICLES_DENSITIES_BUFFER);
+        */
 
         _SPH_Shader.SetBuffer(_DAMPEN_BY_BOUNDS, "bounds", BOUNDS_BUFFER);
         _SPH_Shader.SetBuffer(_DAMPEN_BY_BOUNDS, "particles", _BM.PARTICLES_BUFFER);
@@ -584,7 +604,6 @@ public class ParticleController : MonoBehaviour
 
     public void UpdateMullerParticles() {
         //DebugBufferParticle("POSITIONS",1000,PARTICLES_BUFFER);
-
         // Reset the grid and num neighbors buffer, if we are debugging
         _SPH_Shader.Dispatch(
             _CLEAR_GRID, 
@@ -598,7 +617,8 @@ public class ParticleController : MonoBehaviour
         
         // We perform the updates for density, pressure, and force/acceleration. 
         _SPH_Shader.Dispatch(_COMPUTE_DENSITY, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f), 1, 1);
-        _SPH_Shader.Dispatch(_COMPUTE_INTERNAL_FORCES, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f),1,1);
+        _SPH_Shader.Dispatch(_COMPUTE_PRESSURE_FORCES, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f),1,1);
+        _SPH_Shader.Dispatch(_COMPUTE_VISCOSITY_FORCES, Mathf.CeilToInt((float)(_numParticles+_NUM_BOUNDARY_PARTICLES) / 256f),1,1);
 
         //_SPH_Shader.Dispatch(compute_external_acceleration_kernel, Mathf.CeilToInt((float)numParticles / (float)_BLOCK_SIZE), 1, 1);
 
@@ -639,17 +659,29 @@ public class ParticleController : MonoBehaviour
             MakeRecord();
         }
 
+        /*
+        int rest_density_property = Shader.PropertyToID("rest_density");
+        int bulk_modulus_property = Shader.PropertyToID("bulk_modulus");
+        int max_color_val_property = Shader.PropertyToID("max_color_val");
+        int render_color_property = Shader.PropertyToID("render_color");
+        */
+
         RENDER_LIMITS_BUFFER.SetData(_renderLimits);
+
+        // In our materials buffer, let's set the necessary buffers for rendering particles and the like
+        _GRID.particle_material.SetBuffer(particle_buffer_property, _BM.PARTICLES_BUFFER);
+        _GRID.particle_material.SetBuffer(density_buffer_property, _BM.PARTICLES_DENSITIES_BUFFER);
+        _GRID.particle_material.SetBuffer(render_limits_property, RENDER_LIMITS_BUFFER);
+        // Same for variables
+        _GRID.particle_material.SetFloat(size_property, particleRenderSize);
+        //_GRID.particle_material.SetFloat(num_particles_per_cell_property, (float)_numParticlesPerGridCell);
+        _GRID.particle_material.SetInt(render_color_property, render_colors ? 1 : 0);
+        _GRID.particle_material.SetFloat(rest_density_property, _rest_density);
+        _GRID.particle_material.SetFloat(bulk_modulus_property, _k);
+        _GRID.particle_material.SetFloat(max_color_val_property, max_color_value);
+
         switch(_renderType) {
             case RenderType.Particles:
-                _GRID.particle_material.SetFloat(size_property, particleRenderSize);
-                _GRID.particle_material.SetFloat(num_particles_per_cell_property, (float)_numParticlesPerGridCell);
-                _GRID.particle_material.SetFloat(render_denom_property, _renderDenom);
-                _GRID.particle_material.SetInt(render_touching_property, 0);
-                _GRID.particle_material.SetBuffer(pressure_buffer_property, _BM.PARTICLES_PRESSURE_FORCES_BUFFER);
-                _GRID.particle_material.SetBuffer(velocity_buffer_property, _BM.PARTICLES_VELOCITIES_BUFFER);
-                _GRID.particle_material.SetBuffer(particle_buffer_property, _BM.PARTICLES_BUFFER);
-                _GRID.particle_material.SetBuffer(render_limits_property, RENDER_LIMITS_BUFFER);
                 Graphics.DrawMeshInstancedIndirect(
                     _GRID.particle_mesh, 
                     0, 
@@ -659,14 +691,11 @@ public class ParticleController : MonoBehaviour
                     castShadows: UnityEngine.Rendering.ShadowCastingMode.Off
                 );
                 break;
+            /*
             case RenderType.ParticlesTouchingObstacles:
-                _GRID.particle_material.SetFloat(size_property, particleRenderSize);
                 _GRID.particle_material.SetFloat(num_particles_per_cell_property, (float)_numParticlesPerGridCell);
                 _GRID.particle_material.SetFloat(render_denom_property, _renderDenom);
                 _GRID.particle_material.SetInt(render_touching_property, 1);
-                _GRID.particle_material.SetBuffer(pressure_buffer_property, _BM.PARTICLES_PRESSURES_BUFFER);
-                _GRID.particle_material.SetBuffer(particle_buffer_property, _BM.PARTICLES_BUFFER);
-                _GRID.particle_material.SetBuffer(velocity_buffer_property, _BM.PARTICLES_VELOCITIES_BUFFER);
                 _GRID.particle_material.SetBuffer(render_limits_property, RENDER_LIMITS_BUFFER);
                 Graphics.DrawMeshInstancedIndirect(
                     _GRID.particle_mesh, 
@@ -693,8 +722,6 @@ public class ParticleController : MonoBehaviour
             case RenderType.Both:
                 _GRID.particle_material.SetFloat(size_property, particleRenderSize);
                 _GRID.particle_material.SetFloat(num_particles_per_cell_property, (float)_numParticlesPerGridCell);
-                _GRID.particle_material.SetBuffer(pressure_buffer_property, _BM.PARTICLES_PRESSURES_BUFFER);
-                _GRID.particle_material.SetBuffer(particle_buffer_property, _BM.PARTICLES_BUFFER);
                 Graphics.DrawMeshInstancedIndirect(
                     _GRID.particle_mesh, 
                     0, 
@@ -715,6 +742,7 @@ public class ParticleController : MonoBehaviour
                     castShadows: UnityEngine.Rendering.ShadowCastingMode.Off
                 );
                 break;
+            */
             default:
                 return;
         }

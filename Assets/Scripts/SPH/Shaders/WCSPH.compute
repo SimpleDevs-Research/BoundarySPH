@@ -33,6 +33,7 @@ float viscosity_coefficient;    // The viscosity coefficient for SPH. The higher
 float rest_density;             // The density of the fluid at the ideal state
 float damping;                  // The amount of influence that boundaries have on particles when particles collide with boundaries.
 float bulkModulus;
+float nearBulkModulus;
 float c;                        // The speed of sound in fluid. Used to relate density to pressure.
 
 // GPU SETTINGS 
@@ -110,13 +111,13 @@ RWStructuredBuffer<uint> hash_grid_tracker;     // RWStructuredBuffer<uint> _has
 // number of particles at each grid
 
 // Stores the density of each particle
-RWStructuredBuffer<float> density;
+RWStructuredBuffer<float> densities;
+RWStructuredBuffer<float> near_densities;
 // Stores the pressure of each particle
-RWStructuredBuffer<float> pressure;
+RWStructuredBuffer<float> pressures;
+RWStructuredBuffer<float> nearPressures;
 // Stores the velocity of each particle
 RWStructuredBuffer<float3> velocity;
-// Stores the pressure force of each particle
-RWStructuredBuffer<float3> pressureForces;
 // Stores the viscosity force of each particle
 RWStructuredBuffer<float3> viscosityForces;
 // Stores the force (acceleration) of each particle
@@ -192,9 +193,9 @@ void GenerateParticles(uint id : SV_DispatchThreadID) {
 
     particles[id].position = position;
     particles[id].render = 0;
-    density[id] = (315.0 * particleMass) / (64.0 * pi * radius3);
-    pressure[id] = bulkModulus * density[id];
-    force[id] = float3(0,0,0);
+    //densities[id] = (315.0 * particleMass) / (64.0 * pi * radius3);
+    densities[id] = 0;
+    pressures[id] = 1;
     velocity[id] = float3(0,0,0);
 
     externalForces[id].projection = float3(0,0,0);
@@ -329,6 +330,53 @@ float MullerViscosityKernelLaplacian2D(float3 currentPos, float3 otherPos, float
     return (40.0 / (pi * radius5)) * (kernelSmoothingRadius - dLength);
 }
 
+
+
+
+// From Sebastian Lague from "Coding Adventure: Simulating Fluids"
+float SmoothingKernelPoly6(float dst, float kernelSmoothingRadius) {
+	if (dst < kernelSmoothingRadius) {
+		float scale = 315 / (64 * pi * pow(abs(kernelSmoothingRadius), 9));
+		float v = kernelSmoothingRadius * kernelSmoothingRadius - dst * dst;
+		return v * v * v * scale;
+	}
+	return 0;
+}
+float SpikyKernelPow2(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+	float dLength = length(otherPos - currentPos);
+    if (dLength < kernelSmoothingRadius) {
+		float scale = 15.0 / (2.0 * pi * pow(kernelSmoothingRadius, 5));
+		float v = kernelSmoothingRadius - dLength;
+		return v * v * scale;
+	}
+	return 0;
+}
+float SpikyKernelPow3(float3 currentPos, float3 otherPos, float kernelSmoothingRadius) {
+    float dLength = length(otherPos - currentPos);
+	if (dLength < kernelSmoothingRadius) {
+		float scale = 15 / (pi * pow(kernelSmoothingRadius, 6));
+		float v = kernelSmoothingRadius - dLength;
+		return v * v * v * scale;
+	}
+	return 0;
+}
+float DerivativeSpikyPow2(float dst, float kernelSmoothingRadius) {
+	if (dst <= kernelSmoothingRadius) {
+		float scale = 15 / (pow(kernelSmoothingRadius, 5) * pi);
+		float v = kernelSmoothingRadius - dst;
+		return -v * scale;
+	}
+	return 0;
+}
+float DerivativeSpikyPow3(float dst, float kernelSmoothingRadius) {
+	if (dst <= kernelSmoothingRadius) {
+		float scale = 45 / (pow(kernelSmoothingRadius, 6) * pi);
+		float v = kernelSmoothingRadius - dst;
+		return -v * v * scale;
+	}
+	return 0;
+}
+
 /*
 // Helper function: calculates density for a current particle and its potential neighbor.
 float CalculateDensity(float3 currentPos, float3 otherPos, float3 otherVel) {
@@ -374,8 +422,10 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
     CellLimits limits = cellLimits[projectedID];
 
     // We pre-emptively add the particle itself to density. This makes it easier to handle because of imprecision with float point values
-    float _density = (315.0 * particleMass) / (64.0 * pi * radius3);
-    /*float deltaDensity = 0.0;*/
+    //float _density = (315.0 * particleMass) / (64.0 * pi * radius3);
+    float _density = 0;
+    //float _nearDensity = (315.0 * particleMass) / (64.0 * pi * radius3);
+    float _nearDensity = 0.0;
 
     uint lowX = limits.lowerLimits[0];
     uint lowY = limits.lowerLimits[1];
@@ -384,6 +434,8 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
     uint upY = limits.upperLimits[1];
     uint upZ = limits.upperLimits[2];
     
+    float3 neighborPos;
+    float3 diffPos;
     for(uint x = lowX; x <= upX; x++) {
         for(uint y = lowY; y <= upY; y++) {
             for(uint z = lowZ; z <= upZ; z++) {
@@ -395,42 +447,37 @@ void CV_ComputeDensity(uint3 id : SV_DispatchThreadID) {
                     // Skip if we're looking at ourselves
                     if (otherId == id.x) continue;
                     // Otherwise, continue calculating density1
-                    //_density += CalculateDensity(p, particles[otherId].position, velocity[otherId]);
-                    _density += particleMass * Poly6Kernel3D(p, particles[otherId].position, smoothingRadius);
-                    /*deltaDensity += particleMass * (length(velocity[id.x]) - length(velocity[otherId])) * Poly6KernelGradient3D(p, particles[otherId].position, smoothingRadius);*/
+                    //_density += particleMass * Poly6Kernel3D(p, particles[otherId].position, smoothingRadius);
+                    neighborPos = particles[otherId].position;
+                    // Calculate the offset between the current particle and neighbor particle
+                    diffPos = neighborPos - p;
+                    // Exit early if the particle is outside the radius
+                    if (length(diffPos) > smoothingRadius) continue;
+                    _density += particleMass * SpikyKernelPow2(p, neighborPos, smoothingRadius);
+                    _nearDensity += particleMass * SpikyKernelPow3(p, neighborPos, smoothingRadius);
                 }
             }
         }
     }
 
     // We update both the densities buffer and pressures buffer
-    /*
-    float newDensity = density[id.x] + deltaDensity;
-    density[id.x] = newDensity;
-    pressure[id.x] = bulkModulus * newDensity;
-    particles[id.x].force = bulkModulus * newDensity;
-    */
-    density[id.x] = _density;
-    pressure[id.x] = bulkModulus * _density;
-    particles[id.x].force = bulkModulus * _density;
-    
-    //pressure[id.x] = ((rest_density * (c * c))/7.0) * (pow(_density/rest_density,7)-1.0);
-    //particles[id.x].force = float3(((rest_density * (c * c))/7.0) * (pow(_density/rest_density,7)-1.0),0.0,0.0);
+    densities[id.x] = _density;
+    near_densities[id.x] = _nearDensity;
 }
 
 // == PRESSURE FORCE CALCULATION ==
-// Helper function: calculates pressure force between the current particle and a neighbor particle
-/*
-float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentDensity, float otherDensity) {
-    // We limit the pressure calculation to outward to prevent grouping and inward forces
-    //float currentPressure = min(bulkModulus * (currentDensity - rest_density), 0.0);
-    //float otherPressure = min(bulkModulus * (otherDensity - rest_density), 0.0);
-    float currentPressure = ((rest_density * (c * c))/7.0) * (pow(currentDensity/rest_density,7)-1.0);
-    float otherPressure = ((rest_density * (c * c))/7.0) * (pow(otherDensity/rest_density,7)-1.0);
-    return particleMass * ((currentPressure + otherPressure)/(2.0 * otherDensity)) * SpikyKernelGradient3D(currentPos, otherPos, smoothingRadius);
-}
-*/
 
+// Helper function: calculate the pressure using density, rest_density (or target density), and bulk modulus
+float PressureFromDensity(float d) {
+    return (d - rest_density) * bulkModulus;
+}
+// Helper function: calculate the pressure using just density and bulk modulus
+float NearPressureFromDensity(float d) {
+    return d * nearBulkModulus;
+}
+
+
+// Helper function: calculates pressure force between the current particle and a neighbor particle
 float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentDensity, float otherDensity) {
     float3 diffPosition = currentPos - otherPos;
     float diffPositionLength = length(diffPosition);
@@ -446,42 +493,37 @@ float3 CalculatePressureForce(float3 currentPos, float3 otherPos, float currentD
     return c1 * c2 * c3 * c4 * c5;
 }
 
-
-// == VISCOSITY FORCE CALCULATION ==
-// Helper function: calculates viscosity force
-float3 CalculateViscosityForce(float3 currentPos, float3 otherPos, float3 currentVel, float3 otherVel, float otherDensity) {
-    return viscosity_coefficient * particleMass * ((otherVel - currentVel)/otherDensity) * MullerViscosityKernelLaplacian3D(currentPos, otherPos, smoothingRadius);
-}
-/*
-float3 CalculateViscosityForce(float3 diffPosition, float diffPositionLength, float neighborDensity, float3 currentVelocity, float3 otherVelocity) {
-    float3 c1 = (currentVelocity - otherVelocity) / neighborDensity;
-    float c2 =  -45.0 / (pi * radius6);
-    float c3 = smoothingRadius - diffPositionLength;
-    return particleMass * c1 * c2 * c3;
-}
-*/
-
-// == INTERNAL FORCE CALCULATION - COMBINING PRESSURE AND VISCOSITY EQUATIONS
-#pragma kernel ComputeInternalForces
+// == PRESSURE FORCE CALCULATION
+#pragma kernel ComputePressureForces
 [numthreads(256,1,1)]
-void ComputeInternalForces(uint3 id : SV_DispatchThreadID) {
+void ComputePressureForces(uint3 id : SV_DispatchThreadID) {
     if (id.x >= (numParticles+numBoundaryParticles)) return;
 
-    float3 pressureForce = float3(0,0,0);
-    float3 viscosityForce = float3(0,0,0);
-
+    // Get properties about our current particle
     float3 p = particles[id.x].position;
-    float3 otherP;
-    float3 diffPos;
-    float diffPosLength;
-
-    float d = density[id.x];
-    float otherD;
+    float d = densities[id.x];
+    float nearD = near_densities[id.x];
     float3 v = velocity[id.x];
+    
+    // Initialize the pressure and near pressure calculations
+    float3 pressureForce = float3(0,0,0);
+    float3 nearPressureForce = float3(0,0,0);
+    float pressure = PressureFromDensity(d);
+    float nearPressure = NearPressureFromDensity(nearD);
+
+    // Initialize some variables we'll be using across the loop
+    float3 otherP;
+    float otherD;
+    float otherNearD;
+    float3 diffPos;
+    float dst;
+    float otherPressure;
+    float otherNearPressure;
+    float sharedPressure;
+    float sharedNearPressure;
 
     int projectedID = GetProjectedGridIndexFromGivenPosition(p);
     CellLimits limits = cellLimits[projectedID];
-
     uint lowX = limits.lowerLimits[0];
     uint lowY = limits.lowerLimits[1];
     uint lowZ = limits.lowerLimits[2];
@@ -501,49 +543,105 @@ void ComputeInternalForces(uint3 id : SV_DispatchThreadID) {
                     if (otherId == id.x) continue;
                     // Grab the other particle's properties
                     otherP = particles[otherId].position;
-                    otherD = density[otherId];
-                    // Contribute to pressure force
-                    pressureForce += CalculatePressureForce(p, otherP, d, otherD);
-                    // Contribute to viscosity force
-                    viscosityForce += CalculateViscosityForce(p, otherP, v, velocity[otherId], otherD);
-                    /*
-                    // Skip if we are outside the smoothing radius;
-                    diffPos = p - particles[otherId].position;
-                    diffPosLength = length(diffPos);
-                    if (diffPosLength == 0.0) {
-                        diffPos = velocity[otherId] * -0.000001;
-                        diffPosLength = length(diffPos);
-                    }
-                    if (diffPosLength > smoothingRadius) continue;
-                    // Continue with pressure and viscosity calculations otherwise
-                    otherD = density[otherId];
-                    pressureForce += CalculatePressureForce(diffPos, diffPosLength, d, otherD);
-                    viscosityForce += CalculateViscosityForce(diffPos, diffPosLength, otherD, v, velocity[otherId]);
-                    */
+                    otherD = densities[otherId];
+                    otherNearD = near_densities[otherId];
+                    // Calculate the offset between the current particle and neighbor particle
+                    diffPos = otherP - p;
+        			dst = length(diffPos);
+                    // Exit early if the particle is outside the radius
+                    if (dst > smoothingRadius) continue;
+                    // Calculate the pressure induced by the other particle
+                    otherPressure = PressureFromDensity(otherD);
+                    otherNearPressure = NearPressureFromDensity(otherNearD); 
+                    // Calculate the average pressure
+                    sharedPressure = (pressure + otherPressure) / 2;
+			        sharedNearPressure = (nearPressure + otherNearPressure) / 2;
+                    // Calculate the pressure force from the shared pressure and shared near pressure
+                    float3 dir = dst > 0 ? diffPos / dst : float3(0, 1, 0);
+                    if (otherD == 0.0) otherD = 0.000001;
+                    if (otherNearD == 0.0) otherNearD = 0.000001;
+                    pressureForce += dir * DerivativeSpikyPow2(dst, smoothingRadius) * sharedPressure / otherD;
+			        pressureForce += dir * DerivativeSpikyPow3(dst, smoothingRadius) * sharedNearPressure / otherNearD;
                 }
             }
         }
     }
 
-    pressureForces[id.x] = pressureForce;
-    float3 finalViscosityForce = viscosity_coefficient * viscosityForce;
-    viscosityForces[id.x] = finalViscosityForce;
-    //pressureForce[id.x] = pressureForce + (viscosity_coefficient * viscosityForce);
-    //particles[id.x].force = particleMass * (pressureForce + finalViscosityForce + (density[id.x] * g));
+    // Let's update the velocity of the particle here.
+    float3 acceleration = pressureForce / d;
+	velocity[id.x] += acceleration * dt;
+    // Currently saving the NEAR PRESSURE as opposed to just the pressure.
+    pressures[id.x] = nearPressure;
 }
 
-#pragma kernel Integrate_Debug
+
+
+// == VISCOSITY FORCE CALCULATION ==
+// Helper function: calculates viscosity force
+float3 CalculateViscosityForce(float3 currentPos, float3 otherPos, float3 currentVel, float3 otherVel, float otherDensity) {
+    return viscosity_coefficient * particleMass * ((otherVel - currentVel)/otherDensity) * MullerViscosityKernelLaplacian3D(currentPos, otherPos, smoothingRadius);
+}
+
+
+#pragma kernel ComputeViscosityForces
 [numthreads(256,1,1)]
-void Integrate_Debug(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= numParticles) return;
+void ComputeViscosityForces(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= (numParticles+numBoundaryParticles)) return;
 
-    Particle p = particles[id.x];
+    // Get properties about our current particle
+    float3 p = particles[id.x].position;
+    float d = densities[id.x];
     float3 v = velocity[id.x];
-    float3 a = ((pressureForces[id.x] + viscosityForces[id.x]) / density[id.x]) + g;
-    float3 v2 =  v + (dt * a);
 
-    force[id.x] = a;
-    velocity[id.x] = v2;
+    // Initialize the viscosity force (we won't be storing it, we'll just be calculating and directly applying it.)
+    float3 viscosityForce = float3(0,0,0);
+
+    // Initializing other properties used in the loop
+    float3 otherP;
+    float3 diffPos;
+    float dst;
+    float otherD;
+    float3 otherV;
+    
+
+    int projectedID = GetProjectedGridIndexFromGivenPosition(p);
+    CellLimits limits = cellLimits[projectedID];
+    uint lowX = limits.lowerLimits[0];
+    uint lowY = limits.lowerLimits[1];
+    uint lowZ = limits.lowerLimits[2];
+    uint upX = limits.upperLimits[0];
+    uint upY = limits.upperLimits[1];
+    uint upZ = limits.upperLimits[2];
+
+    for(uint x = lowX; x <= upX; x++) {
+        for(uint y = lowY; y <= upY; y++) {
+            for(uint z = lowZ; z <= upZ; z++) {
+                int neighborProjectedID = GetProjectedGridIndexFromXYZ(x,y,z);
+                int particleNeighborsStartingIndex = GetParticleNeighborStartingIndex(neighborProjectedID);
+                int numParticlesInGridCell = grid[neighborProjectedID];
+                for(uint j = particleNeighborsStartingIndex; j < particleNeighborsStartingIndex + min(numParticlesPerGridCell, numParticlesInGridCell); j++) {
+                    uint otherId = particleNeighbors[j];
+                    // Skip if we encountered each other
+                    if (otherId == id.x) continue;
+                    // Grab the other particle's properties
+                    otherP = particles[otherId].position;
+                    otherD = densities[otherId];
+                    otherV = velocity[otherId];
+                     // Calculate the offset between the current particle and neighbor particle
+                    diffPos = otherP - p;
+        			dst = length(diffPos);
+                    // Exit early if the particle is outside the radius
+                    if (dst > smoothingRadius) continue;
+                    // Contribute to viscosity force
+                    //viscosityForce += CalculateViscosityForce(p, otherP, v, velocity[otherId], otherD);
+                    viscosityForce += (otherV - v) * SmoothingKernelPoly6(dst, smoothingRadius);
+                }
+            }
+        }
+    }
+
+    // add viscosity force to velocity
+    velocity[id.x] += viscosityForce * viscosity_coefficient * dt;
 }
 
 #pragma kernel Integrate
@@ -555,12 +653,13 @@ void Integrate(uint id : SV_DispatchThreadID) {
     float3 v = velocity[id];
     Projection projection = externalForces[id];
     int shouldRender = 0;
-    
-    //v += dt * a;
 
+    /*
     // Before we do anything else, we do something else first: try to determine if the innermost part of the particle, given the projection, is inside the mesh or not
     float3 a = (pressureForces[id] + viscosityForces[id] + density[id] * g) / density[id];
     v += a * dt;
+    */
+    v += g * dt;
 
     float distfinal = distance(projection.position, p.position);
     if (projection.counter > 0 && length(projection.normal) > 0.0) {
@@ -675,7 +774,7 @@ void Integrate(uint id : SV_DispatchThreadID) {
     }
     */
 
-    force[id] = a;
+    //force[id] = a;
     velocity[id] = v;
     particles[id] = p;
 }

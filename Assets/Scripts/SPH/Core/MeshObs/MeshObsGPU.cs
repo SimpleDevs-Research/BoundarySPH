@@ -83,7 +83,8 @@ public class MeshObsGPU : MonoBehaviour
     public BufferManager _BM;
     public Grid _GRID;
     public ComputeShader _SHADER;
-    public ParticleController _PARTICLE_CONTROLLER = null;
+    //public ParticleController _PARTICLE_CONTROLLER = null;
+    public Simulation3D _PARTICLE_CONTROLLER = null;
     public BoidsController _BOIDS_CONTROLLER = null;
 
     [Header("== OBSTACLES AND BOIDS ===")]

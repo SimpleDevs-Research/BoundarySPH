@@ -272,7 +272,7 @@ public class RecordingManager : MonoBehaviour
             }
             if (_recordPressures) {
                 // Add the pressures writer
-                RecordingWriterFloat pressuresWriter = new RecordingWriterFloat(_pressures_filepath, _BM.PARTICLES_PRESSURES_BUFFER, _PC.numParticles, h);
+                RecordingWriterFloat pressuresWriter = new RecordingWriterFloat(_pressures_filepath, _BM.PARTICLES_PRESSURE_BUFFER, _PC.numParticles, h);
                 _writers.Add(pressuresWriter);
             }            
             // Finally, indicate that we can write to files
