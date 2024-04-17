@@ -331,6 +331,7 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
 
     float3 v = velocities[id.x];
     Particle p = particles[id.x];
+    float3 predP = predictedPositions[id.x];
     Projection projection = obstacleForces[id.x];
 
     /*
@@ -339,10 +340,10 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
     v += a * deltaTime;
     */
 
-    float distfinal = distance(projection.position, p.position);
+    float distfinal = distance(projection.position, predP);
     if (projection.counter > 0 && length(projection.normal) > 0.0) {
         float3 n = normalize(projection.normal);
-        float3 innermostPoint = p.position - n * smoothingRadius;
+        float3 innermostPoint = predP - n * smoothingRadius;
         if (distfinal <= smoothingRadius) {
             if (length(v)>0.0 && dot(v,n) <= 0.0) {
                 // This series of equations was derived from that of Carlos Alberto Dutra Fraga Filho.
@@ -362,7 +363,7 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
                 v += projection.frictionCoefficient * (projection.external_force) * deltaTime;
             }
             if (sign(dot(innermostPoint-projection.position,n))<0.0) {
-                float3 inward = (projection.position + n * smoothingRadius) - p.position;
+                float3 inward = (predP + n * smoothingRadius) - predP;
                 if (length(inward) > 0.0) {
                     float vLength = length(v);
                     float3 newV = v + (normalize(inward) * clamp(length(inward),0.0,smoothingRadius));
@@ -374,7 +375,6 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
     }
 
     if (length(v) > 0.0) v = normalize(v) * clamp(length(v),0.0,30.0);
-
     velocities[id.x] = v;
-    particles[id.x].position += v * deltaTime;   
+    particles[id.x].position += v * deltaTime;
 }

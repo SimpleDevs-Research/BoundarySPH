@@ -94,6 +94,7 @@ public class MeshObs : MonoBehaviour
                 }
             } 
             else {
+                // Should be local space meshes...
                 _vertices = _mesh.vertices;
             }
             Debug.Log(_vertices.Length);

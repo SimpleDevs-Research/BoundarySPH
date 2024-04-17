@@ -44,6 +44,7 @@ public class BufferManager : MonoBehaviour
     public ComputeBuffer MESHOBS_TRANSLATION_FORCES_BUFFER;     // Stores the translational forces experienced BY an obstacle due to forces such as gravity or pressure fields
     public ComputeBuffer MESHOBS_TORQUE_FORCES_BUFFER;          // Stores the rotational forces experienced BY an obstacle due to forces such as gravity or pressure fields
     public ComputeBuffer MESHOBS_VELOCITIES_BUFFER;             // Stores the current velocity of the obstacle
+    public ComputeBuffer MESHOBS_WORLDTOLOCAL_BUFFER;           // Stores the world to local matrix of an obstacle
 
     [Header("=== DEBUG SETTINGS ===")]
     [SerializeField] private bool _verbose = true;
@@ -127,6 +128,7 @@ public class BufferManager : MonoBehaviour
         MESHOBS_VERTICES_DYNAMIC_BUFFER = new ComputeBuffer(numVertices, sizeof(uint) + sizeof(float)*9);
         MESHOBS_EDGES_STATIC_BUFFER = new ComputeBuffer(numEdges, sizeof(uint)*5 + sizeof(float)*6);
         MESHOBS_EDGES_DYNAMIC_BUFFER = new ComputeBuffer(numEdges, sizeof(float)*3);
+        MESHOBS_WORLDTOLOCAL_BUFFER = new ComputeBuffer(numObstacles, sizeof(float)*16);
 
         MESHOBS_TRANSLATION_FORCES_BUFFER = new ComputeBuffer(numObstacles, sizeof(int)*3);
         MESHOBS_TORQUE_FORCES_BUFFER = new ComputeBuffer(numObstacles, sizeof(int)*3);
@@ -207,6 +209,7 @@ public class BufferManager : MonoBehaviour
         if (MESHOBS_TRANSLATION_FORCES_BUFFER != null) MESHOBS_TRANSLATION_FORCES_BUFFER.Release();
         if (MESHOBS_TORQUE_FORCES_BUFFER != null) MESHOBS_TORQUE_FORCES_BUFFER.Release();
         if (MESHOBS_VELOCITIES_BUFFER != null) MESHOBS_VELOCITIES_BUFFER.Release();
+        if (MESHOBS_WORLDTOLOCAL_BUFFER != null) MESHOBS_WORLDTOLOCAL_BUFFER.Release();
     }
 }
 

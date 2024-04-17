@@ -840,8 +840,10 @@ public class MeshObsGPU : MonoBehaviour
         // Before anything, we need to extract the mesh data! 
         // We also need to extract the vertex anbd triangle data from that mesh
         Mesh mesh = obstacle.obstacle.GetMesh();
+        // I believe these are local space vertices, which is obviously what we want.
         var vs = obstacle.obstacle.vertices;
         var ts = obstacle.obstacle.triangles;
+        // bunch of hoopla. Ignore for now.
         obstacle.prevDensity = obstacle.density;
         obstacle.prevFriction = obstacle.frictionCoefficient;
         obstacle.prevReflection = obstacle.restitutionCoefficient;
@@ -937,6 +939,8 @@ public class MeshObsGPU : MonoBehaviour
         // We also update the lower bounds of the mesh data
         o_static.lowerBound = lowerBound;
         o_static.upperBound = upperBound;
+
+        foreach(float3 v in obstacle.obstacle.fixed_vs) Debug.Log(v);
 
         // ===== GENERATING TRIANGLES AND EDGES DATA ==== //
         
@@ -1177,6 +1181,8 @@ public class MeshObsGPU : MonoBehaviour
         // We always reset the vertex forces
         _SHADER.Dispatch(resetVertexForcesKernel, Mathf.CeilToInt((float)numVertices/64f),1,1);
 
+        // All we need to do is get the worldtolocal matrix for each obstacle.
+        
         for(int i = 0; i < obstacles.Count; i++) {
             // Check if the transform has been changed in any way
             mo = obstacles[i].obstacle; 
