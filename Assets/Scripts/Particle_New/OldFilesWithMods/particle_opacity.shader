@@ -1,4 +1,4 @@
-Shader "SPH/Particle/Pressure"
+Shader "SPH/Particle/Default"
 {
 	Properties
 	{
@@ -21,8 +21,11 @@ Shader "SPH/Particle/Pressure"
 		
 		float size;
 		int color_toggle;
+		float min_color_val;
 		float max_color_val;
-		
+		float3 lower_render_limits;
+		float3 upper_render_limits;
+
 		struct Input
 		{
 			float2 uv_MainTex;
@@ -37,6 +40,7 @@ Shader "SPH/Particle/Pressure"
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
 			StructuredBuffer<particle> particle_buffer;
 			StructuredBuffer<float> float_buffer;
+			StructuredBuffer<float> render_limits_buffer;
 		#endif
 
 	void setup()
@@ -65,9 +69,17 @@ Shader "SPH/Particle/Pressure"
 		#ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
 			float v = float_buffer[unity_InstanceID];
 			float a = 0.0;
-			if (color_toggle == 1) a = clamp((v - max_color_val)/max_color_val, 0.0, 1.0);
+			if (color_toggle == 1) {
+				if (max_color_val < min_color_val) a = 0.0;
+				else a = clamp((v - min_color_val)/(max_color_val-min_color_val), 0.0, 1.0);
+			}
 			finalColor = defaultColor * (1.0-a) + secondaryColor * a;
 			float3 pos = particle_buffer[unity_InstanceID].position;
+			if (
+				pos.x < render_limits_buffer[0] || pos.y < render_limits_buffer[1] || pos.z < render_limits_buffer[2] 
+				|| pos.x > render_limits_buffer[3] || pos.y > render_limits_buffer[4] || pos.z > render_limits_buffer[5]) {
+				finalColor.a = 0;
+			}
 		#endif
 
 		float4 c = finalColor;

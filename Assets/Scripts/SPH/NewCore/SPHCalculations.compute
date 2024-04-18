@@ -48,6 +48,7 @@ struct Projection {
 RWStructuredBuffer<Particle> particles;
 RWStructuredBuffer<float3> predictedPositions;
 RWStructuredBuffer<float3> velocities;
+RWStructuredBuffer<float> velocity_magnitudes;
 RWStructuredBuffer<float> densities;
 RWStructuredBuffer<float> near_densities;
 RWStructuredBuffer<float> pressures;
@@ -342,12 +343,24 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
     v += a * deltaTime;
     */
 
-    float distfinal = distance(projection.position, p.position);
+    // Terminology:
+    // p.position = the particle's current position
+    // - projection.position = the partlce's closest point on the mesh to consider
+    // - innermostPoint = a point on the edge of the particle, calculated using the negative of the normal vector of the mesh component the projection maintained
+
+    // If we have any projectsion to consider and the normal vector is not nonexistent...
     if (projection.counter > 0 && length(projection.normal) > 0.0) {
+        // calculate the normal. Normalize again if necessary
         float3 n = normalize(projection.normal);
+        // Calculate innermost point following the negative direction of the normal
         float3 innermostPoint = p.position - n * smoothingRadius;
-        if (distfinal <= smoothingRadius) {
+        // Calculate the distance between the particle and the particle's closest point on the mesh
+        float distfinal = distance(projection.position, p.position);
+        // If the dot product between the innermost point and particle position and the normal vector is + in sign, then we need to reflect
+        if (sign(dot(projection.position - innermostPoint, n))>0.0) {
             if (length(v)>0.0 && dot(v,n) <= 0.0) {
+                // If so, we have to calculate the reflection of the particle, but only if the velocity is not 0 in magnitude and if the velocity is inward
+
                 // This series of equations was derived from that of Carlos Alberto Dutra Fraga Filho.
                 // Report: https://doi.org/10.21203/rs.3.rs-3214518/v1
                 // The collided, reflected velocity comes in a normal form and a tangential form.
@@ -363,7 +376,42 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
                 float3 vrt = vtan * (1.0-projection.frictionCoefficient); 
                 v = vrn + vrt;
                 v += projection.frictionCoefficient * (projection.external_force) * deltaTime;
+                // Now, v is reflected off the surface.
             }
+
+            // move the position to the ideal position and set the position
+            if (length(v) > 0.0) v = normalize(v) * clamp(length(v),0.0,30.0);
+            velocities[id.x] = v;
+            velocity_magnitudes[id.x] = length(v);
+            particles[id.x].position = projection.position + n * (smoothingRadius + epsilon);
+            return;
+        } 
+
+        /*
+        // if the projection's position is within the radius of the particle, then:
+        if (distfinal <= smoothingRadius) {
+            // Check: does my particle actually have a vector and, if so, is that vector going in the opposite direction of the surface normal (aka the particle is going further into the mesh if unstopped)>
+            if (length(v)>0.0 && dot(v,n) <= 0.0) {
+                // If so, we have to calculate the reflection of the particle
+
+                // This series of equations was derived from that of Carlos Alberto Dutra Fraga Filho.
+                // Report: https://doi.org/10.21203/rs.3.rs-3214518/v1
+                // The collided, reflected velocity comes in a normal form and a tangential form.
+                // Note: to calculate the magnitude of a vector A as a component along another vector B, we use the following formula:
+                // dot(A,B)/dot(B,B)
+                // However, since B (which is the normal vector) is a normalized normal, the denominator just ends up being 1
+                // Therefore, we only need to calculate dot(A,B). To get the magnitude, we get the absolute value of this value
+                // The magnitude of the normal component of vel_ref is the same as the magnitude of the normal component of the incoming vector
+                float vn = abs(dot(v,-n));
+                float3 vtan = v - (-n*vn);
+                float vt = length(vtan);
+                float3 vrn = n * vn * projection.restitutionCoefficient;
+                float3 vrt = vtan * (1.0-projection.frictionCoefficient); 
+                v = vrn + vrt;
+                v += projection.frictionCoefficient * (projection.external_force) * deltaTime;
+                // Now, v is reflected off the surface.
+            }
+            // If the sign of the vector from the position to innermost point and the normal vector is -1, then the center of the particle is 
             if (sign(dot(innermostPoint-projection.position,n))<0.0) {
                 float3 inward = (p.position + n * smoothingRadius) - p.position;
                 if (length(inward) > 0.0) {
@@ -372,11 +420,13 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
                     if (length(newV) > 0.0) v = normalize(newV) * vLength;
                 }
             }
-            
         }
+        */
     }
 
+    // Clamp the velocity so that particles don't go haywire
     if (length(v) > 0.0) v = normalize(v) * clamp(length(v),0.0,30.0);
     velocities[id.x] = v;
+    velocity_magnitudes[id.x] = length(v);
     particles[id.x].position += v * deltaTime;
 }

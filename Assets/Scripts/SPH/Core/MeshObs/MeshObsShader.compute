@@ -741,7 +741,10 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             distfinal = distance(final_proj_position, particle.position);
             innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
 
-            if (projection.counter == 0 || distfinal < distance(projection.position, particle.position)) {
+            if (
+                    projection.counter == 0 
+                    || distfinal < distance(projection.position, particle.position)
+            ) {
                 projection.triangleID = i;
                 projection.projection = proj1;
                 projection.position = final_proj_position;
