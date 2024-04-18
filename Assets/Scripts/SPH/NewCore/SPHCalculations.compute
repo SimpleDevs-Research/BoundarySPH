@@ -52,7 +52,7 @@ RWStructuredBuffer<float> velocity_magnitudes;
 RWStructuredBuffer<float> densities;
 RWStructuredBuffer<float> near_densities;
 RWStructuredBuffer<float> pressures;
-RWStructuredBuffer<float> nearPressures;
+RWStructuredBuffer<float> near_pressures;
 RWStructuredBuffer<Projection> obstacleForces;
 RWStructuredBuffer<uint3> spatialIndices;   // used for spatial hashing. We do not touch these. EVER.
 RWStructuredBuffer<uint> spatialOffsets;    // used for spatial hashing. We do not touch these. EVER.
@@ -265,6 +265,7 @@ void UpdatePressure(uint3 id : SV_DispatchThreadID) {
 	float3 acceleration = pressureForce / density;
 	velocities[id.x] += acceleration * deltaTime;
     pressures[id.x] = pressure;
+    near_pressures[id.x] = nearPressure;
 }
 
 /*

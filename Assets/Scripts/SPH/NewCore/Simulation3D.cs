@@ -30,6 +30,16 @@ public class Recording {
             n_obstacles, n_vertices, n_edges, n_triangles 
         );
     }
+
+     public Recording(
+            int frame, float dt_passed_sec, float rl_passed_sec, float fps, 
+            int n_obstacles, int n_vertices, int n_edges, int n_triangles
+    ) {
+        this.frameData = new RecordingFrame(
+            frame, dt_passed_sec, rl_passed_sec, fps,
+            n_obstacles, n_vertices, n_edges, n_triangles 
+        );
+    }
 }
 
 public class RecordingFrame {
@@ -91,7 +101,7 @@ public class Simulation3D : MonoBehaviour
     private int _numParticles = 0;
     public int numParticles => _numParticles;
 
-    public enum RenderValue { Off, Velocity, Density, Pressure }
+    public enum RenderValue { Off, Velocity, Density, Pressure, Near_Pressure }
     [Header("== RENDERING & VISUALIZATION ==")]
     [SerializeField, Tooltip("How long should we delay the beginning of the simulation? This is important because we need to avoid the first frames of the unity runtime, which may be different than the rest of the simulation")]
     private float _delay = 1f;
@@ -132,9 +142,10 @@ public class Simulation3D : MonoBehaviour
     [ReadOnly, SerializeField] private float _fps;
 
 
+    public enum RecordingType { Off, All, FPS }
     [Header("== RECORDING ==")]
     [SerializeField, Tooltip("Reference to a csvWriter that will record our findings for us.")] private CSVWriter recorder;
-    [SerializeField, Tooltip("Public toggle to determine if we should be recording.")] private bool _record_statistics = false;
+    [SerializeField, Tooltip("Public toggle to determine if we should be recording.")] private RecordingType _record_statistics = RecordingType.Off;
     [SerializeField, Tooltip("The duraction (in seconds) of the recording session")]  private float _record_interval = 0.01f;
     [Tooltip("Amount of time passed since last recording update")] private float _record_interval_time = 0f;
     private IEnumerator _recordCoroutine = null;
@@ -215,7 +226,7 @@ public class Simulation3D : MonoBehaviour
         InitializeShaderVariables(_dt);
 
         // If we are recording, we initialize a recording session
-        if (_record_statistics) {
+        if (_record_statistics != RecordingType.Off) {
             _recordCoroutine = RecordSim();
             StartCoroutine(_recordCoroutine);
         }
@@ -264,6 +275,7 @@ public class Simulation3D : MonoBehaviour
         ComputeHelper.SetBuffer(compute, _BM.PARTICLES_DENSITIES_BUFFER, "densities", updateDensityKernel, updatePressureKernel, updateViscosityKernel);
         ComputeHelper.SetBuffer(compute, _BM.PARTICLES_NEAR_DENSITIES_BUFFER, "near_densities", updateDensityKernel, updatePressureKernel, updateViscosityKernel);
         ComputeHelper.SetBuffer(compute, _BM.PARTICLES_PRESSURE_BUFFER, "pressures", updatePressureKernel);
+        ComputeHelper.SetBuffer(compute, _BM.PARTICLES_NEAR_PRESSURE_BUFFER, "near_pressures", updatePressureKernel);
         ComputeHelper.SetBuffer(compute, _BM.PARTICLES_VELOCITIES_BUFFER, "velocities", updateExternalForcesKernel, updatePressureKernel, updateViscosityKernel, updatePositionsKernel);
         ComputeHelper.SetBuffer(compute, _BM.PARTICLES_VELOCITY_MAGNITUDES_BUFFER, "velocity_magnitudes", updatePositionsKernel);
         ComputeHelper.SetBuffer(compute, _BM.PARTICLES_EXTERNAL_FORCES_BUFFER, "obstacleForces", updatePositionsKernel);
@@ -337,6 +349,10 @@ public class Simulation3D : MonoBehaviour
                 break;
             case RenderValue.Pressure:
                 _particle_material.SetBuffer(renderer_float_buffer, _BM.PARTICLES_PRESSURE_BUFFER);
+                _particle_material.SetInt(renderer_color_toggle, 1);
+                break;
+            case RenderValue.Near_Pressure:
+                _particle_material.SetBuffer(renderer_float_buffer, _BM.PARTICLES_NEAR_PRESSURE_BUFFER);
                 _particle_material.SetInt(renderer_color_toggle, 1);
                 break;
             default:
@@ -443,30 +459,33 @@ public class Simulation3D : MonoBehaviour
             // Get the top record in our queue
             Recording r = _recordQueue.Dequeue();
 
-            // Initialize the recorder
-            recorder.fileName = r.frameData.fileName;
-            recorder.columns = new List<string> {
-                "particle_id",
-                "position_x", "position_y", "position_z",
-                "velocity_x", "velocity_y", "velocity_z", "velocity_mag",
-                "density", "near_density", "pressure", "near_pressure"
-            };
-            recorder.Initialize();
-            // Write our CSVs
-            for(int i = 0; i < _numParticles; i++) {    
-                recorder.AddPayload(i);                               // particle id
-                recorder.AddPayload(r.temp_particles[i].position);    // particle position
-                recorder.AddPayload(r.temp_velocities[i]);            // particle velocity
-                recorder.AddPayload(r.temp_velocity_magnitudes[i]);   // particle velocity magnitudes
-                recorder.AddPayload(r.temp_densities[i]);             // particle density
-                recorder.AddPayload(r.temp_near_densities[i]);        // particle near density
-                recorder.AddPayload(r.temp_pressures[i]);             // particle pressure
-                recorder.AddPayload(r.temp_near_pressures[i]);        // particle near pressures
-                recorder.WriteLine();
-            }
+            // If we want to write JUST the FPS, we don't record the particle positions.
+            if (_record_statistics == RecordingType.All) {
+                // Initialize the recorder
+                recorder.fileName = r.frameData.fileName;
+                recorder.columns = new List<string> {
+                    "particle_id",
+                    "position_x", "position_y", "position_z",
+                    "velocity_x", "velocity_y", "velocity_z", "velocity_mag",
+                    "density", "near_density", "pressure", "near_pressure"
+                };
+                recorder.Initialize();
+                // Write our CSVs
+                for(int i = 0; i < _numParticles; i++) {    
+                    recorder.AddPayload(i);                               // particle id
+                    recorder.AddPayload(r.temp_particles[i].position);    // particle position
+                    recorder.AddPayload(r.temp_velocities[i]);            // particle velocity
+                    recorder.AddPayload(r.temp_velocity_magnitudes[i]);   // particle velocity magnitudes
+                    recorder.AddPayload(r.temp_densities[i]);             // particle density
+                    recorder.AddPayload(r.temp_near_densities[i]);        // particle near density
+                    recorder.AddPayload(r.temp_pressures[i]);             // particle pressure
+                    recorder.AddPayload(r.temp_near_pressures[i]);        // particle near pressures
+                    recorder.WriteLine();
+                }
 
-            // Flush and Disable CSV
-            recorder.Disable();
+                // Flush and Disable CSV
+                recorder.Disable();
+            }
 
             // Pass `r`'s RecordingFrame to the new queue
             _recordFrameQueue.Enqueue(r.frameData);
@@ -477,41 +496,51 @@ public class Simulation3D : MonoBehaviour
     }
 
     private void MakeRecord() {
-        if (!_record_statistics) return;
+        if (_record_statistics == RecordingType.Off) return;
 
         is_recording_frame = true;
 
-        // GET DATA
-        OP.Particle[] temp_particles = new OP.Particle[_numParticles];
-            _BM.PARTICLES_BUFFER.GetData(temp_particles);
-        float3[] temp_velocities = new float3[_numParticles];
-            _BM.PARTICLES_VELOCITIES_BUFFER.GetData(temp_velocities);
-        float[] temp_velocity_magnitudes = new float[_numParticles];
-            _BM.PARTICLES_VELOCITY_MAGNITUDES_BUFFER.GetData(temp_velocity_magnitudes);
-        float[] temp_densities = new float[_numParticles];
-            _BM.PARTICLES_DENSITIES_BUFFER.GetData(temp_densities);
-        float[] temp_near_densities = new float[_numParticles];
-            _BM.PARTICLES_NEAR_DENSITIES_BUFFER.GetData(temp_near_densities);
-        float[] temp_pressures = new float[_numParticles];
-            _BM.PARTICLES_PRESSURE_BUFFER.GetData(temp_pressures);
-        float[] temp_near_pressures = new float[_numParticles];
-            _BM.PARTICLES_NEAR_PRESSURE_BUFFER.GetData(temp_near_pressures);
-
-        // Remember that each of these dynamic and static variations of the vertices, triangles, and edges all are the same size. So it doesn't matter if we get the number of them from either the static or dyanmic buffers
+         // Remember that each of these dynamic and static variations of the vertices, triangles, and edges all are the same size. So it doesn't matter if we get the number of them from either the static or dyanmic buffers
         int n_obstacles = (_BM.MESHOBS_OBSTACLES_STATIC_BUFFER != null) ? _BM.MESHOBS_OBSTACLES_STATIC_BUFFER.count : 0;
         int n_vertices = (_BM.MESHOBS_VERTICES_STATIC_BUFFER != null) ? _BM.MESHOBS_VERTICES_STATIC_BUFFER.count : 0;
         int n_edges = (_BM.MESHOBS_EDGES_STATIC_BUFFER != null) ? _BM.MESHOBS_EDGES_STATIC_BUFFER.count : 0;
         int n_triangles = (_BM.MESHOBS_TRIANGLES_STATIC_BUFFER != null) ? _BM.MESHOBS_TRIANGLES_STATIC_BUFFER.count : 0;
+
+        // GET DATA, but only if required
+        if (_record_statistics == RecordingType.All) {
+            OP.Particle[] temp_particles = new OP.Particle[_numParticles];
+                _BM.PARTICLES_BUFFER.GetData(temp_particles);
+            float3[] temp_velocities = new float3[_numParticles];
+                _BM.PARTICLES_VELOCITIES_BUFFER.GetData(temp_velocities);
+            float[] temp_velocity_magnitudes = new float[_numParticles];
+                _BM.PARTICLES_VELOCITY_MAGNITUDES_BUFFER.GetData(temp_velocity_magnitudes);
+            float[] temp_densities = new float[_numParticles];
+                _BM.PARTICLES_DENSITIES_BUFFER.GetData(temp_densities);
+            float[] temp_near_densities = new float[_numParticles];
+                _BM.PARTICLES_NEAR_DENSITIES_BUFFER.GetData(temp_near_densities);
+            float[] temp_pressures = new float[_numParticles];
+                _BM.PARTICLES_PRESSURE_BUFFER.GetData(temp_pressures);
+            float[] temp_near_pressures = new float[_numParticles];
+                _BM.PARTICLES_NEAR_PRESSURE_BUFFER.GetData(temp_near_pressures);
+
+            // Create a new entry in a queue that holds all the recordings    
+            _recordQueue.Enqueue(new Recording(
+                temp_particles, 
+                temp_velocities, temp_velocity_magnitudes, 
+                temp_densities, temp_near_densities, 
+                temp_pressures, temp_near_pressures, 
+                _simulation_frames_passed, _simulation_time_passed, _rl_time_passed, _fps,
+                n_obstacles, n_vertices, n_edges, n_triangles
+            ));
+        }
+        // However, if we're just recording the fps, no need to do all the above
+        else {
+            _recordQueue.Enqueue(new Recording(
+                _simulation_frames_passed, _simulation_time_passed, _rl_time_passed, _fps,
+                n_obstacles, n_vertices, n_edges, n_triangles
+            ));
+        }
         
-        // Create a new entry in a queue that holds all the recordings    
-        _recordQueue.Enqueue(new Recording(
-            temp_particles, 
-            temp_velocities, temp_velocity_magnitudes, 
-            temp_densities, temp_near_densities, 
-            temp_pressures, temp_near_pressures, 
-            _simulation_frames_passed, _simulation_time_passed, _rl_time_passed, _fps,
-            n_obstacles, n_vertices, n_edges, n_triangles
-        ));
 
         is_recording_frame = false;
     }
