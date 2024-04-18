@@ -384,7 +384,7 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
             if (length(v) > 0.0) v = normalize(v) * clamp(length(v),0.0,30.0);
             velocities[id.x] = v;
             velocity_magnitudes[id.x] = length(v);
-            particles[id.x].position = projection.position + n * (smoothingRadius + epsilon);
+            particles[id.x].position = projection.position + n * (smoothingRadius + 0.01);
             return;
         } 
 
