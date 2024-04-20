@@ -800,17 +800,47 @@ PrefabInstance:
     - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
         type: 3}
       propertyPath: m_LocalPosition.x
-      value: 15.16
+      value: 8.03
       objectReference: {fileID: 0}
     - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 17.37
+      value: 6.9
       objectReference: {fileID: 0}
     - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: 11.11
+      value: 8.69
+      objectReference: {fileID: 0}
+    - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.16667645
+      objectReference: {fileID: 0}
+    - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.030864174
+      objectReference: {fileID: 0}
+    - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0.96905434
+      objectReference: {fileID: 0}
+    - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.17944379
+      objectReference: {fileID: 0}
+    - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 20.982
+      objectReference: {fileID: 0}
+    - target: {fileID: 4322999897520959531, guid: 5582dc941d9827444a7b14ef429b23f5,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: -160.481
       objectReference: {fileID: 0}
     - target: {fileID: 4322999897624058389, guid: 5582dc941d9827444a7b14ef429b23f5,
         type: 3}
@@ -1099,6 +1129,18 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 684172711}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &749417248 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1470229466030007990, guid: 5582dc941d9827444a7b14ef429b23f5,
+    type: 3}
+  m_PrefabInstance: {fileID: 672542632}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbf4d31367c3a4345bde536f642c518a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &832130813
 GameObject:
   m_ObjectHideFlags: 0
@@ -111173,14 +111215,14 @@ MonoBehaviour:
   _fps: 0
   recorder:
     fileName: 
-    dirName: DamBreakSlope_Side
+    dirName: DamBreakSlope_Diag_FPS
     writeUnixTime: 0
     append_zero_to_filename: 0
     columns: []
     filePath: 
-  _record_statistics: 1
+  _record_statistics: 2
   _record_interval: 0.05
-  textboxes: {fileID: 672542633}
+  textboxes: {fileID: 749417248}
 --- !u!4 &1414904883
 Transform:
   m_ObjectHideFlags: 0

@@ -2173,13 +2173,13 @@ MonoBehaviour:
   _render_size: 0.1
   _color_toggle: 1
   min_color_val: 0
-  max_color_val: 15
+  max_color_val: 30
   render_limits:
   - 0
-  - 0
+  - 6.75
   - 0
   - 100
-  - 100
+  - 8.25
   - 100
   _particle_mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
   _particle_material: {fileID: 2100000, guid: 66324ef78dedd694b954770496b691ea, type: 2}
@@ -2193,12 +2193,12 @@ MonoBehaviour:
   _fps: 0
   recorder:
     fileName: 
-    dirName: FlowField_Torus_Top
+    dirName: FlowField_Torus_Top_FPS
     writeUnixTime: 0
     append_zero_to_filename: 0
     columns: []
     filePath: 
-  _record_statistics: 1
+  _record_statistics: 2
   _record_interval: 0.01
   textboxes: {fileID: 634084579}
 --- !u!4 &1201872842

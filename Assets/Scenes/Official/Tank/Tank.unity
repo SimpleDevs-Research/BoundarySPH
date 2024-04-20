@@ -111111,8 +111111,8 @@ MonoBehaviour:
   _delay: 1
   _render_size: 0.05
   _color_toggle: 3
-  min_color_val: -60000
-  max_color_val: -55000
+  min_color_val: 90000
+  max_color_val: 105000
   render_limits:
   - 0
   - 0
@@ -111137,7 +111137,7 @@ MonoBehaviour:
     append_zero_to_filename: 0
     columns: []
     filePath: 
-  _record_statistics: 1
+  _record_statistics: 0
   _record_interval: 0.05
   textboxes: {fileID: 672542633}
 --- !u!4 &1414904883
