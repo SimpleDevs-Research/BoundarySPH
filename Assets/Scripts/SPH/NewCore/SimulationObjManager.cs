@@ -46,6 +46,9 @@ public class SimulationObjManager : MonoBehaviour
         public float3 center;
         public float3 normal;
         public float distance_to_center;
+        public float3 v1v2n;
+        public float3 v2v3n;
+        public float3 v1v3n;
         public Triangle(
                 uint obstacleIndex,
                 uint3 vertices,
@@ -53,7 +56,10 @@ public class SimulationObjManager : MonoBehaviour
                 uint3 edges,
                 float3 center,
                 float3 normal,
-                float distance_to_center
+                float distance_to_center,
+                float3 v1v2n,
+                float3 v2v3n,
+                float3 v1v3n
         ) {
             this.obstacleIndex = obstacleIndex;
             this.vertices = vertices;
@@ -62,6 +68,9 @@ public class SimulationObjManager : MonoBehaviour
             this.center = center;
             this.normal = normal;
             this.distance_to_center = distance_to_center;
+            this.v1v2n = v1v2n;
+            this.v2v3n = v2v3n;
+            this.v1v3n = v1v3n;
         }
 
     }
@@ -124,15 +133,21 @@ public class SimulationObjManager : MonoBehaviour
             Vector3 norm = meshObjects[obstacle_id].obstacle.transform.TransformDirection(e.normal);
             Gizmos.DrawLine(midpoint, midpoint+norm);
         }
-        foreach(Triangle t in global_triangles) {
+        */
+        //foreach(Triangle t in global_triangles) {
+            Triangle t = global_triangles[0];
             int obstacle_id = (int)t.obstacleIndex;
             int min_vertex_index = (int)global_obstacles[obstacle_id].vertex_range[0];
             int min_edge_index = (int)global_obstacles[obstacle_id].edges_range[0];
+            
             Vector3 v1 = meshObjects[obstacle_id].obstacle.transform.TransformPoint(global_vertices[min_vertex_index + (int)t.vertices[0]].position);
             Vector3 v2 = meshObjects[obstacle_id].obstacle.transform.TransformPoint(global_vertices[min_vertex_index + (int)t.vertices[1]].position);
             Vector3 v3 = meshObjects[obstacle_id].obstacle.transform.TransformPoint(global_vertices[min_vertex_index + (int)t.vertices[2]].position);
+            Gizmos.color = Color.blue;
             Gizmos.DrawSphere(v1, 0.25f);
+            Gizmos.color = Color.red;
             Gizmos.DrawSphere(v2, 0.25f);
+            Gizmos.color = Color.black;
             Gizmos.DrawSphere(v3, 0.25f);
             
             Vector3 midpoint = meshObjects[obstacle_id].obstacle.transform.TransformPoint(t.center);
@@ -140,6 +155,22 @@ public class SimulationObjManager : MonoBehaviour
             Vector3 norm = meshObjects[obstacle_id].obstacle.transform.TransformDirection(t.normal);
             Gizmos.DrawLine(midpoint, midpoint+norm);
 
+            Edge e1 = global_edges[min_edge_index + (int)t.edges[0]];
+            Edge e2 = global_edges[min_edge_index + (int)t.edges[1]];
+            Edge e3 = global_edges[min_edge_index + (int)t.edges[2]];
+            Vector3 e1m = meshObjects[obstacle_id].obstacle.transform.TransformPoint(e1.midpoint);
+            Vector3 e2m = meshObjects[obstacle_id].obstacle.transform.TransformPoint(e2.midpoint);
+            Vector3 e3m = meshObjects[obstacle_id].obstacle.transform.TransformPoint(e3.midpoint);
+            Vector3 v1v2n = meshObjects[obstacle_id].obstacle.transform.TransformDirection(t.v1v2n);
+            Vector3 v2v3n = meshObjects[obstacle_id].obstacle.transform.TransformDirection(t.v2v3n);
+            Vector3 v1v3n = meshObjects[obstacle_id].obstacle.transform.TransformDirection(t.v1v3n);
+            Gizmos.DrawLine(e1m, e1m+v1v2n);
+            Gizmos.DrawLine(e2m, e2m+v1v3n);
+            Gizmos.DrawLine(e3m, e3m+v2v3n);
+            
+            Gizmos.DrawLine(v1, v3);
+            Gizmos.DrawLine(v2, v3);
+            /*
             Edge e1 = global_edges[min_edge_index + (int)t.edges[0]];
             int evmin = (int)global_obstacles[(int)e1.obstacleIndex].vertex_range[0];
             Vector3 ev1 = meshObjects[(int)e1.obstacleIndex].obstacle.transform.TransformPoint(global_vertices[evmin+(int)e1.vertices[0]].position);
@@ -155,8 +186,8 @@ public class SimulationObjManager : MonoBehaviour
             ev1 = meshObjects[(int)e3.obstacleIndex].obstacle.transform.TransformPoint(global_vertices[evmin+(int)e3.vertices[0]].position);
             ev2 = meshObjects[(int)e3.obstacleIndex].obstacle.transform.TransformPoint(global_vertices[evmin+(int)e3.vertices[1]].position);
             Gizmos.DrawLine(ev1, ev2);
-        }
-        */
+            */
+        //}
     }
 
     private void Start() {
@@ -310,6 +341,17 @@ public class SimulationObjManager : MonoBehaviour
                 edges[es_map_index_v2v3] = e;
             }
 
+            // CALCULATE 2D NORMALS OF EDGES
+            // A pre-processing step we can conduct is the pre-computatin of v1v2n, v2v3n, v1v3n
+            float3 v1v2 = v2.position - v1.position;
+            float3 v1c = centerF - v1.position;
+            float3 v1v2n = -Unity.Mathematics.math.normalize(v1c - (Unity.Mathematics.math.dot(v1c,v1v2)/Unity.Mathematics.math.dot(v1v2,v1v2))*v1v2);
+            float3 v1v3 = v3.position - v1.position;
+            float3 v1v3n = -Unity.Mathematics.math.normalize(v1c - (Unity.Mathematics.math.dot(v1c,v1v3)/Unity.Mathematics.math.dot(v1v3,v1v3))*v1v3);
+            float3 v2v3 = v3.position - v2.position;
+            float3 v2c = centerF - v2.position;
+            float3 v2v3n = -Unity.Mathematics.math.normalize(v2c - (Unity.Mathematics.math.dot(v2c,v2v3)/Unity.Mathematics.math.dot(v2v3,v2v3))*v2v3);
+
             // CREATE TRIANGLES
             // We have everything to create our trianges
             triangles[ti] = new Triangle(
@@ -319,7 +361,10 @@ public class SimulationObjManager : MonoBehaviour
                 new uint3((uint)es_map_index_v1v2,(uint)es_map_index_v1v3,(uint)es_map_index_v2v3),     // edges
                 centerF,                                                    // center
                 normalF,                                                     // normal vector,
-                Unity.Mathematics.math.dot(-1f * centerF, normalF)       // signed distance from object origin to center
+                Unity.Mathematics.math.dot(-1f * centerF, normalF),       // signed distance from object origin to center
+                v1v2n, 
+                v2v3n,                
+                v1v3n
             );
         }
 
@@ -360,9 +405,8 @@ public class SimulationObjManager : MonoBehaviour
         _obstacles.Add(obs);
     }
 
-    // Update is called once per frame
-    private void Update() {
-        
+    public void UpdateBuffers() {
+
     }
 
     public static float AngleFromVectors(float3 from, float3 to) {

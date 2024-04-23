@@ -352,10 +352,7 @@ MonoBehaviour:
   _BM: {fileID: 0}
   _SIM: {fileID: 0}
   meshObjects:
-  - obstacle: {fileID: 1010627306}
-    friction_coefficient: 0
-    restitution_coefficient: 0
-  - obstacle: {fileID: 2125041510}
+  - obstacle: {fileID: 1222371844}
     friction_coefficient: 0
     restitution_coefficient: 0
   global_obstacles: []
@@ -2595,6 +2592,12 @@ MonoBehaviour:
   _triangles: 
   fixed_vs: []
   vs_map: 
+--- !u!33 &1222371844 stripped
+MeshFilter:
+  m_CorrespondingSourceObject: {fileID: -5754084199372789682, guid: c702509bbcea39b40aac501b56b2de60,
+    type: 3}
+  m_PrefabInstance: {fileID: 1222371839}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1233972134
 GameObject:
   m_ObjectHideFlags: 0
