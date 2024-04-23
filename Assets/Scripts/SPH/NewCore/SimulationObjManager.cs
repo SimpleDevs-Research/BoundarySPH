@@ -109,6 +109,7 @@ public class SimulationObjManager : MonoBehaviour
     private List<Vertex> global_vertices;
     private List<Edge> global_edges;
     private List<Triangle> global_triangles;
+    private int numObstacles, numTriangles, numVertices, numEdges;
 
     void OnDrawGizmos() {
         if (!Application.isPlaying) return;
@@ -133,7 +134,6 @@ public class SimulationObjManager : MonoBehaviour
             Vector3 norm = meshObjects[obstacle_id].obstacle.transform.TransformDirection(e.normal);
             Gizmos.DrawLine(midpoint, midpoint+norm);
         }
-        */
         //foreach(Triangle t in global_triangles) {
             Triangle t = global_triangles[0];
             int obstacle_id = (int)t.obstacleIndex;
@@ -211,6 +211,22 @@ public class SimulationObjManager : MonoBehaviour
 
         // With all our data properly encapsulated, let's put them into the necessary buffers... assuming we have a buffer manager linked
         if (_BM == null) return;
+
+        // For later use
+        numObstacles = global_obstacles.Count;
+        numVertices = global_vertices.Count;
+        numEdges = global_edges.Count;
+        numTriangles = global_triangles.Count;
+
+        // Initialize the necessary buffers
+        _BM.InitializeNewMeshObsBuffers(numObstacles, numTriangles, numVertices, numEdges);
+        // Populate those buffers
+        _BM.MESHOBS_OBSTACLES_BUFFER.SetData(global_obstacles.ToArray());
+        _BM.MESHOBS_VERTICES_BUFFER.SetData(global_vertices.ToArray());
+        _BM.MESHOBS_EDGES_BUFFER.SetData(global_edges.ToArray());
+        _BM.MESHOBS_TRIANGLES_BUFFER.SetData(global_triangles.ToArray());
+        // Pass on the rest to _SIM, if it exists
+        if (_SIM != null) _SIM.InitializeObstacleInteractions(numObstacles, numTriangles, numVertices, numEdges);
     }
 
     private void PreprocessObj(
@@ -406,7 +422,22 @@ public class SimulationObjManager : MonoBehaviour
     }
 
     public void UpdateBuffers() {
-
+        // This is usually called by _SIM
+        Matrix4x4[] worldPosToLocal = new Matrix4x4[numObstacles];
+        Matrix4x4[] worldDirToLocal = new Matrix4x4[numObstacles];
+        Matrix4x4[] localPosToWorld = new Matrix4x4[numObstacles];
+        Matrix4x4[] localDirToWorld = new Matrix4x4[numObstacles];
+        for(int i = 0; i < meshObjects.Length; i++) {
+            Transform t = meshObjects[i].obstacle.transform;
+            // Get the world to local
+            Matrix4x4 worldpos_to_local = t.worldToLocalMatrix;
+            // Get the rotation matrix
+            Matrix4x4 worlddir_to_local = Matrix4x4.Rotate(t.rotation);
+            // Get the locla to world
+            Matrix4x4 localpos_to_world = t.localToWorldMatrix;
+            // Get the rotation
+            
+        }
     }
 
     public static float AngleFromVectors(float3 from, float3 to) {

@@ -527,6 +527,7 @@ namespace ObstaclePrimitives {
         
         [System.Serializable]
         public struct Projection {
+            public uint obstacle_id;
             public uint triangleID;
             public float3 projection;
             public float3 position;

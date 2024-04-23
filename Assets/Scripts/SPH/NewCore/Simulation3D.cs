@@ -184,6 +184,7 @@ public class Simulation3D : MonoBehaviour
     int updatePressureKernel;
     int updateViscosityKernel;
     int updatePositionsKernel;
+    int updateProjectionsKernel = -1;  // might not be set.
 
     // This is provided by Sebastian Lague, who actually inspired a lot of this code, admittedly.
     GPUSort gpuSort;
@@ -314,6 +315,24 @@ public class Simulation3D : MonoBehaviour
         compute.SetFloat("near_pressure_influence", _near_pressure_influence);
         compute.SetFloat("damping_effect", _damping_effect);
         renderLimitsBuffer.SetData(render_limits);
+    }
+
+    public void InitializeObstacleInteractions(int numObstacles, int numTriangles, int numVertices, int numEdges) {
+        // If we get called this, it's usually from the SimulationObjManager.
+        // This means we want to conduct interactions using a new kernel: `updateProjectionsKernel`
+        // First, find the kernel
+        updateProjectionsKernel = compute.FindKernel("UpdateProjections");
+        // Next, update this kernel with the necessary buffers
+        compute.SetBuffer(updateProjectionsKernel, "particles", _BM.PARTICLES_BUFFER);
+        compute.SetBuffer(updateProjectionsKernel, "projections", _BM.PARTICLES_EXTERNAL_FORCES_BUFFER);
+        compute.SetBuffer(updateProjectionsKernel, "obstacles", _BM.MESHOBS_OBSTACLES_BUFFER);
+        compute.SetBuffer(updateProjectionsKernel, "triangles", _BM.MESHOBS_TRIANGLES_BUFFER);
+        compute.SetBuffer(updateProjectionsKernel, "edges", _BM.MESHOBS_EDGES_BUFFER);
+        compute.SetBuffer(updateProjectionsKernel, "vertices", _BM.MESHOBS_VERTICES_BUFFER);
+        compute.SetBuffer(updateProjectionsKernel, "worldpos_to_local_matrices", _BM.MESHOBS_WORLDPOS_TO_LOCAL_BUFFER);
+        // We also need to update the upatePositions correclty with the necessary 
+        compute.SetBuffer(updatePositionsKernel, "localpos_to_world_matrices", _BM.MESHOBS_LOCALPOS_TO_WORLD_BUFFER);
+        compute.SetBuffer(updatePositionsKernel, "localdir_to_world_matrices", _BM.MESHOBS_LOCALDIR_TO_WORLD_BUFFER);
     }
 
     private float delay_time_passed = 0f;

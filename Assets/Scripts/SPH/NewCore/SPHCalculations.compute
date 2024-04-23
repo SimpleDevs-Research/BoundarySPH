@@ -26,6 +26,7 @@ struct Particle {
     int render;
 };
 struct Projection {
+	uint obstacle_id;
     uint triangleID;
     float3 projection;
     float3 position;
@@ -43,6 +44,38 @@ struct Projection {
     float3 e1_3DN;
     float3 e2_3DN;
 };
+struct Vertex {
+    uint obstacleIndex;
+    float3 position;
+    float3 normal;
+};
+struct Edge {
+	uint obstacleIndex;
+    uint2 vertices;
+    uint2 triangles;
+    float3 midpoint;
+    float3 normal;     
+};
+struct Triangle {
+    uint obstacleIndex;
+    uint3 vertices;
+    float3 angles;
+    uint3 edges;
+    float3 center;
+    float3 normal;
+    float distance_to_center;
+    float3 v1v2n;
+    float3 v2v3n;
+    float3 v1v3n;
+};
+struct Obstacle {
+    uint index;
+    float friction_coefficient;
+    float restitution_coefficient;
+    uint2 vertex_range;      // [0] = starting index in global vertices, [1] = # of vertices associated with this obstacle. _+
+    uint2 triangles_range;   // [0] = starting index in global triangles, [1] = # of vertices associated with this obstacle.
+    uint2 edges_range;       // [0] = starting index in global edges, [1] = # of edges associated with this obstacle
+};
 
 // Buffers
 RWStructuredBuffer<Particle> particles;
@@ -56,6 +89,15 @@ RWStructuredBuffer<float> near_pressures;
 RWStructuredBuffer<Projection> obstacleForces;
 RWStructuredBuffer<uint3> spatialIndices;   // used for spatial hashing. We do not touch these. EVER.
 RWStructuredBuffer<uint> spatialOffsets;    // used for spatial hashing. We do not touch these. EVER.
+// These Buffers are important for obstacle interactions
+RWStructuredBuffer<Obstacle> obstacles;
+RWStructuredBuffer<Vertex> vertices;
+RWStructuredBuffer<Edge> edges;
+RWStructuredBuffer<Triangle> trianges;
+RWStructuredBuffer<float4x4> worldpos_to_local_matrices;
+RWStructuredBuffer<float4x4> worlddir_to_local_matrices;
+RWStructuredBuffer<float4x4> localpos_to_world_matrices;
+RWStructuredBuffer<float4x4> localdir_to_world_matrices;
 
 
 #pragma kernel UpdateExternalForces
@@ -327,6 +369,168 @@ void UpdateViscosity(uint3 id : SV_DispatchThreadID) {
 	velocities[id.x] += viscosityForce * viscosity_influence * deltaTime;
 }
 
+/*
+#pragma kernel UpdateProjections
+[numthreads(256,1,1)]
+void UpdateProjections(uint3 id : SV_DispatchThreadID) {
+	if (id.x >= numParticles) return;
+	// References
+    Particle particle = particles[id];
+    Projection projection = projections[id];
+	// Rset the projection
+	projection.counter = 0;
+    
+    for(uint oi = 0; oi < numObstacles; oi++) {
+		float3 p = mul(worldpos_to_local_matrices[oi], particle.position);
+        int meshobs_found = 0;
+        float3 meshobs_closest_point = p;
+        float meshobs_closest_distance = 0.0;
+        float3 meshobs_closest_normal = float3(0,0,0);
+		// Grab the current obstacle
+        Obstacle o = obstacles[oi];
+        // Iterate through the vertices
+        for(uint i = o.triangles_range[0]; i < o.triangles_range[0] + o.triangles_range[1]; i++) {
+            Triangle t = triangles[i];
+            // More references
+            Vertex v1 = vertices[o.vertex_range[0] + t.vertices[0]];
+            Vertex v2 = vertices[o.vertex_range[0] + t.vertices[1]];
+            Vertex v3 = vertices[o.vertex_range[0] + t.vertices[2]];
+
+            // At this point, we need to project the particle's position onto the plane defined by this triangle.
+            // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
+            // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
+            //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
+            float3 dir = normalize(sign(dot(t.normal, t.center - p)) * t.normal);
+            // We need to project the point onto the plane formed by this triangle
+            float dist_from_point_to_plane = -(dot(t.normal, p) + t.distance_to_center) / dot(t.normal, dir);
+            float3 proj1 = p + dist_from_point_to_plane * dir;
+
+            float3 closestVertexPosition = v1.position;
+            float3 closestVertexNormal = v1.normal;
+            float3 edge1 = v2.position - v1.position;
+            float3 edge2 = v3.position - v1.position;
+            float3 e1_2DN = t.v1v2n;
+            float3 e2_2DN = t.v1v3n;
+            float3 e1_3DN = edges[o.edges_range[0] + t.edges[0]];
+            float3 e2_3DN = edges[o.edges_range[0] + t.edges[1]];
+            float denom, u, v, distfinal;
+            float3 c, innermostPoint, v1force, v2force, v3force;
+            
+            if (distance(p, v2.position) < distance(p, closestVertexPosition)) {
+                closestVertexPosition = v2.position;
+                closestVertexNormal = v2.normal;
+                edge1 = v1.position - v2.position;
+                edge2 = v3.position - v2.position;
+                e1_2DN = t.v1v2n;
+                e2_2DN = t.v2v3n;
+                e1_3DN = edges[o.edges_range[0] + t.edges[0]];
+                e2_3DN = edges[o.edges_range[0] + t.edges[2]];
+            }
+            if (distance(p, v3.position) < distance(p, closestVertexPosition)) {
+                closestVertexPosition = v3.position;
+                closestVertexNormal = v3.normal;
+                edge1 = v1.position - v3.position;
+                edge2 = v2.position - v3.position;
+                e1_2DN = t.v1v3n;
+                e2_2DN = t.v2v3n;
+                e1_3DN = edges[o.edges_range[0] + t.edges[1]];
+                e2_3DN = edges[o.edges_range[0] + t.edges[2]];
+            }
+
+            float3 final_proj_position;
+            float3 final_proj_normal;
+            int isInTriangle = CheckVoroniRegions(
+                proj1,                          // The projection of the particle position onto the plane
+                closestVertexPosition, closestVertexNormal,   // The closest vertex position + its 3D normal
+                edge1, edge2,                   // The two edges connected to the closest vertex
+                normalize(e1_2DN), normalize(e2_2DN),                 // The 2D normals of the two connected edges
+                normalize(e1_3DN), normalize(e2_3DN),                 // The 3D normals of the two connected edges
+                normalize(t.normal),             // The triangle normal
+                0.05,                            // The threshold for overlap
+                final_proj_position,        // reference to the projection position
+                final_proj_normal           // reference the projection normal
+            );
+
+            // Check if the particle is either in range of the boundary triangle or if it's underneath
+            distfinal = distance(final_proj_position, p);
+            //innermostPoint = particle.position - final_proj_normal * particleRenderRadius;
+			innermostPoint = particle.position;
+
+            if (
+                    projection.counter == 0 
+                    || distfinal < distance(projection.position, p)
+            ) {
+				projection.obstacle_id = oi;
+                projection.triangleID = i;
+                projection.projection = proj1;
+                projection.position = final_proj_position;
+                projection.normal = final_proj_normal;
+
+                // We have to calculate the force at this point
+                denom = dot(projection.normal, projection.normal);
+                c = cross(v3.position - v2.position, final_proj_position - v2.position);
+                u = dot(projection.normal, c) / denom;
+                c = cross(v1.position - v3.position, final_proj_position - v3.position);
+                v = dot(projection.normal, c) / denom;
+                if (dot(v1.force,projection.normal)<0) v1force = float3(0,0,0);
+                else v1force = v1.force;
+                if (dot(v2.force,projection.normal)<0) v2force = float3(0,0,0);
+                else v2force = v2.force;
+                if (dot(v3.force,projection.normal)<0) v3force = float3(0,0,0);
+                else v3force = v3.force;
+                projection.external_force = (u * v1force) + (v * v2force) + ((1.0-u-v) * v3force);
+                if (dot(projection.external_force,projection.normal)<0) {
+                    // We re-program the external force to be that it follows the tangential component of the external force only
+                    float3 force_normal_comp = (dot(projection.external_force,-projection.normal)/dot(-projection.normal, -projection.normal)) * -projection.normal;
+                    projection.external_force = projection.external_force - force_normal_comp;
+                    //projection.external_force = -projection.external_force;
+                }
+                // We also have to calculate the amount of force exerted by the particle.
+                // For now, we just calculate the orthogonal force based on the particle's current force
+                // To calculate the force component along the normal vector, we:
+                // 1) detect if the particle is within range or is intersecting with the triangle
+                // 2) if so, perform the follwing: dot(normal,particle force) / length(normal)
+                // since the normal is normalized, it'll just be 1. So we just calcualte dot(normal, particle force)
+                //projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                
+                if (
+                    //distfinal <= particleRenderRadius
+					distfinal <= 0
+                    || dot(final_proj_position - innermostPoint, final_proj_normal) >= 0.0
+                ) {
+                    projection.particle_force = dot(-final_proj_normal, particle.force) * (-final_proj_normal);
+                    if (dot(projection.particle_force,final_proj_normal) > 0.0) projection.particle_force = float3(0,0,0);
+                } else {
+                    projection.particle_force = float3(0,0,0);
+                }
+                
+
+                projection.counter = isInTriangle;
+                projection.frictionCoefficient = o.frictionCoefficient;
+                projection.restitutionCoefficient = o.restitutionCoefficient;
+
+                projection.e1 = edge1;
+                projection.e2 = edge2;
+                projection.e1_2DN = e1_2DN;
+                projection.e2_2DN = e2_2DN;
+                projection.e1_3DN = e1_3DN;
+                projection.e2_3DN = e2_3DN;
+            }
+
+            if (meshobs_found == 0 || distfinal < meshobs_closest_distance) {
+                meshobs_found = 1;
+                meshobs_closest_distance = distfinal;
+                meshobs_closest_point = final_proj_position;
+                meshobs_closest_normal = final_proj_normal;
+            }
+        }
+    }
+	// The issue is that everything in projection is now in the local space of the obstacle. However... we should be fine
+	// Because all we need to do is calculate those in `update Positions` kernel, not here.
+    projections[id] = projection;
+}
+*/
+
 #pragma kernel UpdatePositions
 [numthreads(256,1,1)]
 void UpdatePositions(uint3 id : SV_DispatchThreadID) {
@@ -351,14 +555,15 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
 
     // If we have any projectsion to consider and the normal vector is not nonexistent...
     if (projection.counter > 0 && length(projection.normal) > 0.0) {
+		float3 n = normalize(mul(localdir_to_world_matrices[projection.obstacle_id],projection.normal));
+		float3 projp = mul(localpos_to_world_matrices[projection.obstacle_id],projection.position);
         // calculate the normal. Normalize again if necessary
-        float3 n = normalize(projection.normal);
         // Calculate innermost point following the negative direction of the normal
         float3 innermostPoint = p.position - n * smoothingRadius;
         // Calculate the distance between the particle and the particle's closest point on the mesh
-        float distfinal = distance(projection.position, p.position);
+        float distfinal = distance(projp, p.position);
         // If the dot product between the innermost point and particle position and the normal vector is + in sign, then we need to reflect
-        if (sign(dot(projection.position - innermostPoint, n))>0.0) {
+        if (sign(dot(projp - innermostPoint, n))>0.0) {
             if (length(v)>0.0 && dot(v,n) <= 0.0) {
                 // If so, we have to calculate the reflection of the particle, but only if the velocity is not 0 in magnitude and if the velocity is inward
 
@@ -376,7 +581,8 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
                 float3 vrn = n * vn * projection.restitutionCoefficient;
                 float3 vrt = vtan * (1.0-projection.frictionCoefficient); 
                 v = vrn + vrt;
-                v += projection.frictionCoefficient * (projection.external_force) * deltaTime;
+				float3 projforce = mul(localpos_to_world_matrices[projection.obstacle_id], projection.external_force);
+                v += projection.frictionCoefficient * projforce * deltaTime;
                 // Now, v is reflected off the surface.
             }
 
@@ -387,42 +593,6 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
             particles[id.x].position = projection.position + n * (smoothingRadius + 0.01);
             return;
         } 
-
-        /*
-        // if the projection's position is within the radius of the particle, then:
-        if (distfinal <= smoothingRadius) {
-            // Check: does my particle actually have a vector and, if so, is that vector going in the opposite direction of the surface normal (aka the particle is going further into the mesh if unstopped)>
-            if (length(v)>0.0 && dot(v,n) <= 0.0) {
-                // If so, we have to calculate the reflection of the particle
-
-                // This series of equations was derived from that of Carlos Alberto Dutra Fraga Filho.
-                // Report: https://doi.org/10.21203/rs.3.rs-3214518/v1
-                // The collided, reflected velocity comes in a normal form and a tangential form.
-                // Note: to calculate the magnitude of a vector A as a component along another vector B, we use the following formula:
-                // dot(A,B)/dot(B,B)
-                // However, since B (which is the normal vector) is a normalized normal, the denominator just ends up being 1
-                // Therefore, we only need to calculate dot(A,B). To get the magnitude, we get the absolute value of this value
-                // The magnitude of the normal component of vel_ref is the same as the magnitude of the normal component of the incoming vector
-                float vn = abs(dot(v,-n));
-                float3 vtan = v - (-n*vn);
-                float vt = length(vtan);
-                float3 vrn = n * vn * projection.restitutionCoefficient;
-                float3 vrt = vtan * (1.0-projection.frictionCoefficient); 
-                v = vrn + vrt;
-                v += projection.frictionCoefficient * (projection.external_force) * deltaTime;
-                // Now, v is reflected off the surface.
-            }
-            // If the sign of the vector from the position to innermost point and the normal vector is -1, then the center of the particle is 
-            if (sign(dot(innermostPoint-projection.position,n))<0.0) {
-                float3 inward = (p.position + n * smoothingRadius) - p.position;
-                if (length(inward) > 0.0) {
-                    float vLength = length(v);
-                    float3 newV = v + (normalize(inward) * clamp(length(inward),0.0,smoothingRadius));
-                    if (length(newV) > 0.0) v = normalize(newV) * vLength;
-                }
-            }
-        }
-        */
     }
 
     // Clamp the velocity so that particles don't go haywire
