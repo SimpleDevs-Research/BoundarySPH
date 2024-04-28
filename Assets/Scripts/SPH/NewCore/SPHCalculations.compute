@@ -343,7 +343,6 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
     float3 a = (pressureForces[id] + viscosityForces[id] + density[id] * g) / density[id];
     v += a * deltaTime;
     */
-
     // Terminology:
     // p.position = the particle's current position
     // - projection.position = the partlce's closest point on the mesh to consider

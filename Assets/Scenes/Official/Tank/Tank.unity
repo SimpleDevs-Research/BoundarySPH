@@ -111116,10 +111116,10 @@ MonoBehaviour:
   render_limits:
   - 0
   - 0
-  - 1
+  - 0
   - 100
   - 100
-  - 1.5
+  - 100
   _particle_mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
   _particle_material: {fileID: 2100000, guid: 66324ef78dedd694b954770496b691ea, type: 2}
   _simulation_time_passed: 0
@@ -111137,7 +111137,7 @@ MonoBehaviour:
     append_zero_to_filename: 0
     columns: []
     filePath: 
-  _record_statistics: 0
+  _record_statistics: 2
   _record_interval: 0.05
   textboxes: {fileID: 672542633}
 --- !u!4 &1414904883
