@@ -684,7 +684,7 @@ Transform:
   - {fileID: 1746045499}
   - {fileID: 2866108561089494570}
   m_Father: {fileID: 1133516763}
-  m_RootOrder: 4
+  m_RootOrder: 6
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &186240570
 GameObject:
@@ -1627,6 +1627,95 @@ Transform:
   - {fileID: 2045479338}
   m_Father: {fileID: 171124826}
   m_RootOrder: 3
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &503771602
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 503771604}
+  - component: {fileID: 503771603}
+  m_Layer: 0
+  m_Name: Simulation3D
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &503771603
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 503771602}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c730e97418937404a8fe1e757e72dcdf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _BM: {fileID: 1133516764}
+  _SPAWNER: {fileID: 1517309588}
+  compute: {fileID: 7200000, guid: 09a043c40560fd84e97f36ab4f1a10d5, type: 3}
+  _dt: 0.00825
+  _particleMass: 1
+  _external_force: {x: 0, y: -9.8, z: 0}
+  _kernel_radius: 0.125
+  _rest_density: 1000
+  _viscosity_influence: 0.001
+  _pressure_influence: 100
+  _near_pressure_influence: 0
+  _damping_effect: -0.25
+  _numParticles: 0
+  _delay: 1
+  _render_size: 0.12
+  _color_toggle: 1
+  min_color_val: 0
+  max_color_val: 30
+  render_limits:
+  - 0
+  - 0
+  - 0
+  - 100
+  - 100
+  - 100
+  _particle_mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  _particle_material: {fileID: 2100000, guid: 66324ef78dedd694b954770496b691ea, type: 2}
+  _simulation_time_passed: 0
+  _simulation_frames_passed: 0
+  _rl_time_passed: 0
+  _rl_frames_passed: 0
+  _fps_calculation_interval: 0.25
+  _fps_frames_counter: 0
+  _fps_time_counter: 0
+  _fps: 0
+  recorder:
+    fileName: 
+    dirName: 
+    writeUnixTime: 1
+    append_zero_to_filename: 0
+    columns: []
+    filePath: 
+  _record_statistics: 0
+  _record_interval: 0.01
+  textboxes: {fileID: 0}
+--- !u!4 &503771604
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 503771602}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1133516763}
+  m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &612334990
 GameObject:
@@ -2604,7 +2693,7 @@ Transform:
   m_Children:
   - {fileID: 283748138}
   m_Father: {fileID: 1133516763}
-  m_RootOrder: 0
+  m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &891484314
 MonoBehaviour:
@@ -2653,6 +2742,7 @@ MonoBehaviour:
   _mu: 0.1
   _damping_effect: -0.5
   _k: 0.8
+  _nk: 1
   _c: 5.77
   _spawnDistanceBetweenParticles: 0.25
   _startDelay: 2
@@ -2664,7 +2754,8 @@ MonoBehaviour:
   - 5
   - 5
   - 5
-  _renderDenom: 0.001
+  render_colors: 0
+  max_color_value: 0
   gizmos_particles: 0
   gizmos_particle_color: {r: 0, g: 0, b: 1, a: 0.16470589}
   gizmos_velocities: 0
@@ -3106,6 +3197,8 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 1517309589}
+  - {fileID: 503771604}
   - {fileID: 891484313}
   - {fileID: 1879856406}
   - {fileID: 1215821889}
@@ -3126,1310 +3219,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bffe1e38a122ee74a830532a2817bcea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _PARTICLE_CONTROLLER: {fileID: 1879856408}
+  _PARTICLE_CONTROLLER: {fileID: 503771603}
   _BOIDS_CONTROLLER: {fileID: 0}
   _OBSTACLES_CONTROLLER: {fileID: 1491622165}
   _PRESSURE_RENDERER: {fileID: 0}
   _CF: {fileID: 0}
   _RM: {fileID: 1133516765}
   _verbose: 1
-  _particles_array:
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
-  - position:
-      x: 0
-      y: 0
-      z: 0
-    force:
-      x: 0
-      y: 0
-      z: 0
-    render: 0
+  _particles_array: []
   _particles_grid_array: 
   _particles_velocities_array:
   - x: 0
@@ -4624,248 +3421,11 @@ MonoBehaviour:
   - x: 0
     y: 0
     z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
-  - x: 0
-    y: 0
-    z: 0
+  _particles_velocity_magnitudes_array: []
   _particles_densities_array: []
+  _particles_near_densities_array: []
   _particles_pressures_array: []
+  _particles_near_pressures_array: []
   _particles_external_forces_array: []
   _obstacles_grid_array: 
   _rearranged_obstacles_array: 
@@ -56720,7 +55280,7 @@ Transform:
   m_Children:
   - {fileID: 1180767610}
   m_Father: {fileID: 1133516763}
-  m_RootOrder: 2
+  m_RootOrder: 4
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1259090200
 GameObject:
@@ -57176,7 +55736,7 @@ Transform:
   - {fileID: 2066142522}
   - {fileID: 767644877}
   m_Father: {fileID: 1133516763}
-  m_RootOrder: 3
+  m_RootOrder: 5
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1491622165
 MonoBehaviour:
@@ -57193,7 +55753,7 @@ MonoBehaviour:
   _BM: {fileID: 1133516764}
   _GRID: {fileID: 1491622167}
   _SHADER: {fileID: 7200000, guid: 5844ad32101ce40428678d3d4d50d622, type: 3}
-  _PARTICLE_CONTROLLER: {fileID: 1879856408}
+  _PARTICLE_CONTROLLER: {fileID: 503771603}
   _BOIDS_CONTROLLER: {fileID: 0}
   obstacles:
   - obstacleID: 0
@@ -57227,15 +55787,15 @@ MonoBehaviour:
     prevApplyGravity: 0
     prevCheckObstacleBounds: 1
     prevCheckTriangleBounds: 1
-    show_vertex_positions: 1
-    show_vertex_normals: 1
-    show_vertex_forces: 1
-    show_face_normals: 1
-    show_3D_edge_normals: 1
-    show_2D_edge_normals: 1
-    show_centroids: 1
-    show_bounds: 1
-    show_triangle_bounds: 1
+    show_vertex_positions: 0
+    show_vertex_normals: 0
+    show_vertex_forces: 0
+    show_face_normals: 0
+    show_3D_edge_normals: 0
+    show_2D_edge_normals: 0
+    show_centroids: 0
+    show_bounds: 0
+    show_triangle_bounds: 0
   _boidDefaults:
     isBoid: 1
     checkObstacleBounds: 1
@@ -57257,7 +55817,7 @@ MonoBehaviour:
   - obstacleID: 0
     obstacle: {fileID: 651545867}
     frictionCoefficient: 0
-    restitutionCoefficient: 0.1
+    restitutionCoefficient: 0.25
     checkObstacleBounds: 1
     checkTriangleBounds: 1
     alwaysUpdate: 0
@@ -57267,7 +55827,7 @@ MonoBehaviour:
     isBoid: 1
     visualRange: 0
     innerRange: 0
-    boundaryRange: 0.25
+    boundaryRange: 0.125
     minSpeed: 0
     maxSpeed: 0
     turnSpeed: 0
@@ -166853,6 +165413,63 @@ MonoBehaviour:
   centerOfRotation: {fileID: 0}
   deltaTime: 0.0165
   speed: 5
+--- !u!1 &1517309587
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1517309589}
+  - component: {fileID: 1517309588}
+  m_Layer: 0
+  m_Name: ParticleSpawner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1517309588
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1517309587}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8efa58079aac99849b86a3e207fb3dac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  numParticlesPerAxis:
+    x: 8
+    y: 1
+    z: 8
+  spawnDistanceBetweenParticles: 0.125
+  initialVel:
+    x: 0
+    y: 0
+    z: 0
+  jitterStrength: 0
+  showSpawnBounds: 1
+  spawnBoundsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  debug_numParticles: 64
+--- !u!4 &1517309589
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1517309587}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2.5, y: 3, z: 2.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1133516763}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1689148258
 GameObject:
   m_ObjectHideFlags: 0
@@ -167274,7 +165891,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 2147483647
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1879856406
 Transform:
   m_ObjectHideFlags: 0
@@ -167289,7 +165906,7 @@ Transform:
   m_Children:
   - {fileID: 171124826}
   m_Father: {fileID: 1133516763}
-  m_RootOrder: 1
+  m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1879856407
 MonoBehaviour:
@@ -167427,6 +166044,7 @@ MonoBehaviour:
   _mu: 0.001
   _damping_effect: -0.5
   _k: 1
+  _nk: 1
   _c: 5.77
   _spawnDistanceBetweenParticles: 0.125
   _startDelay: 1
@@ -167438,7 +166056,8 @@ MonoBehaviour:
   - 100
   - 100
   - 100
-  _renderDenom: 25.2
+  render_colors: 0
+  max_color_value: 0
   gizmos_particles: 0
   gizmos_particle_color: {r: 0, g: 0, b: 1, a: 0.16470589}
   gizmos_velocities: 0

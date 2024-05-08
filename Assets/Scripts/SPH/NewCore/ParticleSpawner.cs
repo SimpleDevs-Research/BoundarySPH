@@ -26,10 +26,15 @@ public class ParticleSpawner : MonoBehaviour
         for (int x = 0; x < numParticlesPerAxis.x; x++) {
             for (int y = 0; y < numParticlesPerAxis.y; y++) {
                 for (int z = 0; z < numParticlesPerAxis.z; z++) {
-                    float tx = x / (numParticlesPerAxis.x - 1f);
-                    float ty = y / (numParticlesPerAxis.y - 1f);
-                    float tz = z / (numParticlesPerAxis.z - 1f);
-
+                    float tx = (numParticlesPerAxis.x > 1) 
+                        ? x / (numParticlesPerAxis.x - 1f)
+                        : 0f;
+                    float ty = (numParticlesPerAxis.y > 1)
+                        ? y / (numParticlesPerAxis.y - 1f)
+                        : 0;
+                    float tz = (numParticlesPerAxis.z > 1) 
+                        ? z / (numParticlesPerAxis.z - 1f)
+                        : 0;
                     float px = (tx - 0.5f) * size.x + center.x;
                     float py = (ty - 0.5f) * size.y + center.y;
                     float pz = (tz - 0.5f) * size.z + center.z;
@@ -42,6 +47,7 @@ public class ParticleSpawner : MonoBehaviour
             }
         }
 
+        Debug.Log($"Spawning {particles.Length} particles");
         return new SpawnData() { particles = particles, positions = positions, velocities = velocities };
     }
 
