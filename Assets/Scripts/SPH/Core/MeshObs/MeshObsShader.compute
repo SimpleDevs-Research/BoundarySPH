@@ -682,8 +682,8 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
             float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - particle.position)) * tri_dynamic.normal);
             // We need to project the point onto the plane formed by this triangle
-            //float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
-            float dist_from_point_to_plane = dot(tri_dynamic.normal, dir);
+            float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
+            //float dist_from_point_to_plane = dot(tri_dynamic.normal, dir);
             float3 proj1 = particle.position + dist_from_point_to_plane * dir;
 
             float3 closestVertexPosition = v1.position;
