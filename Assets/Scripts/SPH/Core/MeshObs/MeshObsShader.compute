@@ -680,11 +680,11 @@ void CheckForProjection(uint id : SV_DispatchThreadID ) {
             // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
             // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
             //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
-            float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - particle.position)) * tri_dynamic.normal);
+            float3 dir = dot(tri_dynamic.normal, tri_dynamic.center - particle.position) * tri_dynamic.normal;
             // We need to project the point onto the plane formed by this triangle
-            float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
+            //float dist_from_point_to_plane = -(dot(tri_dynamic.normal, particle.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
             //float dist_from_point_to_plane = dot(tri_dynamic.normal, dir);
-            float3 proj1 = particle.position + dist_from_point_to_plane * dir;
+            float3 proj1 = particle.position + dir;
 
             float3 closestVertexPosition = v1.position;
             float3 closestVertexNormal = v1.normal;
@@ -948,10 +948,10 @@ void CheckForObstaclesForBoids(uint3 id : SV_DispatchThreadID ) {
     // To calculate this projection, we grab the normal vector of the triangle and use that as our direction
     // Normally, we need to check if the vector from the particle's position to the centroid of the plane is parallal to the normal vector direction...
     //   ... however, in this case, we don't have to do that. This is because the direction we're using to project the particle position will always be orthogonal to the plane
-    float3 dir = normalize(sign(dot(tri_dynamic.normal, tri_dynamic.center - o_dynamic.position)) * tri_dynamic.normal);    
+    float3 dir = dot(tri_dynamic.normal, tri_dynamic.center - o_dynamic.position) * tri_dynamic.normal;    
     // We need to project the point onto the plane formed by this triangle
-    float dist_from_point_to_plane = -(dot(tri_dynamic.normal, o_dynamic.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
-    float3 proj = o_dynamic.position + dist_from_point_to_plane * dir;
+    //float dist_from_point_to_plane = -(dot(tri_dynamic.normal, o_dynamic.position) + tri_dynamic.d) / dot(tri_dynamic.normal, dir);
+    float3 proj = o_dynamic.position + dir;
 
     // We now determine qualities such as closest vertex and edges
     float3 closestVertexPosition = v1.position;
