@@ -370,7 +370,7 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID) {
                 // Therefore, we only need to calculate dot(A,B). To get the magnitude, we get the absolute value of this value
                 // The magnitude of the normal component of vel_ref is the same as the magnitude of the normal component of the incoming vector
                 float vn = abs(dot(v,-n));
-                float3 vtan = v - (-n*vn);
+                float3 vtan = v + (n*vn);
                 float vt = length(vtan);
                 float3 vrn = n * vn * projection.restitutionCoefficient;
                 float3 vrt = vtan * (1.0-projection.frictionCoefficient); 
