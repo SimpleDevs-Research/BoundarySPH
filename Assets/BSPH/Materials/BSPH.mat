@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: ParticleOpacity
+  m_Name: BSPH
   m_Shader: {fileID: 4800000, guid: cedc9012e092d5b44a683f7088e127e2, type: 3}
   m_ValidKeywords: []
   m_InvalidKeywords: []
