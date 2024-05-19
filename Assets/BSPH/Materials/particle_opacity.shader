@@ -12,7 +12,7 @@ Shader "SPH/Particle/Default"
 		LOD 200
 
 		CGPROGRAM
-		#include "../../Noise/noise.cginc"
+		#include "./noise.cginc"
 		#pragma surface surf Standard addshadow fullforwardshadows alpha:fade
 		#pragma multi_compile_instancing
 		#pragma instancing_options procedural:setup
