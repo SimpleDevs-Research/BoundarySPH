@@ -38,19 +38,19 @@ public class ParticleManager : MonoBehaviour
         public float gridCellSize => _gridCellSize;
         [SerializeField, Tooltip("In our grid space, how many buffer cells are added to each axis? Limited to 2 at a minimum, to add one cell on each end of the axis.")]
         private int _bufferCellsPerAxis = 2;
-        [ReadOnly, SerializeField, Tooltip("Where in world space are we centering the simulation around?")]
+        [ReadOnlyInsp, SerializeField, Tooltip("Where in world space are we centering the simulation around?")]
         private Vector3 _origin = new Vector3(0f,0f,0f);
         public Vector3 origin => _origin;
         public float[] originF => new float[3]{origin.x, origin.y, origin.z};
-        [ReadOnly, SerializeField, Tooltip("What are the world space length (per axis) is the simulation, limited by buffer cells?")]
+        [ReadOnlyInsp, SerializeField, Tooltip("What are the world space length (per axis) is the simulation, limited by buffer cells?")]
         private float[] _innerBounds = new float[6]{0f, 0f, 0f, 0f, 0f, 0f};
         private Vector3 innerBounds => new Vector3(_innerBounds[3]-_innerBounds[0], _innerBounds[4]-_innerBounds[1], _innerBounds[5]-_innerBounds[2]);
         private float[] innerBoundsF => new float[3]{_innerBounds[3]-_innerBounds[0], _innerBounds[4]-_innerBounds[1], _innerBounds[5]-_innerBounds[2]};
-        [ReadOnly, SerializeField, Tooltip("What are the total world space length (per axis) is the simulation?")]
+        [ReadOnlyInsp, SerializeField, Tooltip("What are the total world space length (per axis) is the simulation?")]
         private float[] _outerBounds = new float[6]{0f, 0f, 0f, 0f, 0f, 0f};
         private Vector3 outerBounds => new Vector3(_outerBounds[3]-_outerBounds[0], _outerBounds[4]-_outerBounds[1], _outerBounds[5]-_outerBounds[2]);
         private float[] outerBoundsF => new float[3]{_outerBounds[3]-_outerBounds[0], _outerBounds[4]-_outerBounds[1], _outerBounds[5]-_outerBounds[2]};
-        [ReadOnly, SerializeField, Tooltip("Given `_outerBounds`, how many grid cells are along each axis?")]
+        [ReadOnlyInsp, SerializeField, Tooltip("Given `_outerBounds`, how many grid cells are along each axis?")]
         private int[] _numCellsPerAxis = new int[3]{0,0,0};
         public Vector3Int numCellsPerAxis => new Vector3Int(_numCellsPerAxis[0], _numCellsPerAxis[1], _numCellsPerAxis[2]);
         // How many grid cells do we have in total?
@@ -116,7 +116,7 @@ public class ParticleManager : MonoBehaviour
         [SerializeField, Tooltip("How many particle should we use? This transform determines how many particles we can fit within `innerBounds`")]
         private Transform _WATER_LEVEL_TRANSFORM = null;
 
-        [ReadOnly,SerializeField]
+        [ReadOnlyInsp,SerializeField]
         private int maxNumParticles = 100000;
         [Tooltip("How many particles will we use in the simulation? Controlled by adjusting the WATER LEVEL transform lever in the scene (blue box)")]
         public int numParticles = 100000;
@@ -129,7 +129,7 @@ public class ParticleManager : MonoBehaviour
         // How many particles can we realistically fit into each grid cell? Calculated from particle render size. Intentional to use radius instead of size
         private int _numParticlesPerGridCell => Mathf.CeilToInt(Mathf.Pow(gridCellSize / particleRenderSize, 3));
         public int numParticlesPerGridCell { get => _numParticlesPerGridCell; set {} }
-        [ReadOnly, SerializeField, Tooltip("How many particles, per axis?")]
+        [ReadOnlyInsp, SerializeField, Tooltip("How many particles, per axis?")]
         private int[] _numParticlesPerAxis = new int[3]{0,0,0};
         public int[] numParticlesPerAxis => _numParticlesPerAxis;
 
@@ -194,7 +194,7 @@ public class ParticleManager : MonoBehaviour
         #if UNITY_EDITOR
         [Help("The first `numBoids` particles are considered boids and will be constantly cemented to the boids from a separate boids manager. We just need to let the SPH compute shader know which of its particles are boids", UnityEditor.MessageType.None)]
         #endif
-        [ReadOnly] public int numBoids = 100;
+        [ReadOnlyInsp] public int numBoids = 100;
     */
 
     [Header("== GPU SETTINGS ==")]

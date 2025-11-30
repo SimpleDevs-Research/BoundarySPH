@@ -112,14 +112,14 @@ public class RecordingManager : MonoBehaviour
     [SerializeField] private bool _recordPositions = true, _recordVelocities = true, _recordDensities = true, _recordPressures = true;
 
     [Header("=== RECORDING STATISTICS ===")]
-    [SerializeField, ReadOnly] private string _positions_filepath, _velocities_filepath, _densities_filepath, _pressures_filepath;
+    [SerializeField, ReadOnlyInsp] private string _positions_filepath, _velocities_filepath, _densities_filepath, _pressures_filepath;
     private float _timeStarted;
     private float _recordingTimeStarted;
-    [SerializeField, ReadOnly] private float _timeElapsed;
-    [SerializeField, ReadOnly] private int _numRecordsPassed = -1;
-    [SerializeField, ReadOnly] private List<RecordingWriter> _writers;
-    [SerializeField, ReadOnly] private bool _filespace_initialized = false;
-    [SerializeField, ReadOnly] private bool _initialized = false;
+    [SerializeField, ReadOnlyInsp] private float _timeElapsed;
+    [SerializeField, ReadOnlyInsp] private int _numRecordsPassed = -1;
+    [SerializeField, ReadOnlyInsp] private List<RecordingWriter> _writers;
+    [SerializeField, ReadOnlyInsp] private bool _filespace_initialized = false;
+    [SerializeField, ReadOnlyInsp] private bool _initialized = false;
 
 
     // === PRIVATE VARIABLES ===

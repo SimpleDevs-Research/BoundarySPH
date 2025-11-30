@@ -40,9 +40,9 @@ public class ParticleObstacleTest : MonoBehaviour
     private List<ParticleTriangle> _triangles = new List<ParticleTriangle>();
 
     // Is the debug particle within the boundaries of this obstacle?
-    [SerializeField, ReadOnly] private bool _isIntersecting = false;
+    [SerializeField, ReadOnlyInsp] private bool _isIntersecting = false;
     // Counter for the intersection calculation. If the counter > 0, then the partice is inside the mesh
-    [SerializeField, ReadOnly] private int _counter = 0;
+    [SerializeField, ReadOnlyInsp] private int _counter = 0;
     // DEBUG ELEMENT: stores all projections of the current debug particle so that we can render them via Gizmos
     private List<Vector3> projections = new List<Vector3>();
     // DEBUG ELEMENT: stores the closest projection and is used for the raycast direction.

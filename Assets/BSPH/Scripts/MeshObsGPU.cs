@@ -24,7 +24,7 @@ public class MeshObsGPU : MonoBehaviour
     [System.Serializable]
     public class TestObstacle {
         [Header("= Global Configurations =")]
-        [ReadOnly, Tooltip("Reference ID in the obstacles array.")] 
+        [ReadOnlyInsp, Tooltip("Reference ID in the obstacles array.")] 
         public int obstacleID;
         [Tooltip("Reference to the MeshObs component of this scene entity.")] 
         public MeshObs obstacle;
@@ -113,7 +113,7 @@ public class MeshObsGPU : MonoBehaviour
     [SerializeField] private bool drawProjectionGizmos = false;
     private bool drawGizmos => drawObstacleGizmos || drawProjectionGizmos;
 
-    [ReadOnly] public int numObstacles, numVertices, numTriangles, numEdges, numBoids;
+    [ReadOnlyInsp] public int numObstacles, numVertices, numTriangles, numEdges, numBoids;
     [HideInInspector] public int numParticles;
     
     private ComputeBuffer obstacle_offsets_buffer, grid_offsets_buffer, grid_sums_buffer1, grid_sums_buffer2;

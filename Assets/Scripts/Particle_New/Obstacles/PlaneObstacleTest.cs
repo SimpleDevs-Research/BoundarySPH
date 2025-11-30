@@ -10,8 +10,8 @@ public class PlaneObstacleTest : MonoBehaviour
     public Vector3 size;
     public float radius;
     public Transform particleTarget;
-    [ReadOnly] public Vector3 centroid, targetVector, projectionPoint;
-    [ReadOnly] public float dotBetweenParticleAndNormal;
+    [ReadOnlyInsp] public Vector3 centroid, targetVector, projectionPoint;
+    [ReadOnlyInsp] public float dotBetweenParticleAndNormal;
 
     public bool isIntersecting = false;
 

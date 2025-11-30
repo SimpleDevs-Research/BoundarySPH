@@ -32,16 +32,16 @@ public class ParticleController : MonoBehaviour
     private float _particleRenderSize = 0.5f;
     public float particleRenderSize => _particleRenderSize;
     public float particleRenderRadius => _particleRenderSize / 2f;
-    [SerializeField, ReadOnly, Tooltip("The max number of particles possible within this controller's grid section")]
+    [SerializeField, ReadOnlyInsp, Tooltip("The max number of particles possible within this controller's grid section")]
     private int _MAX_NUM_PARTICLES = 0;
     [SerializeField, Tooltip("The number of particles that need to be generated. If `sectionIndex` is defined, will default to using that section's # of particles instead. If `sectionIndex` is set to -1, will use this value by default")]
     private int _numParticles = 100;
     public int numParticles => _numParticles;
-    [SerializeField, ReadOnly]
+    [SerializeField, ReadOnlyInsp]
     private int[] _numParticlesPerAxis;
-    [SerializeField, ReadOnly]
+    [SerializeField, ReadOnlyInsp]
     private int _numParticlesPerGridCell;
-    [SerializeField, ReadOnly]
+    [SerializeField, ReadOnlyInsp]
     private float[] _spawnBounds;
     [SerializeField, Tooltip("The mass of each particle. We generally assume all particles have the same particle mass.")]
     private float _particleMass = 1f;
@@ -322,7 +322,7 @@ public class ParticleController : MonoBehaviour
     private int _BLOCK_SIZE = 512;
     private int _NUM_BLOCKS_GRID;
     private int _NUM_BLOCKS_PARTICLES;
-    [SerializeField, ReadOnly] private int _NUM_BOUNDARY_PARTICLES;
+    [SerializeField, ReadOnlyInsp] private int _NUM_BOUNDARY_PARTICLES;
     private void InitializeVariables() {
         // We can't do anything if `grid` is null or if our compute shader is null
         if (_GRID == null || _SPH_Shader == null) return;

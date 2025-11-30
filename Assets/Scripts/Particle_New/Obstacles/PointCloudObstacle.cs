@@ -56,9 +56,9 @@ public class PointCloudObstacle : MonoBehaviour
     public MeshFilter meshFilter;
     public MeshRenderer meshRenderer;
     public List<ObstaclePlane> planesFromMesh = new List<ObstaclePlane>();
-    [ReadOnly, SerializeField]
+    [ReadOnlyInsp, SerializeField]
     private int numPlanes;
-    [ReadOnly, SerializeField]
+    [ReadOnlyInsp, SerializeField]
     Vector3 newBounds, newBoundsMin, newBoundsMax;
     public List<Vector3> points = new List<Vector3>();
     public List<Point> pPoints = new List<Point>();

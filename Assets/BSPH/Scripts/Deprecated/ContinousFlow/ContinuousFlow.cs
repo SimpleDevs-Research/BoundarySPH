@@ -26,12 +26,12 @@ public class ContinuousFlow : MonoBehaviour
         transposeParticlesKernel;
     private int _numParticleBlocks;
 
-    [SerializeField, ReadOnly] private int[] _numParticlesPerAxisInInflow;
-    [SerializeField, ReadOnly] private int _numThreshold; 
+    [SerializeField, ReadOnlyInsp] private int[] _numParticlesPerAxisInInflow;
+    [SerializeField, ReadOnlyInsp] private int _numThreshold; 
 
     [SerializeField] private float[] _timePhases = new float[2]{15f,5f};
 
-    [SerializeField, ReadOnly] private bool _initialized =false;
+    [SerializeField, ReadOnlyInsp] private bool _initialized =false;
 
     [Header("=== DEBUG ===")]
     [SerializeField] private uint2[] particles_in_outflow_array;

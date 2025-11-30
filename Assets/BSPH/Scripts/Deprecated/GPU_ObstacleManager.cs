@@ -93,7 +93,7 @@ public class GPU_ObstacleManager : MonoBehaviour
 
     [SerializeField] private List<Obstacle> _OBSTACLES = new List<Obstacle>();
     private int _numVertices, _numTriangles;
-    [SerializeField, ReadOnly] private bool _initialized = false;
+    [SerializeField, ReadOnlyInsp] private bool _initialized = false;
     [SerializeField] private bool _toggle_gizmos = true;
     [SerializeField] private bool _toggle_debug = false;
 

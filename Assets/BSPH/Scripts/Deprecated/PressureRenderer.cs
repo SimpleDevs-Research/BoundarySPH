@@ -29,9 +29,9 @@ public class PressureRenderer : MonoBehaviour
     [Header("== DEBUG ==")]
     [SerializeField] private bool _getPressures = false;
     [SerializeField] private int _numTempPressures;
-    [ReadOnly, SerializeField] private float[] _tempPressures;
-    [ReadOnly, SerializeField] private OP.GridCell[] _tempCells;
-    //[ReadOnly, SerializeField] private int[] _tempParticles;
+    [ReadOnlyInsp, SerializeField] private float[] _tempPressures;
+    [ReadOnlyInsp, SerializeField] private OP.GridCell[] _tempCells;
+    //[ReadOnlyInsp, SerializeField] private int[] _tempParticles;
 
     public void Initialize() {
         if (_GRID == null || _SHADER == null || _PC == null) {

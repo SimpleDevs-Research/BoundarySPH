@@ -12,7 +12,7 @@ public class PointCloudObstacleManager : MonoBehaviour
         public Transform obstacle = null;
         public Color gizmosColor = Color.red;
         public bool isActive = true;
-        [HideInInspector, ReadOnly, Tooltip("World-scale positions of boundary particles")] public List<OP.Particle> boundaryParticles = new List<OP.Particle>();
+        [HideInInspector, ReadOnlyInsp, Tooltip("World-scale positions of boundary particles")] public List<OP.Particle> boundaryParticles = new List<OP.Particle>();
     }
 
     public float kernelRadius = 1.5f;

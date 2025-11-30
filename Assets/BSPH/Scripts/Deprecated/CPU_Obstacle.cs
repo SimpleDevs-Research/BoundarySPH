@@ -7,15 +7,15 @@ public class CPU_Obstacle : SPH_Obstacle
 {
     [Header("== MESH VARIABLES ==")]
     // The boundaries of the obstacle in world-scale. Extracted from the mesh renderer, not from any vertex calculation
-    [SerializeField, ReadOnly] private float[] _bounds;
+    [SerializeField, ReadOnlyInsp] private float[] _bounds;
      // The world-scale vertices of the mesh.
-    [SerializeField, ReadOnly] private float3[] _vertices;
+    [SerializeField, ReadOnlyInsp] private float3[] _vertices;
     // List to store the triangles of the simulation.
-    [SerializeField, ReadOnly] private ParticleTriangle[] _triangles;
+    [SerializeField, ReadOnlyInsp] private ParticleTriangle[] _triangles;
 
     [Header("== DEBUGGING ==")]
     // Counters for the intersection calculation for each debug particle. If the counter > 0, then the partice is inside the mesh
-    [SerializeField, ReadOnly] private int[] _counters;
+    [SerializeField, ReadOnlyInsp] private int[] _counters;
     public int[] counters => _counters;
 
     // DEBUG ELEMENT: stores all projections of the current debug particle so that we can render them via Gizmos

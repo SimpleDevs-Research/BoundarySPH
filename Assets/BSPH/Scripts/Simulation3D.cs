@@ -130,16 +130,16 @@ public class Simulation3D : MonoBehaviour
     */
     [Header("== FPS Calculation ==")]
     // The simulation time and frames
-    [ReadOnly, SerializeField] private float _simulation_time_passed = 0f;
-    [ReadOnly, SerializeField] private int _simulation_frames_passed = 0;
+    [ReadOnlyInsp, SerializeField] private float _simulation_time_passed = 0f;
+    [ReadOnlyInsp, SerializeField] private int _simulation_frames_passed = 0;
     // The real world time and frames
-    [ReadOnly, SerializeField] private float _rl_time_passed = 0f;
-    [ReadOnly, SerializeField] private int _rl_frames_passed = 0;
+    [ReadOnlyInsp, SerializeField] private float _rl_time_passed = 0f;
+    [ReadOnlyInsp, SerializeField] private int _rl_frames_passed = 0;
     // The variables required for FPS calculation
     [SerializeField, Tooltip("How much time we wait for each FPS update.")]  private float _fps_calculation_interval = 0.25f;
-    [ReadOnly, SerializeField] private int _fps_frames_counter = 0;
-    [ReadOnly, SerializeField] private float _fps_time_counter = 0f;
-    [ReadOnly, SerializeField] private float _fps;
+    [ReadOnlyInsp, SerializeField] private int _fps_frames_counter = 0;
+    [ReadOnlyInsp, SerializeField] private float _fps_time_counter = 0f;
+    [ReadOnlyInsp, SerializeField] private float _fps;
 
 
     public enum RecordingType { Off, All, FPS }

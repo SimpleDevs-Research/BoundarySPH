@@ -32,7 +32,7 @@ public class BoidsController : MonoBehaviour
     public int numBoids => _boids.Count;
     //public float boidSize = 0.05f;
     //public Color boidColor = Color.red;
-    [SerializeField, ReadOnly] private float _visualRange;
+    [SerializeField, ReadOnlyInsp] private float _visualRange;
     [SerializeField, Tooltip("Make sure this is smaller than the `visualRange`.")] private float _innerRange;
     [SerializeField] private float _maxSpeed = 1.5f;
     [SerializeField] private float _minSpeed = 0.5f;
@@ -53,10 +53,10 @@ public class BoidsController : MonoBehaviour
 
     [SerializeField] private bool updateSceneBoids = true;
 
-    [SerializeField, ReadOnly] private OP.Boid[] _gpuBoids;
-    [SerializeField, ReadOnly] private float3[] _gpuBoidVelocities;
-    [SerializeField, ReadOnly] private float3[] _gpuBoidCurrentDirections;
-    [SerializeField, ReadOnly] private float[] _gpuBoidDirectionDiffs;
+    [SerializeField, ReadOnlyInsp] private OP.Boid[] _gpuBoids;
+    [SerializeField, ReadOnlyInsp] private float3[] _gpuBoidVelocities;
+    [SerializeField, ReadOnlyInsp] private float3[] _gpuBoidCurrentDirections;
+    [SerializeField, ReadOnlyInsp] private float[] _gpuBoidDirectionDiffs;
 
     //private int _CPU_LIMIT = 2048;
 
@@ -66,9 +66,9 @@ public class BoidsController : MonoBehaviour
     [Header("== DEBUG TOOLS ==")]
     [SerializeField] private bool _verbose = true;
 
-    [SerializeField, ReadOnly] private bool _useGPU;
-    [SerializeField, ReadOnly] private int _numGridBlocks;
-    [SerializeField, ReadOnly] private int _numBoidBlocks;
+    [SerializeField, ReadOnlyInsp] private bool _useGPU;
+    [SerializeField, ReadOnlyInsp] private int _numGridBlocks;
+    [SerializeField, ReadOnlyInsp] private int _numBoidBlocks;
 
     [SerializeField] private bool showRadii = true;
     [SerializeField] private bool showDirection = true;

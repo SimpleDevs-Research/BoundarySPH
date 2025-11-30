@@ -190,12 +190,12 @@ namespace ObstaclePrimitives {
             public Transform LOWER_BOUND_REF = null;
             [SerializeField, Tooltip("The transform reference for the upper bound of this subsection")]
             public Transform UPPER_BOUND_REF = null;
-            [SerializeField, ReadOnly, Tooltip("The origin (center) of the section formed from the average of the bound refs")]
+            [SerializeField, ReadOnlyInsp, Tooltip("The origin (center) of the section formed from the average of the bound refs")]
             private Vector3 _origin;
             public Vector3 origin => _origin;
             public float[] originF => new float[3]{origin.x, origin.y, origin.z};
             // Store the bounds formed by this section's upper and lower bounds
-            [SerializeField, ReadOnly]
+            [SerializeField, ReadOnlyInsp]
             private float[] _bounds = new float[6];
             public float[] bounds => _bounds;
             public Vector3 dimensionsV3 => new Vector3(_bounds[3]-_bounds[0], _bounds[4]-_bounds[1],_bounds[5]-_bounds[2]);

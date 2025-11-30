@@ -15,10 +15,10 @@ public class BaseParticleController : MonoBehaviour
     public float particleRenderRadius => _particle_render_radius;
     public float particle_render_radius => _particle_render_radius;
     [SerializeField, Tooltip("How much space is needed between newly-generated particles?")] private float _spawn_distance_btw_particles = 1f;
-    [SerializeField, ReadOnly, Tooltip("A READ-ONLY array that identifies how many particles can be spawned per axis")] private int[] _num_particles_per_axis;
-    [SerializeField, ReadOnly] private int _num_particles_per_grid_cell;
-    [SerializeField, ReadOnly] private float[] _spawn_bounds;
-    [SerializeField, ReadOnly] private int _max_num_particles;
+    [SerializeField, ReadOnlyInsp, Tooltip("A READ-ONLY array that identifies how many particles can be spawned per axis")] private int[] _num_particles_per_axis;
+    [SerializeField, ReadOnlyInsp] private int _num_particles_per_grid_cell;
+    [SerializeField, ReadOnlyInsp] private float[] _spawn_bounds;
+    [SerializeField, ReadOnlyInsp] private int _max_num_particles;
     [SerializeField] private int _num_particles;
 
     [Header("== SPH Variables ==")]
